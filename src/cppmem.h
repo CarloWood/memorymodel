@@ -1,9 +1,12 @@
 #pragma once
 
+#include "debug.h"
+
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
 #include <boost/optional/optional_io.hpp>
+#include <boost/spirit/include/qi.hpp>
 
 #include <iostream>
 #include <string>
@@ -99,6 +102,7 @@ struct global {
 
   global() { }
   global(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
+  global(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
 
   friend bool operator==(global const& g1, global const& g2) {
     return g1.m_type == g2.m_type && g1.m_memory_location == g2.m_memory_location && g1.m_initial_value == g2.m_initial_value;
@@ -114,26 +118,53 @@ struct global {
   }
 };
 
+struct statement : std::string {
+  friend std::ostream& operator<<(std::ostream& os, statement const& statement)
+  {
+    os << static_cast<std::string const&>(statement) << ';';
+    return os;
+  }
+};
+
+struct scope;
+using scope_node = boost::variant<statement, boost::recursive_wrapper<scope>>;
+
+// {
+//   *(STATEMENT | SCOPE)
+// }
+struct scope
+{
+  using list_type = std::vector<scope_node>;
+  using value_type = list_type::value_type;
+  using iterator = list_type::iterator;
+  iterator end() { return m_list.end(); }
+  void insert(iterator const& iter, value_type const& value) { m_list.insert(iter, value); }
+
+  list_type m_list;
+
+  bool operator==(std::string const& statement) const;
+
+  friend std::ostream& operator<<(std::ostream& os, scope const& scope)
+  {
+    os << "{ ";
+    for (auto&& node : scope.m_list)
+      os << node;
+    os << " }";
+    return os;
+  }
+};
+
 // IDENTIFIER
 struct function_name
 {
   std::string m_function_name;
 
+  function_name() { }
+  function_name(std::string const& function_name) : m_function_name(function_name) { }
+
   friend std::ostream& operator<<(std::ostream& os, function_name const& function_name)
   {
     os << function_name.m_function_name;
-    return os;
-  }
-};
-
-// {
-//   *(SCOPE | +STATEMENT;)
-// }
-struct scope
-{
-  friend std::ostream& operator<<(std::ostream& os, scope const& /*scope*/)
-  {
-    os << "{ }";
     return os;
   }
 };
@@ -143,6 +174,9 @@ struct scope
 struct function {
   function_name m_function_name;
   scope m_scope;
+
+  function() { }
+  function(function_name function_name) : m_function_name(function_name) { }
 
   friend std::ostream& operator<<(std::ostream& os, function const& function)
   {
@@ -164,14 +198,15 @@ struct cppmem : public std::vector<definition_node>
   }
 };
 
-enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGlobal, AFunctionName, AScope, AFunction, ACppMem };
-using nonterminal = boost::variant<type,  register_location, memory_location, global,  function_name, scope,  function,  cppmem>;
+enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGlobal, AStatement, AScope, AFunctionName, AFunction, ACppMem };
+using nonterminal = boost::variant<type,  register_location, memory_location, global,  statement,  scope,  function_name, function,  cppmem>;
 
 } // namespace AST
 
 namespace cppmem
 {
 
-extern AST::nonterminal parse(std::string const& text);
+extern void parse(std::string const& text, AST::nonterminal& out);
+extern bool parse(std::string const& text, AST::cppmem& out);
 
 } // namespace cppmem
