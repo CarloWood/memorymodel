@@ -38,10 +38,10 @@ struct type
     switch (type.m_type)
     {
       case type_int:
-        os << "*int";
+        os << "int";
         break;
       case type_atomic_int:
-        os << "*atomic_int";
+        os << "atomic_int";
         break;
     }
     return os;

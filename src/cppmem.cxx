@@ -54,11 +54,20 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 namespace phoenix = boost::phoenix;
 
-template <typename Iterator, typename StartRule>
-class grammar_base : public qi::grammar<Iterator, StartRule()>
+template<typename Iterator>
+struct cpp_comment_skipper : public qi::grammar<Iterator> {
+
+    cpp_comment_skipper() : cpp_comment_skipper::base_type(skip, "C++ comment") {
+        skip = ("//" >> *(qi::char_ - '\n') > '\n');
+    }
+    qi::rule<Iterator> skip;
+};
+
+template <typename Iterator, typename StartRule, typename Skipper = cpp_comment_skipper<Iterator>>
+class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 {
  protected:
-  template<typename T> using rule = qi::rule<Iterator, T()>;
+  template<typename T> using rule = qi::rule<Iterator, T(), Skipper>;
 
   rule<qi::unused_type>         whitespace;
   rule<char>                    identifier_begin_char;
@@ -75,7 +84,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule()>
   rule<AST::cppmem>             cppmem_program;
 
  protected:
-  grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule()>(start, name)
+  grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), Skipper>(start, name)
   {
     whitespace                  = +qi::space;
     identifier_begin_char       = qi::alpha | ascii::char_('_');
@@ -110,8 +119,6 @@ class grammar_base : public qi::grammar<Iterator, StartRule()>
                                            -whitespace >> "()" >>
                                            -whitespace >> scope;
 
-    //cppmem_program = *definition;
-
     identifier_begin_char.name("identifier_begin_char");
     identifier_char.name("identifier_char");
     identifier.name("identifier");
@@ -140,12 +147,13 @@ template <typename Iterator>
 class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
 {
  private:
-  qi::rule<Iterator, AST::nonterminal()> unit_test;
+  qi::rule<Iterator, AST::nonterminal(), cpp_comment_skipper<Iterator>> unit_test;
 
  public:
-  unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test")
+  unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
   {
     unit_test = this->global | this->function | this->scope | this->statement | this->type | this->memory_location | this->register_location;
+    unit_test.name("unit_test");
     //qi::debug(unit_test);
   }
 };
@@ -154,13 +162,14 @@ template <typename Iterator>
 class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
 {
  private:
-  qi::rule<Iterator, AST::cppmem> cppmem_program;
+  qi::rule<Iterator, AST::cppmem(), cpp_comment_skipper<Iterator>> cppmem_program;
 
  public:
-  cppmem_grammar() : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_program")
+  cppmem_grammar() : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_grammar")
   {
     cppmem_program = -(this->whitespace) >> *(this->global | this->function);
-    //qi::debug(cppmem_program);
+    cppmem_program.name("cppmem_program");
+    qi::debug(cppmem_program);
   }
 };
 
@@ -172,7 +181,8 @@ namespace cppmem
 void parse(std::string const& text, AST::nonterminal& out)
 {
   std::string::const_iterator start{text.begin()};
-  if (!qi::parse(start, text.end(), unit_test_grammar<std::string::const_iterator>(), out) || start != text.end())
+  cpp_comment_skipper<std::string::const_iterator> skipper;
+  if (!qi::phrase_parse(start, text.end(), unit_test_grammar<std::string::const_iterator>(), skipper, out) || start != text.end())
   {
     throw std::domain_error("invalid cppmem input");
   }
@@ -181,7 +191,8 @@ void parse(std::string const& text, AST::nonterminal& out)
 bool parse(std::string const& text, AST::cppmem& out)
 {
   std::string::const_iterator start{text.begin()};
-  return qi::parse(start, text.end(), cppmem_grammar<std::string::const_iterator>(), out) && start == text.end();
+  cpp_comment_skipper<std::string::const_iterator> skipper;
+  return qi::phrase_parse(start, text.end(), cppmem_grammar<std::string::const_iterator>(), skipper, out) && start == text.end();
 }
 
 } // namespace cppmem
