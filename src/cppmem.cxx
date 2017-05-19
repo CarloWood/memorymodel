@@ -129,7 +129,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule<AST::scope>              scope;
   rule<AST::function_name>      function_name;
   rule<AST::function>           function;
-  //rule<AST::threads>            threads;
+  rule<AST::threads>            threads;
   rule<AST::cppmem>             cppmem_program;
 
  protected:
@@ -158,10 +158,10 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     statement                   = -whitespace >> !(ascii::char_('{') | ascii::char_('|')) >> +(ascii::char_ - (ascii::char_('}') | ';')) >> ';' >> -whitespace;
 
-    body                        = +(statement | scope /*| threads*/)            /* m_dummy workaround: */ >> qi::attr(false);
+    body                        = +(statement | scope | threads)                /* m_dummy workaround: */ >> qi::attr(false);
 
     scope                       = "{" >> -whitespace >> -body >>
-                                         -whitespace > "}" >>
+                                         -whitespace >> "}" >>
                                          -whitespace;
 
     function_name               = identifier;
@@ -170,11 +170,9 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
                                            -whitespace >> "()" >>
                                            -whitespace >> scope;
 
-#if 0
     threads                     =   "{{{" >> -whitespace > body >>
                                   +("|||" >> -whitespace > body) >
-                                    "}}}" >> -whitespace;
-#endif
+                                    "}}}" >> -whitespace                        /* m_dummy workaround: */ >> qi::attr(false);
 
     identifier_begin_char.name("identifier_begin_char");
     identifier_char.name("identifier_char");
@@ -188,19 +186,21 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     scope.name("scope");
     function_name.name("function_name");
     function.name("function");
-    //threads.name("threads");
+    threads.name("threads");
 
     // Uncomment this to turn on debugging.
-    //qi::debug(global);
-    //qi::debug(type);
-    //qi::debug(register_location);
-    //qi::debug(memory_location);
-    //qi::debug(function_name);
-    //qi::debug(function);
-    //qi::debug(scope);
-    //qi::debug(statement);
-    //qi::debug(body);
-    //qi::debug(threads);
+#if 0
+    qi::debug(global);
+    qi::debug(type);
+    qi::debug(register_location);
+    qi::debug(memory_location);
+    qi::debug(function_name);
+    qi::debug(function);
+    qi::debug(scope);
+    qi::debug(statement);
+    qi::debug(body);
+    qi::debug(threads);
+#endif
   }
 };
 
@@ -213,7 +213,7 @@ class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
  public:
   unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
   {
-    unit_test = this->global | this->function | this->scope | this->statement | this->type | this->memory_location | this->register_location;
+    unit_test = this->global | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
     unit_test.name("unit_test");
     //qi::debug(unit_test);
   }

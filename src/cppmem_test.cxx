@@ -8,7 +8,7 @@
 using namespace AST;
 
 #define MIN_TEST 0
-#define MAX_TEST 9
+#define MAX_TEST 10
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -20,6 +20,7 @@ using namespace AST;
 #define scope_anything_nr               7
 #define scope_recursive_nr              8
 #define function_wrlock_nr              9
+#define threads_simple_nr              10
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -172,5 +173,34 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
   ss << f;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
+}
+#endif
+
+#if DO_TEST(threads_simple)
+BOOST_AUTO_TEST_CASE(threads_simple)
+{
+  std::string const text{
+      "{{{\n"
+    "    x.store(1, mo_release);\n"
+    "  |||\n"
+    "    {\n"
+    "      r1 = x.load(mo_acquire).readsvalue(1);\n"
+    "      y.store(1, mo_release);\n"
+    "    }\n"
+    "  |||\n"
+    "      r2 = y.load(mo_acquire).readsvalue(1);\n"
+    "      r3 = x.load(mo_relaxed);\n"
+    "  }}}\n"
+  };
+
+  AST::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(AThreads, value.which());
+  AST::threads const& t = boost::get<threads>(value);
+  std::stringstream ss;
+  ss << t;
+  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
+  //BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
 }
 #endif

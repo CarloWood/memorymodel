@@ -128,7 +128,7 @@ struct statement : std::string {
 
 struct scope;
 struct threads;
-using body_node = boost::variant<statement, boost::recursive_wrapper<scope> /*, boost::recursive_wrapper<threads>*/>;
+using body_node = boost::variant<statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
 
 struct body
 {
@@ -206,8 +206,8 @@ struct cppmem : public std::vector<definition_node>
   }
 };
 
-enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGlobal, AStatement, AScope, AFunctionName, AFunction, ACppMem };
-using nonterminal = boost::variant<type,  register_location, memory_location, global,  statement,  scope,  function_name, function,  cppmem>;
+enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGlobal, AStatement, AScope, AFunctionName, AFunction, ACppMem, AThreads };
+using nonterminal = boost::variant<type,  register_location, memory_location, global,  statement,  scope,  function_name, function,  cppmem,  threads>;
 
 } // namespace AST
 
