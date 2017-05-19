@@ -15,7 +15,7 @@ cppmem_SOURCES = \
 cppmem_test_CXXFLAGS = -fmax-errors=3 @LIBCWD_FLAGS@
 cppmem_test_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la @BOOST_UNIT_TEST_FRAMEWORK_LIB@
 
-cppmem_CXXFLAGS = -fmax-errors=3 @LIBCWD_FLAGS@
+cppmem_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
 cppmem_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 # --------------- Maintainer's Section

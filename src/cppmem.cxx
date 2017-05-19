@@ -1,10 +1,8 @@
 #include "sys.h"
 #include "debug.h"
 #include "cppmem.h"
-#include <boost/config/warning_disable.hpp>
-//#include <boost/spirit/include/qi_grammar.hpp>
-//#include <boost/spirit/include/qi_parse.hpp>
 #include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/repository/include/qi_confix.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>
 #include <boost/spirit/include/phoenix_fusion.hpp>
@@ -35,14 +33,62 @@ BOOST_FUSION_ADAPT_STRUCT(
     (AST::scope, m_scope)
 )
 
+BOOST_FUSION_ADAPT_STRUCT(
+    AST::body,
+    (AST::body::container_type, m_body_nodes),
+    (bool, m_dummy)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    AST::scope,
+    (boost::optional<AST::body>, m_body)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    AST::threads,
+    (AST::threads::container_type, m_threads),
+    (bool, m_dummy)
+)
+
 namespace AST
 {
 
 bool scope::operator==(std::string const& stmt) const
 {
-  assert(m_list.size() == 1);
-  assert(m_list.front().which() == 0);  // statement
-  return boost::get<statement>(m_list.front()) == stmt;
+  assert(m_body);
+  assert(m_body->m_body_nodes.size() == 1);
+  assert(m_body->m_body_nodes.front().which() == 0);  // statement
+  return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
+}
+
+std::ostream& operator<<(std::ostream& os, scope const& scope)
+{
+  os << "{ ";
+  if (scope.m_body)
+    os << scope.m_body.get() << ' ';
+  return os << '}';
+}
+
+std::ostream& operator<<(std::ostream& os, body const& body)
+{
+  for (auto&& node : body.m_body_nodes)
+    os << node;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, threads const& threads)
+{
+  os << "{{{ ";
+  bool first = true;
+  for (auto&& thread : threads.m_threads)
+  {
+    if (!first)
+      os << " ||| ";
+    first = false;
+    os << thread;
+  }
+  os << " }}}";
+  return os;
 }
 
 } // namespace AST
@@ -52,13 +98,14 @@ namespace
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
+namespace repository = boost::spirit::repository;
 namespace phoenix = boost::phoenix;
 
 template<typename Iterator>
 struct cpp_comment_skipper : public qi::grammar<Iterator> {
 
     cpp_comment_skipper() : cpp_comment_skipper::base_type(skip, "C++ comment") {
-        skip = ("//" >> *(qi::char_ - '\n') > '\n');
+        skip = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
     }
     qi::rule<Iterator> skip;
 };
@@ -78,17 +125,19 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule<AST::memory_location>    memory_location;
   rule<AST::global>             global;
   rule<AST::statement>          statement;
+  rule<AST::body>               body;
   rule<AST::scope>              scope;
   rule<AST::function_name>      function_name;
   rule<AST::function>           function;
+  //rule<AST::threads>            threads;
   rule<AST::cppmem>             cppmem_program;
 
  protected:
   grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), Skipper>(start, name)
   {
-    whitespace                  = +qi::space;
-    identifier_begin_char       = qi::alpha | ascii::char_('_');
-    identifier_char             = qi::alnum | ascii::char_('_');
+    whitespace                  = +ascii::space;
+    identifier_begin_char       = ascii::alpha | ascii::char_('_');
+    identifier_char             = ascii::alnum | ascii::char_('_');
 
     identifier                  = identifier_begin_char >> *identifier_char;
 
@@ -107,9 +156,11 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     //symbol = register_location | memory_location;
 
-    statement                   = -whitespace >> !ascii::char_('{') >> +(ascii::char_ - (ascii::char_('}') | ';')) >> ';' >> -whitespace;
+    statement                   = -whitespace >> !(ascii::char_('{') | ascii::char_('|')) >> +(ascii::char_ - (ascii::char_('}') | ';')) >> ';' >> -whitespace;
 
-    scope                       = "{" >> -whitespace >> *(statement | scope) >>
+    body                        = +(statement | scope /*| threads*/)            /* m_dummy workaround: */ >> qi::attr(false);
+
+    scope                       = "{" >> -whitespace >> -body >>
                                          -whitespace > "}" >>
                                          -whitespace;
 
@@ -119,6 +170,12 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
                                            -whitespace >> "()" >>
                                            -whitespace >> scope;
 
+#if 0
+    threads                     =   "{{{" >> -whitespace > body >>
+                                  +("|||" >> -whitespace > body) >
+                                    "}}}" >> -whitespace;
+#endif
+
     identifier_begin_char.name("identifier_begin_char");
     identifier_char.name("identifier_char");
     identifier.name("identifier");
@@ -127,9 +184,11 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     memory_location.name("memory_location");
     global.name("global");
     statement.name("statement");
+    body.name("body");
     scope.name("scope");
     function_name.name("function_name");
     function.name("function");
+    //threads.name("threads");
 
     // Uncomment this to turn on debugging.
     //qi::debug(global);
@@ -140,6 +199,8 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     //qi::debug(function);
     //qi::debug(scope);
     //qi::debug(statement);
+    //qi::debug(body);
+    //qi::debug(threads);
   }
 };
 

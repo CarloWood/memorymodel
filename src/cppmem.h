@@ -6,7 +6,6 @@
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
 #include <boost/optional/optional_io.hpp>
-#include <boost/spirit/include/qi.hpp>
 
 #include <iostream>
 #include <string>
@@ -126,32 +125,41 @@ struct statement : std::string {
   }
 };
 
-struct scope;
-using scope_node = boost::variant<statement, boost::recursive_wrapper<scope>>;
 
-// {
-//   *(STATEMENT | SCOPE)
-// }
+struct scope;
+struct threads;
+using body_node = boost::variant<statement, boost::recursive_wrapper<scope> /*, boost::recursive_wrapper<threads>*/>;
+
+struct body
+{
+  using container_type = std::vector<body_node>;
+  container_type m_body_nodes;
+
+  friend std::ostream& operator<<(std::ostream& os, body const& body);
+
+  // Workaround for the fact that spirit/fusion doesn't work correctly for structs containing a single STL container.
+  bool m_dummy;
+};
+
 struct scope
 {
-  using list_type = std::vector<scope_node>;
-  using value_type = list_type::value_type;
-  using iterator = list_type::iterator;
-  iterator end() { return m_list.end(); }
-  void insert(iterator const& iter, value_type const& value) { m_list.insert(iter, value); }
+  boost::optional<body> m_body;
 
-  list_type m_list;
+  friend std::ostream& operator<<(std::ostream& os, scope const& scope);
 
+  // For the test suite.
   bool operator==(std::string const& statement) const;
+};
 
-  friend std::ostream& operator<<(std::ostream& os, scope const& scope)
-  {
-    os << "{ ";
-    for (auto&& node : scope.m_list)
-      os << node;
-    os << " }";
-    return os;
-  }
+struct threads
+{
+  using container_type = std::vector<body>;
+  container_type m_threads;
+
+  friend std::ostream& operator<<(std::ostream& os, threads const& threads);
+
+  // Workaround for the fact that spirit/fusion doesn't work correctly for structs containing a single STL container.
+  bool m_dummy;
 };
 
 // IDENTIFIER

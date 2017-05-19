@@ -150,7 +150,11 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(AScope, value.which());
-  //BOOST_REQUIRE(boost::get<scope>(value) == "int y = 4;");
+  AST::scope const& s = boost::get<scope>(value);
+  std::stringstream ss;
+  ss << s;
+  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{ int y = 4;atomic_int x;{ { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
 }
 #endif
 
@@ -166,6 +170,7 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
   AST::function const& f = boost::get<function>(value);
   std::stringstream ss;
   ss << f;
+  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
 }
 #endif
