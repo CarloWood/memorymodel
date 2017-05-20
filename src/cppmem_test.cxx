@@ -8,19 +8,24 @@
 using namespace AST;
 
 #define MIN_TEST 0
-#define MAX_TEST 10
+#define MAX_TEST 15
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
-#define memory_location_internal_nr     2
-#define register_r42_nr                 3
-#define memory_location_r2d2_nr         4
-#define global_simple_nr                5
-#define global_init_nr                  6
-#define scope_anything_nr               7
-#define scope_recursive_nr              8
-#define function_wrlock_nr              9
-#define threads_simple_nr              10
+#define type_comment1_nr                2
+#define type_comment2_nr                3
+#define memory_location_internal_nr     4
+#define register_r42_nr                 5
+#define memory_location_r2d2_nr         6
+#define memory_location_r_comment1_nr   7
+#define memory_location_r_comment2_nr   8
+#define global_simple_nr                9
+#define global_init_nr                 10
+#define type_comment3_nr               11
+#define scope_anything_nr              12
+#define scope_recursive_nr             13
+#define function_wrlock_nr             14
+#define threads_simple_nr              15
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -52,6 +57,29 @@ BOOST_AUTO_TEST_CASE(type_type_atomic_int)
 
   BOOST_REQUIRE_EQUAL(AType, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
+}
+#endif
+
+#if DO_TEST(type_comment1)
+BOOST_AUTO_TEST_CASE(type_comment1)
+{
+  std::string const text{"/* */atomic_int/* */"};
+
+  AST::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(AType, value.which());
+  BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
+}
+#endif
+
+#if DO_TEST(type_comment2)
+BOOST_AUTO_TEST_CASE(type_comment2)
+{
+  std::string const text{"atomic_/**/int"};
+
+  AST::nonterminal value;
+  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
 }
 #endif
 
@@ -94,6 +122,44 @@ BOOST_AUTO_TEST_CASE(memory_location_r2d2)
 }
 #endif
 
+#if DO_TEST(memory_location_r_comment1)
+BOOST_AUTO_TEST_CASE(memory_location_r_comment1)
+{
+  std::string const text{"r/*1*/0"};
+  // Check that the C comment is interpreted in the same way as whitespace would be.
+  std::string const wrong_text{"r0"};
+  std::string const right_text{"r 0"};
+
+  AST::nonterminal value;
+  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
+  BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
+
+  // The behavior when text would be interpreted as wrong_text is different:
+  BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
+  BOOST_REQUIRE_EQUAL(ARegisterLocation, value.which());
+  BOOST_REQUIRE(boost::get<register_location>(value) == 0U);
+}
+#endif
+
+#if DO_TEST(memory_location_r_comment2)
+BOOST_AUTO_TEST_CASE(memory_location_r_comment2)
+{
+  std::string const text{"r4/*2*/_"};
+  // Check that the C comment is interpreted in the same way as whitespace would be.
+  std::string const wrong_text{"r4_"};
+  std::string const right_text{"r4 _"};
+
+  AST::nonterminal value;
+  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
+  BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
+
+  // The behavior when text would be interpreted as wrong_text is different:
+  BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
+  BOOST_REQUIRE_EQUAL(AMemoryLocation, value.which());
+  BOOST_REQUIRE(boost::get<memory_location>(value) == wrong_text);
+}
+#endif
+
 #if DO_TEST(global_simple)
 BOOST_AUTO_TEST_CASE(global_simple)
 {
@@ -117,6 +183,19 @@ BOOST_AUTO_TEST_CASE(global_init)
 
   BOOST_REQUIRE_EQUAL(AGlobal, value.which());
   BOOST_REQUIRE(boost::get<global>(value) == global(type_int, "int3", 123));
+}
+#endif
+
+#if DO_TEST(type_comment3)
+BOOST_AUTO_TEST_CASE(type_comment3)
+{
+  std::string const text{"atomic_int/**/x = 3;"};
+
+  AST::nonterminal value;
+  BOOST_CHECK_NO_THROW(cppmem::parse(text, value));
+
+  BOOST_REQUIRE_EQUAL(AGlobal, value.which());
+  BOOST_REQUIRE(boost::get<global>(value) == global(type_atomic_int, "x", 3));
 }
 #endif
 

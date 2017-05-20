@@ -61,6 +61,18 @@ bool scope::operator==(std::string const& stmt) const
   return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
 }
 
+std::ostream& operator<<(std::ostream& os, function_name const& function_name)
+{
+  os << function_name.m_name;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, function const& function)
+{
+  os << "void " << function.m_function_name << "() " << function.m_scope;
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, scope const& scope)
 {
   os << "{ ";
@@ -102,12 +114,18 @@ namespace repository = boost::spirit::repository;
 namespace phoenix = boost::phoenix;
 
 template<typename Iterator>
-struct cpp_comment_skipper : public qi::grammar<Iterator> {
+struct cpp_comment_skipper : public qi::grammar<Iterator>
+{
+  qi::rule<Iterator> cpp_comment;
+  qi::rule<Iterator> c_comment;
+  qi::rule<Iterator> skip;
 
-    cpp_comment_skipper() : cpp_comment_skipper::base_type(skip, "C++ comment") {
-        skip = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
-    }
-    qi::rule<Iterator> skip;
+  cpp_comment_skipper() : cpp_comment_skipper::base_type(skip, "C++ comment")
+  {
+    cpp_comment = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
+    c_comment = repository::confix("/*", "*/")[*(ascii::char_ - "*/")];
+    skip = c_comment | cpp_comment;
+  }
 };
 
 template <typename Iterator, typename StartRule, typename Skipper = cpp_comment_skipper<Iterator>>
@@ -115,10 +133,14 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 {
  protected:
   template<typename T> using rule = qi::rule<Iterator, T(), Skipper>;
+  template<typename T> using rule_noskip = qi::rule<Iterator, T()>;     // Rules appearing inside lexeme or no_skip etc, must not have a Skipper.
 
-  rule<qi::unused_type>         whitespace;
-  rule<char>                    identifier_begin_char;
-  rule<char>                    identifier_char;
+  rule_noskip<qi::unused_type>  cpp_comment;
+  rule_noskip<qi::unused_type>  c_comment;
+  rule_noskip<qi::unused_type>  whitespace;
+  rule_noskip<char>             identifier_begin_char;
+  rule_noskip<char>             identifier_char;
+
   rule<std::string>             identifier;
   rule<AST::type>               type;
   rule<AST::register_location>  register_location;
@@ -129,34 +151,41 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule<AST::scope>              scope;
   rule<AST::function_name>      function_name;
   rule<AST::function>           function;
+  rule<AST::function>           main;
+  rule<qi::unused_type>         return_statement;
   rule<AST::threads>            threads;
   rule<AST::cppmem>             cppmem_program;
 
  protected:
   grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), Skipper>(start, name)
   {
-    whitespace                  = +ascii::space;
-    identifier_begin_char       = ascii::alpha | ascii::char_('_');
-    identifier_char             = ascii::alnum | ascii::char_('_');
+    using ascii::char_;
 
-    identifier                  = identifier_begin_char >> *identifier_char;
+    // No Skipper rules.
+    cpp_comment                 = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
+    c_comment                   = repository::confix("/*", "*/")[*(ascii::char_ - "*/")];
+    whitespace                  = +(+ascii::space | c_comment | cpp_comment);
+    identifier_begin_char       = ascii::alpha | char_('_');
+    identifier_char             = ascii::alnum | char_('_');
 
-    type                        = ( qi::lit("int")        >> qi::attr(AST::type_int)
-                                  | qi::lit("atomic_int") >> qi::attr(AST::type_atomic_int)
-                                  ) >> !identifier_char;
+    identifier                  = qi::lexeme[ identifier_begin_char >> *identifier_char ];
 
-    register_location           = 'r' >> qi::uint_ >> !identifier_char;
+    type                        = ( "int"        >> qi::attr(AST::type_int)
+                                  | "atomic_int" >> qi::attr(AST::type_atomic_int)
+                                  ) >> !qi::no_skip[ identifier_char ];
+
+    register_location           = qi::lexeme[ 'r' >> qi::uint_ >> !identifier_char ];
 
     memory_location             = identifier - register_location;
 
-    global                      = type >> whitespace >> memory_location >>
+    global                      = type >> qi::no_skip[whitespace] >> memory_location >>
                                          -whitespace >> -("=" >> -whitespace > qi::int_) >>
                                          -whitespace > ";" >>
                                          -whitespace;
 
     //symbol = register_location | memory_location;
 
-    statement                   = -whitespace >> !(ascii::char_('{') | ascii::char_('|')) >> +(ascii::char_ - (ascii::char_('}') | ';')) >> ';' >> -whitespace;
+    statement                   = -whitespace >> !(char_('{') | char_('|')) >> +(char_ - (char_('}') | ';')) >> ';' >> -whitespace;
 
     body                        = +(statement | scope | threads)                /* m_dummy workaround: */ >> qi::attr(false);
 
@@ -166,9 +195,15 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     function_name               = identifier;
 
-    function                    = "void" >> whitespace >> function_name >>
+    function                    = "void" >> qi::no_skip[whitespace] >> function_name >>
                                            -whitespace >> "()" >>
                                            -whitespace >> scope;
+
+    return_statement            = "return" >> qi::no_skip[whitespace] >> qi::int_ >> -whitespace >> ';' >> -whitespace;
+
+    main                        = "int" >> qi::no_skip[whitespace] >> "main" >> /* workaround for the fact that string("main") doesn't work: */ qi::attr(AST::function_name("main")) >>
+                                          -whitespace >> "()" >>
+                                          -whitespace >> -return_statement >> scope;
 
     threads                     =   "{{{" >> -whitespace > body >>
                                   +("|||" >> -whitespace > body) >
@@ -186,10 +221,12 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     scope.name("scope");
     function_name.name("function_name");
     function.name("function");
+    return_statement.name("return_statement");
+    main.name("main");
     threads.name("threads");
 
     // Uncomment this to turn on debugging.
-#if 0
+#if 1
     qi::debug(global);
     qi::debug(type);
     qi::debug(register_location);
@@ -200,6 +237,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     qi::debug(statement);
     qi::debug(body);
     qi::debug(threads);
+    qi::debug(main);
 #endif
   }
 };

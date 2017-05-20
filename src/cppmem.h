@@ -165,16 +165,12 @@ struct threads
 // IDENTIFIER
 struct function_name
 {
-  std::string m_function_name;
+  std::string m_name;
 
   function_name() { }
-  function_name(std::string const& function_name) : m_function_name(function_name) { }
+  function_name(std::string const& name) : m_name(name) { }
 
-  friend std::ostream& operator<<(std::ostream& os, function_name const& function_name)
-  {
-    os << function_name.m_function_name;
-    return os;
-  }
+  friend std::ostream& operator<<(std::ostream& os, function_name const& function_name);
 };
 
 // void FUNCTION_NAME()
@@ -186,11 +182,7 @@ struct function {
   function() { }
   function(function_name function_name) : m_function_name(function_name) { }
 
-  friend std::ostream& operator<<(std::ostream& os, function const& function)
-  {
-    os << "void " << function.m_function_name << "() " << function.m_scope;
-    return os;
-  }
+  friend std::ostream& operator<<(std::ostream& os, function const& function);
 };
 
 using definition_node = boost::variant<global, function>;
