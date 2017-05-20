@@ -16,6 +16,47 @@
 namespace AST
 {
 
+std::ostream& operator<<(std::ostream& os, type const& type)
+{
+  switch (type.m_type)
+  {
+    case type_int:
+      os << "int";
+      break;
+    case type_atomic_int:
+      os << "atomic_int";
+      break;
+  }
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, register_location const& register_location)
+{
+  os << 'r' << register_location.m_id;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, memory_location const& memory_location)
+{
+  os << memory_location.m_name;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, global const& global)
+{
+  os << global.m_type << ' ' << global.m_memory_location;
+  if (global.m_initial_value)
+    os << " = " << global.m_initial_value;
+  os << ';';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, statement const& statement)
+{
+  os << static_cast<std::string const&>(statement) << ';';
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, function_name const& function_name)
 {
   os << function_name.m_name;
@@ -55,6 +96,13 @@ std::ostream& operator<<(std::ostream& os, threads const& threads)
     os << thread;
   }
   os << " }}}";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
+{
+  for (auto&& definition : cppmem)
+    os << definition << "; ";
   return os;
 }
 
