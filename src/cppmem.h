@@ -202,11 +202,3 @@ enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGl
 using nonterminal = boost::variant<type,  register_location, memory_location, global,  statement,  scope,  function_name, function,  cppmem,  threads>;
 
 } // namespace AST
-
-namespace cppmem
-{
-
-extern void parse(std::string const& text, AST::nonterminal& out);
-extern bool parse(std::string const& text, AST::cppmem& out);
-
-} // namespace cppmem

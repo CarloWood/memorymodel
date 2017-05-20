@@ -5,11 +5,13 @@ bin_PROGRAMS = cppmem_test cppmem
 cppmem_test_SOURCES = \
 		 cppmem.cxx \
 		 cppmem.h \
+		 cppmem_parser.h \
 		 cppmem_test.cxx
 
 cppmem_SOURCES = \
 		 cppmem.cxx \
 		 cppmem.h \
+		 cppmem_parser.h \
 		 spirit.cxx
 
 cppmem_test_CXXFLAGS = -fmax-errors=3 @LIBCWD_FLAGS@

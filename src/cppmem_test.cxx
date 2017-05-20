@@ -3,7 +3,7 @@
 #include "sys.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/variant/get.hpp>
-#include "cppmem.h"
+#include "cppmem_parser.h"
 
 using namespace AST;
 
@@ -208,6 +208,7 @@ BOOST_AUTO_TEST_CASE(scope_anything)
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(AScope, value.which());
+  //std::cout << "Result: \"" << boost::get<scope>(value) << "\"." << std::endl;
   BOOST_REQUIRE(boost::get<scope>(value) == "int y = 4 ");
 }
 #endif
