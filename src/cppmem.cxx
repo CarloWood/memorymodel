@@ -42,11 +42,11 @@ std::ostream& operator<<(std::ostream& os, memory_location const& memory_locatio
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, global const& global)
+std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
 {
-  os << global.m_type << ' ' << global.m_memory_location;
-  if (global.m_initial_value)
-    os << " = " << global.m_initial_value;
+  os << vardecl.m_type << ' ' << vardecl.m_memory_location;
+  if (vardecl.m_initial_value)
+    os << " = " << vardecl.m_initial_value.get();
   os << ';';
   return os;
 }

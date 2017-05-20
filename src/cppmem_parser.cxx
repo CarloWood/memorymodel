@@ -21,7 +21,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::global,
+    AST::vardecl,
     (AST::type, m_type),
     (AST::memory_location, m_memory_location),
     (boost::optional<int>, m_initial_value)
@@ -57,7 +57,7 @@ bool scope::operator==(std::string const& stmt) const
 {
   assert(m_body);
   assert(m_body->m_body_nodes.size() == 1);
-  assert(m_body->m_body_nodes.front().which() == 0);  // statement
+  assert(m_body->m_body_nodes.front().which() == BN_statement);
   return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
 }
 
@@ -103,7 +103,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule<AST::type>               type;
   rule<AST::register_location>  register_location;
   rule<AST::memory_location>    memory_location;
-  rule<AST::global>             global;
+  rule<AST::vardecl>            vardecl;
   rule<AST::statement>          statement;
   rule<AST::body>               body;
   rule<AST::scope>              scope;
@@ -136,7 +136,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     memory_location             = identifier - register_location;
 
-    global                      = type >> qi::no_skip[whitespace] >> memory_location >>
+    vardecl                     = type >> qi::no_skip[whitespace] >> memory_location >>
                                          -whitespace >> -("=" >> -whitespace > qi::int_) >>
                                          -whitespace > ";" >>
                                          -whitespace;
@@ -145,7 +145,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     statement                   = -whitespace >> !(char_('{') | char_('|')) >> +(char_ - (char_('}') | ';')) >> ';' >> -whitespace;
 
-    body                        = +(statement | scope | threads)                /* m_dummy workaround: */ >> qi::attr(false);
+    body                        = +(vardecl | statement | scope | threads)      /* m_dummy workaround: */ >> qi::attr(false);
 
     scope                       = "{" >> -whitespace >> -body >>
                                          -whitespace >> "}" >>
@@ -173,7 +173,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     type.name("type");
     register_location.name("register_location");
     memory_location.name("memory_location");
-    global.name("global");
+    vardecl.name("vardecl");
     statement.name("statement");
     body.name("body");
     scope.name("scope");
@@ -184,8 +184,8 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     threads.name("threads");
 
     // Uncomment this to turn on debugging.
-#if 1
-    qi::debug(global);
+#if 0
+    qi::debug(vardecl);
     qi::debug(type);
     qi::debug(register_location);
     qi::debug(memory_location);
@@ -209,7 +209,7 @@ class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
  public:
   unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
   {
-    unit_test = this->global | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
+    unit_test = this->vardecl | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
     unit_test.name("unit_test");
     //qi::debug(unit_test);
   }
@@ -224,7 +224,7 @@ class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
  public:
   cppmem_grammar() : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_grammar")
   {
-    cppmem_program = -(this->whitespace) >> *(this->global | this->function);
+    cppmem_program = -(this->whitespace) >> *(this->vardecl | this->function);
     cppmem_program.name("cppmem_program");
     qi::debug(cppmem_program);
   }

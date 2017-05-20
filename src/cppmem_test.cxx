@@ -8,7 +8,7 @@
 using namespace AST;
 
 #define MIN_TEST 0
-#define MAX_TEST 15
+#define MAX_TEST 16
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -19,13 +19,14 @@ using namespace AST;
 #define memory_location_r2d2_nr         6
 #define memory_location_r_comment1_nr   7
 #define memory_location_r_comment2_nr   8
-#define global_simple_nr                9
-#define global_init_nr                 10
+#define vardecl_simple_nr                9
+#define vardecl_init_nr                 10
 #define type_comment3_nr               11
 #define scope_anything_nr              12
-#define scope_recursive_nr             13
-#define function_wrlock_nr             14
-#define threads_simple_nr              15
+#define scope_vardecl_nr               13
+#define scope_recursive_nr             14
+#define function_wrlock_nr             15
+#define threads_simple_nr              16
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -42,7 +43,7 @@ BOOST_AUTO_TEST_CASE(type_type_int)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AType, value.which());
+  BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_int);
 }
 #endif
@@ -55,7 +56,7 @@ BOOST_AUTO_TEST_CASE(type_type_atomic_int)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AType, value.which());
+  BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
 }
 #endif
@@ -68,7 +69,7 @@ BOOST_AUTO_TEST_CASE(type_comment1)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AType, value.which());
+  BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
 }
 #endif
@@ -91,7 +92,7 @@ BOOST_AUTO_TEST_CASE(memory_location_internal)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AMemoryLocation, value.which());
+  BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == "internal");
 }
 #endif
@@ -104,7 +105,7 @@ BOOST_AUTO_TEST_CASE(register_r42)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(ARegisterLocation, value.which());
+  BOOST_REQUIRE_EQUAL(NT_register_location, value.which());
   BOOST_REQUIRE(boost::get<register_location>(value) == 42U);
 }
 #endif
@@ -117,7 +118,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r2d2)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AMemoryLocation, value.which());
+  BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == "r2d2");
 }
 #endif
@@ -136,7 +137,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment1)
 
   // The behavior when text would be interpreted as wrong_text is different:
   BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
-  BOOST_REQUIRE_EQUAL(ARegisterLocation, value.which());
+  BOOST_REQUIRE_EQUAL(NT_register_location, value.which());
   BOOST_REQUIRE(boost::get<register_location>(value) == 0U);
 }
 #endif
@@ -155,34 +156,34 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment2)
 
   // The behavior when text would be interpreted as wrong_text is different:
   BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
-  BOOST_REQUIRE_EQUAL(AMemoryLocation, value.which());
+  BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == wrong_text);
 }
 #endif
 
-#if DO_TEST(global_simple)
-BOOST_AUTO_TEST_CASE(global_simple)
+#if DO_TEST(vardecl_simple)
+BOOST_AUTO_TEST_CASE(vardecl_simple)
 {
   std::string const text{"atomic_int x;"};
 
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AGlobal, value.which());
-  BOOST_REQUIRE(boost::get<global>(value) == global(type_atomic_int, "x"));
+  BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
+  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x"));
 }
 #endif
 
-#if DO_TEST(global_init)
-BOOST_AUTO_TEST_CASE(global_init)
+#if DO_TEST(vardecl_init)
+BOOST_AUTO_TEST_CASE(vardecl_init)
 {
   std::string const text{"int int3 = 123;"};
 
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AGlobal, value.which());
-  BOOST_REQUIRE(boost::get<global>(value) == global(type_int, "int3", 123));
+  BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
+  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_int, "int3", 123));
 }
 #endif
 
@@ -194,22 +195,44 @@ BOOST_AUTO_TEST_CASE(type_comment3)
   AST::nonterminal value;
   BOOST_CHECK_NO_THROW(cppmem::parse(text, value));
 
-  BOOST_REQUIRE_EQUAL(AGlobal, value.which());
-  BOOST_REQUIRE(boost::get<global>(value) == global(type_atomic_int, "x", 3));
+  BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
+  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x", 3));
 }
 #endif
 
 #if DO_TEST(scope_anything)
 BOOST_AUTO_TEST_CASE(scope_anything)
 {
+  std::string const text{"{\n  y = 4 ;\n}\n"};
+
+  AST::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ::AST::scope sc(boost::get<scope>(value));
+  //std::cout << "Result: \"" << sc << "\"." << std::endl;
+  BOOST_REQUIRE(sc.m_body);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_statement);
+  BOOST_REQUIRE(boost::get<statement>(sc.m_body->m_body_nodes.front()) == "y=4");
+}
+#endif
+
+#if DO_TEST(scope_vardecl)
+BOOST_AUTO_TEST_CASE(scope_vardecl)
+{
   std::string const text{"{\n  int y = 4 ;\n}\n"};
 
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AScope, value.which());
-  //std::cout << "Result: \"" << boost::get<scope>(value) << "\"." << std::endl;
-  BOOST_REQUIRE(boost::get<scope>(value) == "int y = 4 ");
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ::AST::scope sc(boost::get<scope>(value));
+  //std::cout << "Result: \"" << sc << "\"." << std::endl;
+  BOOST_REQUIRE(sc.m_body);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
+  BOOST_REQUIRE(boost::get<vardecl>(sc.m_body->m_body_nodes.front()) == vardecl(type_int, "y", 4U));
 }
 #endif
 
@@ -230,12 +253,12 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AScope, value.which());
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   AST::scope const& s = boost::get<scope>(value);
   std::stringstream ss;
   ss << s;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
-  BOOST_REQUIRE(ss.str() == "{ int y = 4;atomic_int x;{ { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
+  BOOST_REQUIRE(ss.str() == "{ int y = 4;atomic_int x;{ { x.store(1); }r0=y.load(std::memory_order_relaxed); } }");
 }
 #endif
 
@@ -247,7 +270,7 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AFunction, value.which());
+  BOOST_REQUIRE_EQUAL(NT_function, value.which());
   AST::function const& f = boost::get<function>(value);
   std::stringstream ss;
   ss << f;
@@ -276,7 +299,7 @@ BOOST_AUTO_TEST_CASE(threads_simple)
   AST::nonterminal value;
   cppmem::parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(AThreads, value.which());
+  BOOST_REQUIRE_EQUAL(NT_threads, value.which());
   AST::threads const& t = boost::get<threads>(value);
   std::stringstream ss;
   ss << t;

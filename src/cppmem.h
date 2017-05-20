@@ -74,20 +74,20 @@ struct memory_location
 };
 
 // TYPE MEMORY_LOCATION [= INT_];
-struct global {
+struct vardecl {
   type m_type;
   memory_location m_memory_location;
   boost::optional<int> m_initial_value;
 
-  global() { }
-  global(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
-  global(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
+  vardecl() { }
+  vardecl(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
+  vardecl(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
 
-  friend bool operator==(global const& g1, global const& g2) {
-    return g1.m_type == g2.m_type && g1.m_memory_location == g2.m_memory_location && g1.m_initial_value == g2.m_initial_value;
+  friend bool operator==(vardecl const& vd1, vardecl const& vd2) {
+    return vd1.m_type == vd2.m_type && vd1.m_memory_location == vd2.m_memory_location && vd1.m_initial_value == vd2.m_initial_value;
   }
 
-  friend std::ostream& operator<<(std::ostream& os, global const& global);
+  friend std::ostream& operator<<(std::ostream& os, vardecl const& vardecl);
 };
 
 struct statement : std::string {
@@ -97,7 +97,8 @@ struct statement : std::string {
 
 struct scope;
 struct threads;
-using body_node = boost::variant<statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
+enum BodyNode               { BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
+using body_node = boost::variant<vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
 
 struct body
 {
@@ -154,7 +155,8 @@ struct function {
   friend std::ostream& operator<<(std::ostream& os, function const& function);
 };
 
-using definition_node = boost::variant<global, function>;
+enum DefinitionNode               { DN_vardecl, DN_function };
+using definition_node = boost::variant<vardecl,    function>;
 
 // *DEFINITION
 struct cppmem : public std::vector<definition_node>
@@ -162,7 +164,7 @@ struct cppmem : public std::vector<definition_node>
   friend std::ostream& operator<<(std::ostream& os, cppmem const& cppmem);
 };
 
-enum Nonterminals               { AType, ARegisterLocation, AMemoryLocation, AGlobal, AStatement, AScope, AFunctionName, AFunction, ACppMem, AThreads };
-using nonterminal = boost::variant<type,  register_location, memory_location, global,  statement,  scope,  function_name, function,  cppmem,  threads>;
+enum Nonterminals             { NT_type, NT_register_location, NT_memory_location, NT_vardecl, NT_statement, NT_scope, NT_function_name, NT_function, NT_cppmem, NT_threads };
+using nonterminal = boost::variant<type,    register_location,    memory_location,    vardecl,    statement,    scope,    function_name,    function,    cppmem,    threads>;
 
 } // namespace AST
