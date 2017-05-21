@@ -133,14 +133,10 @@ struct threads
 };
 
 // IDENTIFIER
-struct function_name
+struct function_name : std::string
 {
-  std::string m_name;
-
   function_name() { }
-  function_name(std::string const& name) : m_name(name) { }
-
-  friend std::ostream& operator<<(std::ostream& os, function_name const& function_name);
+  function_name(std::string::const_iterator const& begin, std::string::const_iterator const& end) : std::string(begin, end) { }
 };
 
 // void FUNCTION_NAME()

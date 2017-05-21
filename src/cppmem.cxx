@@ -57,12 +57,6 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, function_name const& function_name)
-{
-  os << function_name.m_name;
-  return os;
-}
-
 std::ostream& operator<<(std::ostream& os, function const& function)
 {
   os << "void " << function.m_function_name << "() " << function.m_scope;

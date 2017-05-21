@@ -136,36 +136,25 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     memory_location             = identifier - register_location;
 
-    vardecl                     = type >> qi::no_skip[whitespace] >> memory_location >>
-                                         -whitespace >> -("=" >> -whitespace > qi::int_) >>
-                                         -whitespace > ";" >>
-                                         -whitespace;
+    vardecl                     = type >> qi::no_skip[whitespace] >> memory_location >> -("=" > qi::int_) > ";";
 
     //symbol = register_location | memory_location;
 
-    statement                   = -whitespace >> !(char_('{') | char_('|')) >> +(char_ - (char_('}') | ';')) >> ';' >> -whitespace;
+    statement                   = !(char_('{') | char_('|')) >> +(char_ - (char_('}') | ';')) >> ';';
 
-    body                        = +(vardecl | statement | scope | threads)      /* m_dummy workaround: */ >> qi::attr(false);
+    body                        = +(vardecl | statement | scope | threads) >> qi::attr(false);
 
-    scope                       = "{" >> -whitespace >> -body >>
-                                         -whitespace >> "}" >>
-                                         -whitespace;
+    scope                       = "{" >> -body >> "}";
 
     function_name               = identifier;
 
-    function                    = "void" >> qi::no_skip[whitespace] >> function_name >>
-                                           -whitespace >> "()" >>
-                                           -whitespace >> scope;
+    function                    = "void" >> qi::no_skip[whitespace] >> function_name >> "()" >> scope;
 
-    return_statement            = "return" >> qi::no_skip[whitespace] >> qi::int_ >> -whitespace >> ';' >> -whitespace;
+    return_statement            = "return" >> qi::no_skip[whitespace] >> qi::int_ >> ';';
 
-    main                        = "int" >> qi::no_skip[whitespace] >> "main" >> /* workaround for the fact that string("main") doesn't work: */ qi::attr(AST::function_name("main")) >>
-                                          -whitespace >> "()" >>
-                                          -whitespace >> -return_statement >> scope;
+    main                        = "int" >> qi::no_skip[whitespace] >> qi::string("main") >> "()" >> -return_statement >> scope;
 
-    threads                     =   "{{{" >> -whitespace > body >>
-                                  +("|||" >> -whitespace > body) >
-                                    "}}}" >> -whitespace                        /* m_dummy workaround: */ >> qi::attr(false);
+    threads                     = "{{{" > body >> +("|||" > body) > "}}}" >> qi::attr(false);
 
     identifier_begin_char.name("identifier_begin_char");
     identifier_char.name("identifier_char");
