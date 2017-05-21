@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 
   AST::cppmem result;
   try {
-    if (!cppmem::parse(input, result))
+    if (!cppmem::parse(argv[1], input, result))
     {
       std::cerr << "Parsing failed." << std::endl;
       return 1;

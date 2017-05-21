@@ -8,7 +8,7 @@
 using namespace AST;
 
 #define MIN_TEST 0
-#define MAX_TEST 16
+#define MAX_TEST 17
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -19,14 +19,15 @@ using namespace AST;
 #define memory_location_r2d2_nr         6
 #define memory_location_r_comment1_nr   7
 #define memory_location_r_comment2_nr   8
-#define vardecl_simple_nr                9
-#define vardecl_init_nr                 10
+#define vardecl_simple_nr               9
+#define vardecl_init_nr                10
 #define type_comment3_nr               11
 #define scope_anything_nr              12
 #define scope_vardecl_nr               13
 #define scope_recursive_nr             14
 #define function_wrlock_nr             15
 #define threads_simple_nr              16
+#define function_main_nr               17
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -305,5 +306,22 @@ BOOST_AUTO_TEST_CASE(threads_simple)
   ss << t;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
   //BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
+}
+#endif
+
+#if DO_TEST(function_main)
+BOOST_AUTO_TEST_CASE(function_main)
+{
+  std::string const text{"int main()\n{\n  return 0;\n}\n"};
+
+  AST::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_function, value.which());
+  AST::function const& f = boost::get<function>(value);
+  std::stringstream ss;
+  ss << f;
+  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "int main() { }");
 }
 #endif

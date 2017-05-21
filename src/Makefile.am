@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = cppmem_test
+bin_PROGRAMS = cppmem_test cppmem
 
 cppmem_test_SOURCES = \
 		 cppmem.cxx \

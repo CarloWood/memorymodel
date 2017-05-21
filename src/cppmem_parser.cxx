@@ -9,6 +9,7 @@
 #include <boost/spirit/include/phoenix_stl.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/variant/get.hpp>
+#include <boost/spirit/include/support_line_pos_iterator.hpp>
 
 #include <iostream>
 #include <string>
@@ -100,6 +101,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule_noskip<char>             identifier_char;
 
   rule<std::string>             identifier;
+
   rule<AST::type>               type;
   rule<AST::register_location>  register_location;
   rule<AST::memory_location>    memory_location;
@@ -109,8 +111,11 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule<AST::scope>              scope;
   rule<AST::function_name>      function_name;
   rule<AST::function>           function;
+
   rule<AST::function>           main;
+  rule<AST::scope>              main_scope;
   rule<qi::unused_type>         return_statement;
+
   rule<AST::threads>            threads;
   rule<AST::cppmem>             cppmem_program;
 
@@ -140,7 +145,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     //symbol = register_location | memory_location;
 
-    statement                   = !(char_('{') | char_('|')) >> +(char_ - (char_('}') | ';')) >> ';';
+    statement                   = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
 
     body                        = +(vardecl | statement | scope | threads) >> qi::attr(false);
 
@@ -152,7 +157,9 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     return_statement            = "return" >> qi::no_skip[whitespace] >> qi::int_ >> ';';
 
-    main                        = "int" >> qi::no_skip[whitespace] >> qi::string("main") >> "()" >> -return_statement >> scope;
+    main_scope                  = "{" >> -body >> -return_statement >> "}";
+
+    main                        = "int" >> qi::no_skip[whitespace] >> qi::string("main") >> "()" >> main_scope;
 
     threads                     = "{{{" > body >> +("|||" > body) > "}}}" >> qi::attr(false);
 
@@ -169,22 +176,25 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     function_name.name("function_name");
     function.name("function");
     return_statement.name("return_statement");
+    main_scope.name("main_scope");
     main.name("main");
     threads.name("threads");
 
     // Uncomment this to turn on debugging.
-#if 0
+#if 1
     qi::debug(vardecl);
     qi::debug(type);
     qi::debug(register_location);
     qi::debug(memory_location);
-    qi::debug(function_name);
-    qi::debug(function);
-    qi::debug(scope);
     qi::debug(statement);
     qi::debug(body);
-    qi::debug(threads);
+    qi::debug(scope);
+    qi::debug(function_name);
+    qi::debug(function);
+    qi::debug(return_statement);
     qi::debug(main);
+    qi::debug(main_scope);
+    qi::debug(threads);
 #endif
   }
 };
@@ -198,7 +208,7 @@ class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
  public:
   unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
   {
-    unit_test = this->vardecl | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
+    unit_test = this->main | this->vardecl | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
     unit_test.name("unit_test");
     //qi::debug(unit_test);
   }
@@ -209,11 +219,12 @@ class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
 {
  private:
   qi::rule<Iterator, AST::cppmem(), cpp_comment_skipper<Iterator>> cppmem_program;
+  char const* const m_filename;
 
  public:
-  cppmem_grammar() : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_grammar")
+  cppmem_grammar(char const* filename) : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_grammar"), m_filename(filename)
   {
-    cppmem_program = -(this->whitespace) >> *(this->vardecl | this->function);
+    cppmem_program = *(this->vardecl | this->function) > this->main;
     cppmem_program.name("cppmem_program");
     qi::debug(cppmem_program);
   }
@@ -234,11 +245,15 @@ void parse(std::string const& text, AST::nonterminal& out)
   }
 }
 
-bool parse(std::string const& text, AST::cppmem& out)
+bool parse(char const* filename, std::string const& text, AST::cppmem& out)
 {
-  std::string::const_iterator start{text.begin()};
-  cpp_comment_skipper<std::string::const_iterator> skipper;
-  return qi::phrase_parse(start, text.end(), cppmem_grammar<std::string::const_iterator>(), skipper, out) && start == text.end();
+  std::string::const_iterator text_begin{text.begin()};
+  std::string::const_iterator const text_end{text.end()};
+  using iterator_type = boost::spirit::line_pos_iterator<std::string::const_iterator>;
+  iterator_type begin(text_begin);
+  iterator_type const end;
+  cpp_comment_skipper<iterator_type> skipper;
+  return qi::phrase_parse(begin, end, cppmem_grammar<iterator_type>(filename), skipper, out) && begin == end;
 }
 
 } // namespace cppmem

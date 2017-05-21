@@ -136,7 +136,8 @@ struct threads
 struct function_name : std::string
 {
   function_name() { }
-  function_name(std::string::const_iterator const& begin, std::string::const_iterator const& end) : std::string(begin, end) { }
+  template<typename Iterator>
+  function_name(Iterator const& begin, Iterator const& end) : std::string(begin, end) { }
 };
 
 // void FUNCTION_NAME()

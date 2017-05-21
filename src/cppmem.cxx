@@ -59,7 +59,11 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
 
 std::ostream& operator<<(std::ostream& os, function const& function)
 {
-  os << "void " << function.m_function_name << "() " << function.m_scope;
+  if (function.m_function_name == "main")
+    os << "int ";
+  else
+    os << "void ";
+  os << function.m_function_name << "() " << function.m_scope;
   return os;
 }
 
@@ -96,7 +100,7 @@ std::ostream& operator<<(std::ostream& os, threads const& threads)
 std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
 {
   for (auto&& definition : cppmem)
-    os << definition << "; ";
+    os << definition;
   return os;
 }
 
