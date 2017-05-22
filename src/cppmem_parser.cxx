@@ -141,7 +141,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
     memory_location             = identifier - register_location;
 
-    vardecl                     = type >> qi::no_skip[whitespace] >> memory_location >> -("=" > qi::int_) > ";";
+    vardecl                     = type >> qi::no_skip[whitespace] >> memory_location >> -("=" > qi::int_) >> ";";
 
     //symbol = register_location | memory_location;
 
@@ -251,7 +251,7 @@ bool parse(char const* filename, std::string const& text, AST::cppmem& out)
   std::string::const_iterator const text_end{text.end()};
   using iterator_type = boost::spirit::line_pos_iterator<std::string::const_iterator>;
   iterator_type begin(text_begin);
-  iterator_type const end;
+  iterator_type const end(text_end);
   cpp_comment_skipper<iterator_type> skipper;
   return qi::phrase_parse(begin, end, cppmem_grammar<iterator_type>(filename), skipper, out) && begin == end;
 }
