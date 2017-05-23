@@ -6,6 +6,8 @@
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
 #include <boost/optional/optional_io.hpp>
+#include <boost/fusion/container/vector.hpp>
+#include <boost/fusion/include/at_c.hpp>
 
 #include <iostream>
 #include <string>
@@ -82,6 +84,16 @@ struct vardecl {
   vardecl() { }
   vardecl(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
   vardecl(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
+#ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
+  vardecl(boost::fusion::vector<AST::type, AST::memory_location, boost::optional<int>> const& attr) :
+#else
+  vardecl(boost::fusion::vector3<AST::type, AST::memory_location, boost::optional<int>> const& attr) :
+#endif
+      m_type(boost::fusion::at_c<0>(attr)), m_memory_location(boost::fusion::at_c<1>(attr))
+      {
+        if (boost::fusion::at_c<2>(attr))
+          m_initial_value = boost::fusion::at_c<2>(attr).get();
+      }
 
   friend bool operator==(vardecl const& vd1, vardecl const& vd2) {
     return vd1.m_type == vd2.m_type && vd1.m_memory_location == vd2.m_memory_location && vd1.m_initial_value == vd2.m_initial_value;
@@ -148,6 +160,12 @@ struct function {
 
   function() { }
   function(function_name function_name) : m_function_name(function_name) { }
+#ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
+  function(boost::fusion::vector<AST::function_name, AST::scope> const& attr) :
+#else
+  function(boost::fusion::vector2<AST::function_name, AST::scope> const& attr) :
+#endif
+      m_function_name(boost::fusion::at_c<0>(attr)), m_scope (boost::fusion::at_c<1>(attr)) { }
 
   friend std::ostream& operator<<(std::ostream& os, function const& function);
 };

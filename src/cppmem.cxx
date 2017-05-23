@@ -53,7 +53,7 @@ std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
 
 std::ostream& operator<<(std::ostream& os, statement const& statement)
 {
-  os << static_cast<std::string const&>(statement) << ';';
+  os << "\e[31m" << static_cast<std::string const&>(statement) << "\e[0m" << ';';
   return os;
 }
 
@@ -77,8 +77,15 @@ std::ostream& operator<<(std::ostream& os, scope const& scope)
 
 std::ostream& operator<<(std::ostream& os, body const& body)
 {
+  int last = -1;
   for (auto&& node : body.m_body_nodes)
+  {
+    int bn = node.which();
+    if (last == BN_vardecl || last == BN_statement)
+      os << ' ';
     os << node;
+    last = bn;
+  }
   return os;
 }
 
@@ -99,8 +106,15 @@ std::ostream& operator<<(std::ostream& os, threads const& threads)
 
 std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
 {
+  int last = -1;
   for (auto&& definition : cppmem)
+  {
+    int dn = definition.which();
+    if (last == DN_vardecl || last == DN_function)
+      os << ' ';
     os << definition;
+    last = dn;
+  }
   return os;
 }
 

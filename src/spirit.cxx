@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
       return 1;
     }
   } catch (std::exception const& e) {
-    Dout(dc::warning, "Caught exception" << e.what());
+    Dout(dc::warning, "Parser threw exception: " << e.what());
   }
 
   std::cout << "Result: " << result << std::endl;
