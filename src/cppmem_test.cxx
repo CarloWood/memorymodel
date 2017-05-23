@@ -34,6 +34,16 @@ using namespace AST;
 #define MAX_TEST MIN_TEST
 #endif
 
+void find_and_replace(std::string& str, std::string const& old_str, std::string const& new_str)
+{
+  std::string::size_type pos = 0u;
+  while ((pos = str.find(old_str, pos)) != std::string::npos)
+  {
+    str.replace(pos, old_str.length(), new_str);
+    pos += new_str.length();
+  }
+}
+
 #define DO_TEST(x) (x##_nr >= MIN_TEST && x##_nr <= MAX_TEST)
 
 #if DO_TEST(type_type_int)
@@ -258,8 +268,11 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   AST::scope const& s = boost::get<scope>(value);
   std::stringstream ss;
   ss << s;
-  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
-  BOOST_REQUIRE(ss.str() == "{ int y = 4;atomic_int x;{ { x.store(1); }r0=y.load(std::memory_order_relaxed); } }");
+  std::string out = ss.str();
+  //std::cout << "s = \"" << out << "\"." << std::endl;
+  find_and_replace(out, "\e[31m", "");
+  find_and_replace(out, "\e[0m", "");
+  BOOST_REQUIRE(out == "{ int y = 4; atomic_int x; { { x.store(1); }r0=y.load(std::memory_order_relaxed); } }");
 }
 #endif
 

@@ -12,37 +12,45 @@ int main(int argc, char* argv[])
 #endif
   Debug(NAMESPACE_DEBUG::init());
 
-  if (argc != 2)
+  char const* filename;
+  if (argc == 2)
   {
-    std::cerr << "Usage: " << argv[0] << " <test file>\n";
+    filename = argv[1];
+  }
+  else
+  {
+    std::cerr << "Usage: " << argv[0] << " <input file>\n";
     return 1;
   }
 
-  std::ifstream file(argv[1], std::ios_base::binary | std::ios_base::ate);      // Open file with file position at the end.
-
-  if (!file.is_open())
+  std::ifstream in(filename);
+  if (!in.is_open())
   {
-    std::cerr << "Failed to open file \"" << argv[1] << "\".\n";
+    std::cerr << "Failed to open input file \"" << filename << "\".\n";
     return 1;
   }
 
-  // Allocate space and read contents of file into memory.
-  std::streampos size = file.tellg();
-  std::string input(size, '\0');
-  file.seekg(0, std::ios::beg);
-  file.read(&input.at(0), size);
-  file.close();
+  std::string source_code;              // We will read the contents here.
+  in.unsetf(std::ios::skipws);          // No white space skipping!
+  std::copy(
+      std::istream_iterator<char>(in),
+      std::istream_iterator<char>(),
+      std::back_inserter(source_code));
+  in.close();
 
-  AST::cppmem result;
-  try {
-    if (!cppmem::parse(argv[1], input, result))
+  AST::cppmem ast;
+  try
+  {
+    if (!cppmem::parse(filename, source_code, ast))
     {
-      std::cerr << "Parsing failed." << std::endl;
+      std::cerr << "Parse failure." << std::endl;
       return 1;
     }
-  } catch (std::exception const& e) {
-    Dout(dc::warning, "Parser threw exception: " << e.what());
+  }
+  catch (std::exception const& error)
+  {
+    Dout(dc::warning, "Parser threw exception: " << error.what());
   }
 
-  std::cout << "Result: " << result << std::endl;
+  std::cout << "Result: " << ast << std::endl;
 }
