@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "debug.h"
 #include "cppmem_parser.h"
+#include "skipper.h"
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/support_line_pos_iterator.hpp>
@@ -48,7 +49,7 @@ BOOST_FUSION_ADAPT_STRUCT(
     (bool, m_dummy)
 )
 
-namespace
+namespace parser
 {
 
 namespace qi = boost::spirit::qi;
@@ -56,27 +57,12 @@ namespace ascii = boost::spirit::ascii;
 namespace repository = boost::spirit::repository;
 namespace phoenix = boost::phoenix;
 
-template<typename Iterator>
-struct cpp_comment_skipper : public qi::grammar<Iterator>
-{
-  qi::rule<Iterator> cpp_comment;
-  qi::rule<Iterator> c_comment;
-  qi::rule<Iterator> skip;
-
-  cpp_comment_skipper() : cpp_comment_skipper::base_type(skip, "C++ comment")
-  {
-    cpp_comment = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
-    c_comment = repository::confix("/*", "*/")[*(ascii::char_ - "*/")];
-    skip = +ascii::space | c_comment | cpp_comment;
-  }
-};
-
-template <typename Iterator, typename StartRule, typename Skipper = cpp_comment_skipper<Iterator>>
-class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
+template <typename Iterator, typename StartRule>
+class grammar_base : public qi::grammar<Iterator, StartRule(), skipper<Iterator>>
 {
  protected:
-  template<typename T> using rule = qi::rule<Iterator, T(), Skipper>;
-  template<typename T> using rule_noskip = qi::rule<Iterator, T()>;     // Rules appearing inside lexeme or no_skip etc, must not have a Skipper.
+  template<typename T> using rule = qi::rule<Iterator, T(), skipper<Iterator>>;
+  template<typename T> using rule_noskip = qi::rule<Iterator, T()>;     // Rules appearing inside lexeme or no_skip etc, must not have a skipper.
 
   rule_noskip<qi::unused_type>  cpp_comment;
   rule_noskip<qi::unused_type>  c_comment;
@@ -113,11 +99,11 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   qi::symbols<char>             m_symbols;
 
  protected:
-  grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), Skipper>(start, name)
+  grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), skipper<Iterator>>(start, name)
   {
     using ascii::char_;
 
-    // No Skipper rules.
+    // No-skipper rules.
     cpp_comment                 = repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
     c_comment                   = repository::confix("/*", "*/")[*(ascii::char_ - "*/")];
     whitespace                  = +(+ascii::space | c_comment | cpp_comment);
@@ -244,7 +230,7 @@ template <typename Iterator>
 class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
 {
  private:
-  qi::rule<Iterator, AST::nonterminal(), cpp_comment_skipper<Iterator>> unit_test;
+  qi::rule<Iterator, AST::nonterminal(), skipper<Iterator>> unit_test;
 
  public:
   unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
@@ -259,7 +245,7 @@ template <typename Iterator>
 class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
 {
  private:
-  qi::rule<Iterator, AST::cppmem(), cpp_comment_skipper<Iterator>> cppmem_program;
+  qi::rule<Iterator, AST::cppmem(), skipper<Iterator>> cppmem_program;
   char const* const m_filename;
 
  public:
@@ -271,15 +257,17 @@ class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
   }
 };
 
-} // namespace
+} // namespace parser
 
 namespace cppmem
 {
 
 void parse(std::string const& text, AST::nonterminal& out)
 {
+  using namespace parser;
+
   std::string::const_iterator start{text.begin()};
-  cpp_comment_skipper<std::string::const_iterator> skipper;
+  skipper<std::string::const_iterator> skipper;
   if (!qi::phrase_parse(start, text.end(), unit_test_grammar<std::string::const_iterator>(), skipper, out) || start != text.end())
   {
     throw std::domain_error("invalid cppmem input");
@@ -288,12 +276,14 @@ void parse(std::string const& text, AST::nonterminal& out)
 
 bool parse(char const* filename, std::string const& text, AST::cppmem& out)
 {
+  using namespace parser;
+
   std::string::const_iterator text_begin{text.begin()};
   std::string::const_iterator const text_end{text.end()};
   using iterator_type = boost::spirit::line_pos_iterator<std::string::const_iterator>;
   iterator_type begin(text_begin);
   iterator_type const end(text_end);
-  cpp_comment_skipper<iterator_type> skipper;
+  skipper<iterator_type> skipper;
   bool r = qi::phrase_parse(begin, end, cppmem_grammar<iterator_type>(filename), skipper, out);
   if (!r)
     return false;
