@@ -1,16 +1,10 @@
 #include "sys.h"
 #include "debug.h"
 #include "cppmem_parser.h"
+
 #include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/repository/include/qi_confix.hpp>
-#include <boost/spirit/include/phoenix_core.hpp>
-#include <boost/spirit/include/phoenix_operator.hpp>
-#include <boost/spirit/include/phoenix_fusion.hpp>
-#include <boost/spirit/include/phoenix_stl.hpp>
-#include <boost/fusion/include/adapt_struct.hpp>
-#include <boost/variant/get.hpp>
 #include <boost/spirit/include/support_line_pos_iterator.hpp>
-#include <boost/spirit/include/qi_symbols.hpp>
+#include <boost/spirit/repository/include/qi_confix.hpp>
 #include <boost/phoenix/bind.hpp>
 
 #include <iostream>
@@ -53,19 +47,6 @@ BOOST_FUSION_ADAPT_STRUCT(
     (AST::threads::container_type, m_threads),
     (bool, m_dummy)
 )
-
-namespace AST
-{
-
-bool scope::operator==(std::string const& stmt) const
-{
-  assert(m_body);
-  assert(m_body->m_body_nodes.size() == 1);
-  assert(m_body->m_body_nodes.front().which() == BN_statement);
-  return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
-}
-
-} // namespace AST
 
 namespace
 {

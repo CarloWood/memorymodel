@@ -325,3 +325,16 @@ BOOST_AUTO_TEST_CASE(function_main)
   BOOST_REQUIRE(ss.str() == "int main() { }");
 }
 #endif
+
+namespace AST
+{
+
+bool scope::operator==(std::string const& stmt) const
+{
+  assert(m_body);
+  assert(m_body->m_body_nodes.size() == 1);
+  assert(m_body->m_body_nodes.front().which() == BN_statement);
+  return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
+}
+
+} // namespace AST
