@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
       std::back_inserter(source_code));
   in.close();
 
-  AST::cppmem ast;
+  ast::cppmem ast;
   try
   {
     if (!cppmem::parse(filename, source_code, ast))

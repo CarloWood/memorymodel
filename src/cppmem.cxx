@@ -13,7 +13,7 @@
 
 #include <iostream>
 
-namespace AST
+namespace ast
 {
 
 std::ostream& operator<<(std::ostream& os, type const& type)
@@ -118,4 +118,4 @@ std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
   return os;
 }
 
-} // namespace AST
+} // namespace ast

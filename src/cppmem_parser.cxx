@@ -15,37 +15,37 @@
 #include <functional>
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::memory_location,
+    ast::memory_location,
     (std::string, m_name)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::vardecl,
-    (AST::type, m_type),
-    (AST::memory_location, m_memory_location),
+    ast::vardecl,
+    (ast::type, m_type),
+    (ast::memory_location, m_memory_location),
     (boost::optional<int>, m_initial_value)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::function,
-    (AST::function_name, m_function_name),
-    (AST::scope, m_scope)
+    ast::function,
+    (ast::function_name, m_function_name),
+    (ast::scope, m_scope)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::body,
-    (AST::body::container_type, m_body_nodes),
+    ast::body,
+    (ast::body::container_type, m_body_nodes),
     (bool, m_dummy)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::scope,
-    (boost::optional<AST::body>, m_body)
+    ast::scope,
+    (boost::optional<ast::body>, m_body)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    AST::threads,
-    (AST::threads::container_type, m_threads),
+    ast::threads,
+    (ast::threads::container_type, m_threads),
     (bool, m_dummy)
 )
 
@@ -76,25 +76,25 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), skipper<Iterator>
   rule_noskip<qi::unused_type>  threads_end;
 
   rule<std::string>             identifier;
-  rule<AST::statement>          catchall;
+  rule<ast::statement>          catchall;
 
-  rule<AST::type>               type;
-  rule<AST::register_location>  register_location;
-  rule<AST::memory_location>    memory_location;
-  rule<AST::vardecl>            vardecl;
-  rule<AST::statement>          statement;
+  rule<ast::type>               type;
+  rule<ast::register_location>  register_location;
+  rule<ast::memory_location>    memory_location;
+  rule<ast::vardecl>            vardecl;
+  rule<ast::statement>          statement;
   rule<qi::unused_type>         assignment;
-  rule<AST::body>               body;
-  rule<AST::scope>              scope;
-  rule<AST::function_name>      function_name;
-  rule<AST::function>           function;
+  rule<ast::body>               body;
+  rule<ast::scope>              scope;
+  rule<ast::function_name>      function_name;
+  rule<ast::function>           function;
 
-  rule<AST::function>           main;
-  rule<AST::scope>              main_scope;
+  rule<ast::function>           main;
+  rule<ast::scope>              main_scope;
   rule<qi::unused_type>         return_statement;
 
-  rule<AST::threads>            threads;
-  rule<AST::cppmem>             cppmem_program;
+  rule<ast::threads>            threads;
+  rule<ast::cppmem>             cppmem_program;
 
   qi::symbols<char>             m_symbols;
 
@@ -135,8 +135,8 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), skipper<Iterator>
     // Variable declaration (global or inside a scope).
     vardecl                    %= (type >> qi::no_skip[whitespace] >> memory_location >> -("=" > qi::int_) >> ";")
                                                                 [phoenix::bind(&grammar_base::variable_declaration, this, qi::_1, qi::_2)];
-    type                        = ( "int"        >> qi::attr(AST::type_int)
-                                  | "atomic_int" >> qi::attr(AST::type_atomic_int)
+    type                        = ( "int"        >> qi::attr(ast::type_int)
+                                  | "atomic_int" >> qi::attr(ast::type_atomic_int)
                                   ) >> !qi::no_skip[ identifier_char ];
     memory_location             = identifier - register_location;
     register_location           = qi::lexeme[ 'r' >> qi::uint_ >> !identifier_char ];
@@ -214,26 +214,26 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), skipper<Iterator>
     begin_scope();
   }
 
-  void variable_declaration(AST::type const& type, AST::memory_location const& symbol)
+  void variable_declaration(ast::type const& type, ast::memory_location const& symbol)
   {
     DoutEntering(dc::notice, "variable_declaration(" << type << ", " << symbol << ")");
     m_symbols.add(symbol.m_name);
   }
 
-  void function_declaration(AST::function_name const& function_name)
+  void function_declaration(ast::function_name const& function_name)
   {
     DoutEntering(dc::notice, "function_declaration(" << function_name << ")");
   }
 };
 
 template <typename Iterator>
-class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
+class unit_test_grammar : public grammar_base<Iterator, ast::nonterminal>
 {
  private:
-  qi::rule<Iterator, AST::nonterminal(), skipper<Iterator>> unit_test;
+  qi::rule<Iterator, ast::nonterminal(), skipper<Iterator>> unit_test;
 
  public:
-  unit_test_grammar() : grammar_base<Iterator, AST::nonterminal>(unit_test, "unit_test_grammar")
+  unit_test_grammar() : grammar_base<Iterator, ast::nonterminal>(unit_test, "unit_test_grammar")
   {
     unit_test = this->main | this->vardecl | this->function | this->scope | this->threads | this->statement | this->type | this->memory_location | this->register_location;
     unit_test.name("unit_test");
@@ -242,14 +242,14 @@ class unit_test_grammar : public grammar_base<Iterator, AST::nonterminal>
 };
 
 template <typename Iterator>
-class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
+class cppmem_grammar : public grammar_base<Iterator, ast::cppmem>
 {
  private:
-  qi::rule<Iterator, AST::cppmem(), skipper<Iterator>> cppmem_program;
+  qi::rule<Iterator, ast::cppmem(), skipper<Iterator>> cppmem_program;
   char const* const m_filename;
 
  public:
-  cppmem_grammar(char const* filename) : grammar_base<Iterator, AST::cppmem>(cppmem_program, "cppmem_grammar"), m_filename(filename)
+  cppmem_grammar(char const* filename) : grammar_base<Iterator, ast::cppmem>(cppmem_program, "cppmem_grammar"), m_filename(filename)
   {
     cppmem_program = *(this->vardecl | this->function) > this->main;
     cppmem_program.name("cppmem_program");
@@ -262,7 +262,7 @@ class cppmem_grammar : public grammar_base<Iterator, AST::cppmem>
 namespace cppmem
 {
 
-void parse(std::string const& text, AST::nonterminal& out)
+void parse(std::string const& text, ast::nonterminal& out)
 {
   using namespace parser;
 
@@ -274,7 +274,7 @@ void parse(std::string const& text, AST::nonterminal& out)
   }
 }
 
-bool parse(char const* filename, std::string const& text, AST::cppmem& out)
+bool parse(char const* filename, std::string const& text, ast::cppmem& out)
 {
   using namespace parser;
 

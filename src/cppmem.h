@@ -14,7 +14,7 @@
 #include <vector>
 #include <fstream>
 
-namespace AST
+namespace ast
 {
 
 enum Type { type_int, type_atomic_int };
@@ -85,9 +85,9 @@ struct vardecl {
   vardecl(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
   vardecl(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
 #ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
-  vardecl(boost::fusion::vector<AST::type, AST::memory_location, boost::optional<int>> const& attr) :
+  vardecl(boost::fusion::vector<ast::type, ast::memory_location, boost::optional<int>> const& attr) :
 #else
-  vardecl(boost::fusion::vector3<AST::type, AST::memory_location, boost::optional<int>> const& attr) :
+  vardecl(boost::fusion::vector3<ast::type, ast::memory_location, boost::optional<int>> const& attr) :
 #endif
       m_type(boost::fusion::at_c<0>(attr)), m_memory_location(boost::fusion::at_c<1>(attr))
       {
@@ -161,9 +161,9 @@ struct function {
   function() { }
   function(function_name function_name) : m_function_name(function_name) { }
 #ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
-  function(boost::fusion::vector<AST::function_name, AST::scope> const& attr) :
+  function(boost::fusion::vector<ast::function_name, ast::scope> const& attr) :
 #else
-  function(boost::fusion::vector2<AST::function_name, AST::scope> const& attr) :
+  function(boost::fusion::vector2<ast::function_name, ast::scope> const& attr) :
 #endif
       m_function_name(boost::fusion::at_c<0>(attr)), m_scope (boost::fusion::at_c<1>(attr)) { }
 
@@ -182,4 +182,4 @@ struct cppmem : public std::vector<definition_node>
 enum Nonterminals             { NT_type, NT_register_location, NT_memory_location, NT_vardecl, NT_statement, NT_scope, NT_function_name, NT_function, NT_cppmem, NT_threads };
 using nonterminal = boost::variant<type,    register_location,    memory_location,    vardecl,    statement,    scope,    function_name,    function,    cppmem,    threads>;
 
-} // namespace AST
+} // namespace ast

@@ -5,7 +5,7 @@
 #include <boost/variant/get.hpp>
 #include "cppmem_parser.h"
 
-using namespace AST;
+using namespace ast;
 
 #define MIN_TEST 0
 #define MAX_TEST 17
@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(type_type_int)
 {
   std::string const text{"int"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(type_type_atomic_int)
 {
   std::string const text{"atomic_int"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(type_comment1)
 {
   std::string const text{"/* */atomic_int/* */"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(type_comment2)
 {
   std::string const text{"atomic_/**/int"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
 }
 #endif
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(memory_location_internal)
 {
   std::string const text{"internal"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(register_r42)
 {
   std::string const text{"r42"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_register_location, value.which());
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r2d2)
 {
   std::string const text{"r2d2"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment1)
   std::string const wrong_text{"r0"};
   std::string const right_text{"r 0"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
   BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
 
@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment2)
   std::string const wrong_text{"r4_"};
   std::string const right_text{"r4 _"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
   BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
 
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(vardecl_simple)
 {
   std::string const text{"atomic_int x;"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(vardecl_init)
 {
   std::string const text{"int int3 = 123;"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(type_comment3)
 {
   std::string const text{"atomic_int/**/x = 3;"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   BOOST_CHECK_NO_THROW(cppmem::parse(text, value));
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
@@ -216,11 +216,11 @@ BOOST_AUTO_TEST_CASE(scope_anything)
 {
   std::string const text{"{\n  y = 4 ;\n}\n"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ::AST::scope sc(boost::get<scope>(value));
+  ast::scope sc(boost::get<scope>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
@@ -234,11 +234,11 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
 {
   std::string const text{"{\n  int y = 4 ;\n}\n"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ::AST::scope sc(boost::get<scope>(value));
+  ast::scope sc(boost::get<scope>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
@@ -261,11 +261,11 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
     "}\n"
   };
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  AST::scope const& s = boost::get<scope>(value);
+  ast::scope const& s = boost::get<scope>(value);
   std::stringstream ss;
   ss << s;
   std::string out = ss.str();
@@ -281,11 +281,11 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
 {
   std::string const text{"void wrlock()\n{\n  int y = 4;\n}\n"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
-  AST::function const& f = boost::get<function>(value);
+  ast::function const& f = boost::get<function>(value);
   std::stringstream ss;
   ss << f;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
@@ -310,11 +310,11 @@ BOOST_AUTO_TEST_CASE(threads_simple)
     "  }}}\n"
   };
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_threads, value.which());
-  AST::threads const& t = boost::get<threads>(value);
+  ast::threads const& t = boost::get<threads>(value);
   std::stringstream ss;
   ss << t;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
@@ -327,11 +327,11 @@ BOOST_AUTO_TEST_CASE(function_main)
 {
   std::string const text{"int main()\n{\n  return 0;\n}\n"};
 
-  AST::nonterminal value;
+  ast::nonterminal value;
   cppmem::parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
-  AST::function const& f = boost::get<function>(value);
+  ast::function const& f = boost::get<function>(value);
   std::stringstream ss;
   ss << f;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
@@ -339,7 +339,7 @@ BOOST_AUTO_TEST_CASE(function_main)
 }
 #endif
 
-namespace AST
+namespace ast
 {
 
 bool scope::operator==(std::string const& stmt) const
@@ -350,4 +350,4 @@ bool scope::operator==(std::string const& stmt) const
   return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
 }
 
-} // namespace AST
+} // namespace ast

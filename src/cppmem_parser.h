@@ -6,7 +6,7 @@
 namespace cppmem
 {
 
-void parse(std::string const& text, AST::nonterminal& out);
-bool parse(char const* filename, std::string const& text, AST::cppmem& out);
+void parse(std::string const& text, ast::nonterminal& out);
+bool parse(char const* filename, std::string const& text, ast::cppmem& out);
 
 } // namespace cppmem
