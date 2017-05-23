@@ -90,12 +90,14 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   rule_noskip<qi::unused_type>  threads_end;
 
   rule<std::string>             identifier;
+  rule<AST::statement>          catchall;
 
   rule<AST::type>               type;
   rule<AST::register_location>  register_location;
   rule<AST::memory_location>    memory_location;
   rule<AST::vardecl>            vardecl;
   rule<AST::statement>          statement;
+  rule<qi::unused_type>         assignment;
   rule<AST::body>               body;
   rule<AST::scope>              scope;
   rule<AST::function_name>      function_name;
@@ -107,6 +109,8 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
 
   rule<AST::threads>            threads;
   rule<AST::cppmem>             cppmem_program;
+
+  qi::symbols<char>             m_symbols;
 
  protected:
   grammar_base(rule<StartRule> const& start, char const* name) : qi::grammar<Iterator, StartRule(), Skipper>(start, name)
@@ -153,7 +157,9 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     identifier                  = qi::lexeme[ identifier_begin_char >> *identifier_char ];
 
     // Statements.
-    statement                   = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
+    catchall                    = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
+    statement                   = assignment | catchall;
+    assignment                  = m_symbols >> '=' >> qi::int_ >> ';';
 
 
     // Names of grammar rules.
@@ -176,6 +182,9 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     register_location.name("register_location");
     identifier.name("identifier");
     statement.name("statement");
+    assignment.name("assignment");
+    catchall.name("catchall");
+    m_symbols.name("symbols");
 
     // Uncomment this to turn on debugging.
 #if 0
@@ -198,6 +207,8 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
     qi::debug(register_location);
     qi::debug(identifier);
     qi::debug(statement);
+    qi::debug(assignment);
+    qi::debug(catchall);
 #endif
   }
 
@@ -220,6 +231,7 @@ class grammar_base : public qi::grammar<Iterator, StartRule(), Skipper>
   void variable_declaration(AST::type const& type, AST::memory_location const& symbol)
   {
     DoutEntering(dc::notice, "variable_declaration(" << type << ", " << symbol << ")");
+    m_symbols.add(symbol.m_name);
   }
 
   void function_declaration(AST::function_name const& function_name)
