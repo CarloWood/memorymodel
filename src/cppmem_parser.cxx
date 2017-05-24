@@ -49,8 +49,7 @@ BOOST_FUSION_ADAPT_STRUCT(
     (bool, m_dummy)
 )
 
-namespace parser
-{
+namespace parser {
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
@@ -259,8 +258,7 @@ class cppmem_grammar : public grammar_base<Iterator, ast::cppmem>
 
 } // namespace parser
 
-namespace cppmem
-{
+namespace cppmem {
 
 void parse(std::string const& text, ast::nonterminal& out)
 {

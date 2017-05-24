@@ -14,8 +14,7 @@
 #include <vector>
 #include <fstream>
 
-namespace ast
-{
+namespace ast {
 
 enum Type { type_int, type_atomic_int };
 

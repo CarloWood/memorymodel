@@ -3,8 +3,7 @@
 #include <string>
 #include "cppmem.h"
 
-namespace cppmem
-{
+namespace cppmem {
 
 void parse(std::string const& text, ast::nonterminal& out);
 bool parse(char const* filename, std::string const& text, ast::cppmem& out);

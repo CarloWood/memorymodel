@@ -13,8 +13,7 @@
 
 #include <iostream>
 
-namespace ast
-{
+namespace ast {
 
 std::ostream& operator<<(std::ostream& os, type const& type)
 {

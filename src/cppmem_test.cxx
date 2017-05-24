@@ -339,8 +339,7 @@ BOOST_AUTO_TEST_CASE(function_main)
 }
 #endif
 
-namespace ast
-{
+namespace ast {
 
 bool scope::operator==(std::string const& stmt) const
 {
