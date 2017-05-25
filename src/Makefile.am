@@ -4,6 +4,15 @@ noinst_LIBRARIES = libcppmem.a
 bin_PROGRAMS = cppmem_test cppmem
 
 libcppmem_a_SOURCES = \
+		 grammar_general.h \
+		 grammar_whitespace.cxx \
+		 grammar_whitespace.h \
+		 grammar_vardecl.cxx \
+		 grammar_vardecl.h \
+		 grammar_cppmem.cxx \
+		 grammar_cppmem.h \
+		 grammar_unittest.cxx \
+		 grammar_unittest.h \
 		 cppmem.cxx \
 		 cppmem.h \
 		 cppmem_parser.cxx \
