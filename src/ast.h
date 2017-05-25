@@ -1,18 +1,13 @@
 #pragma once
 
-#include "debug.h"
-
+#include <iosfwd>
+#include <string>
+#include <vector>
+#include <boost/fusion/container/vector.hpp>
+#include <boost/fusion/include/at_c.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
-#include <boost/optional/optional_io.hpp>
-#include <boost/fusion/container/vector.hpp>
-#include <boost/fusion/include/at_c.hpp>
-
-#include <iostream>
-#include <string>
-#include <vector>
-#include <fstream>
 
 namespace ast {
 

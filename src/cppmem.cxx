@@ -1,120 +1,56 @@
 #include "sys.h"
 #include "debug.h"
-#include "cppmem.h"
-
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/repository/include/qi_confix.hpp>
-#include <boost/spirit/include/phoenix_core.hpp>
-#include <boost/spirit/include/phoenix_operator.hpp>
-#include <boost/spirit/include/phoenix_fusion.hpp>
-#include <boost/spirit/include/phoenix_stl.hpp>
-#include <boost/fusion/include/adapt_struct.hpp>
-#include <boost/variant/get.hpp>
-
+#include "cppmem_parser.h"
 #include <iostream>
+#include <string>
+#include <fstream>
 
-namespace ast {
-
-std::ostream& operator<<(std::ostream& os, type const& type)
+int main(int argc, char* argv[])
 {
-  switch (type.m_type)
+#ifdef DEBUGGLOBAL
+  GlobalObjectManager::main_entered();
+#endif
+  Debug(NAMESPACE_DEBUG::init());
+
+  char const* filename;
+  if (argc == 2)
   {
-    case type_int:
-      os << "int";
-      break;
-    case type_atomic_int:
-      os << "atomic_int";
-      break;
+    filename = argv[1];
   }
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, register_location const& register_location)
-{
-  os << 'r' << register_location.m_id;
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, memory_location const& memory_location)
-{
-  os << memory_location.m_name;
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
-{
-  os << vardecl.m_type << ' ' << vardecl.m_memory_location;
-  if (vardecl.m_initial_value)
-    os << " = " << vardecl.m_initial_value.get();
-  os << ';';
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, statement const& statement)
-{
-  os << "\e[31m" << static_cast<std::string const&>(statement) << "\e[0m" << ';';
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, function const& function)
-{
-  if (function.m_function_name == "main")
-    os << "int ";
   else
-    os << "void ";
-  os << function.m_function_name << "() " << function.m_scope;
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, scope const& scope)
-{
-  os << "{ ";
-  if (scope.m_body)
-    os << scope.m_body.get() << ' ';
-  return os << '}';
-}
-
-std::ostream& operator<<(std::ostream& os, body const& body)
-{
-  int last = -1;
-  for (auto&& node : body.m_body_nodes)
   {
-    int bn = node.which();
-    if (last == BN_vardecl || last == BN_statement)
-      os << ' ';
-    os << node;
-    last = bn;
+    std::cerr << "Usage: " << argv[0] << " <input file>\n";
+    return 1;
   }
-  return os;
-}
 
-std::ostream& operator<<(std::ostream& os, threads const& threads)
-{
-  os << "{{{ ";
-  bool first = true;
-  for (auto&& thread : threads.m_threads)
+  std::ifstream in(filename);
+  if (!in.is_open())
   {
-    if (!first)
-      os << " ||| ";
-    first = false;
-    os << thread;
+    std::cerr << "Failed to open input file \"" << filename << "\".\n";
+    return 1;
   }
-  os << " }}}";
-  return os;
-}
 
-std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
-{
-  int last = -1;
-  for (auto&& definition : cppmem)
+  std::string source_code;              // We will read the contents here.
+  in.unsetf(std::ios::skipws);          // No white space skipping!
+  std::copy(
+      std::istream_iterator<char>(in),
+      std::istream_iterator<char>(),
+      std::back_inserter(source_code));
+  in.close();
+
+  ast::cppmem ast;
+  try
   {
-    int dn = definition.which();
-    if (last == DN_vardecl || last == DN_function)
-      os << ' ';
-    os << definition;
-    last = dn;
+    if (!cppmem::parse(filename, source_code, ast))
+    {
+      std::cerr << "Parse failure." << std::endl;
+      return 1;
+    }
   }
-  return os;
-}
+  catch (std::exception const& error)
+  {
+    Dout(dc::warning, "Parser threw exception: " << error.what());
+  }
 
-} // namespace ast
+  std::cout << "Result: " << ast << std::endl;
+}

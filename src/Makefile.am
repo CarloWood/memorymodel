@@ -13,14 +13,14 @@ libcppmem_a_SOURCES = \
 		 grammar_cppmem.h \
 		 grammar_unittest.cxx \
 		 grammar_unittest.h \
-		 cppmem.cxx \
-		 cppmem.h \
+		 ast.cxx \
+		 ast.h \
 		 cppmem_parser.cxx \
 		 cppmem_parser.h
 
 cppmem_test_SOURCES = cppmem_test.cxx
 
-cppmem_SOURCES = spirit.cxx
+cppmem_SOURCES = cppmem.cxx
 
 libcppmem_a_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
 

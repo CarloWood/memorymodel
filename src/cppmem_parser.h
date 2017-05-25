@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "cppmem.h"
+#include "ast.h"
 
 namespace cppmem {
 
