@@ -9,7 +9,7 @@ namespace parser {
 
 template<typename Iterator>
 grammar_unittest<Iterator>::grammar_unittest() :
-    qi::grammar<Iterator, ast::nonterminal(), skipper<Iterator>>(unittest, "grammar_unittest"),
+    grammar_unittest::base_type(unittest, "grammar_unittest"),
     cppmem("UNITTEST")
 {
   unittest = cppmem.main

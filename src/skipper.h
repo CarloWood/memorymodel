@@ -17,16 +17,19 @@ struct skipper : public qi::grammar<Iterator>
 {
   skipper() : skipper::base_type(start, "skipper")
   {
+    qi::eol_type eol;
+    ascii::char_type char_;
+
     start =             // White space (tab/space/cr/lf) and/or comments.
             +ascii::space
           | c_comment
           | cpp_comment;
 
     cpp_comment =       // C++-style comment.
-            repository::confix("//", qi::eol)[*(ascii::char_ - qi::eol)];
+            repository::confix("//", eol)[*(char_ - eol)];
 
     c_comment =         // C-style comment.
-            repository::confix("/*", "*/")[*(ascii::char_ - "*/")];
+            repository::confix("/*", "*/")[*(char_ - "*/")];
   }
 
   qi::rule<Iterator> cpp_comment;

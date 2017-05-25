@@ -32,7 +32,7 @@ namespace parser {
 
 template<typename Iterator>
 grammar_cppmem<Iterator>::grammar_cppmem(char const* filename) :
-    qi::grammar<Iterator, ast::cppmem(), skipper<Iterator>>(cppmem, "grammar_cppmem"),
+    grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
     m_filename(filename)
 {
   using ascii::char_;
