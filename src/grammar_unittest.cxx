@@ -8,9 +8,9 @@ namespace parser {
 //=====================================
 
 template<typename Iterator>
-grammar_unittest<Iterator>::grammar_unittest() :
+grammar_unittest<Iterator>::grammar_unittest(error_handler<Iterator>& error_h) :
     grammar_unittest::base_type(unittest, "grammar_unittest"),
-    cppmem("UNITTEST")
+    cppmem("UNITTEST", error_h)
 {
   unittest = cppmem.main
            | cppmem.vardecl

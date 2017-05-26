@@ -12,7 +12,8 @@ void parse(std::string const& text, ast::nonterminal& out)
 
   std::string::const_iterator start{text.begin()};
   skipper<std::string::const_iterator> skipper;
-  if (!qi::phrase_parse(start, text.end(), grammar_unittest<std::string::const_iterator>(), skipper, out) || start != text.end())
+  error_handler<std::string::const_iterator> error_h(start, text.end());
+  if (!qi::phrase_parse(start, text.end(), grammar_unittest<std::string::const_iterator>(error_h), skipper, out) || start != text.end())
   {
     throw std::domain_error("invalid cppmem input");
   }
@@ -28,7 +29,8 @@ bool parse(char const* filename, std::string const& text, ast::cppmem& out)
   iterator_type begin(text_begin);
   iterator_type const end(text_end);
   skipper<iterator_type> skipper;
-  bool r = qi::phrase_parse(begin, end, grammar_cppmem<iterator_type>(filename), skipper, out);
+  error_handler<iterator_type> error_h(begin, end);
+  bool r = qi::phrase_parse(begin, end, grammar_cppmem<iterator_type>(filename, error_h), skipper, out);
   if (!r)
     return false;
   if (begin != end)

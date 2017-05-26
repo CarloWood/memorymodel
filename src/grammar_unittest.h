@@ -14,7 +14,7 @@ class grammar_unittest : public qi::grammar<Iterator, ast::nonterminal(), skippe
   rule<ast::nonterminal>   unittest;
 
  public:
-  grammar_unittest();
+  grammar_unittest(error_handler<Iterator>& error_h);
 };
 
 } // namespace parser

@@ -1,5 +1,12 @@
 #include "sys.h"
 #include "grammar_cppmem.h"
+//#include "annotation.h"
+#include <boost/spirit/include/phoenix_function.hpp>
+#include <boost/spirit/include/phoenix_core.hpp>
+#include <boost/spirit/include/phoenix_operator.hpp>
+#include <boost/spirit/include/phoenix_fusion.hpp>
+#include <boost/spirit/include/phoenix_stl.hpp>
+#include <boost/spirit/include/phoenix_object.hpp>
 
 BOOST_FUSION_ADAPT_STRUCT(
     ast::function,
@@ -26,42 +33,49 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 namespace parser {
 
+namespace phoenix = boost::phoenix;
+
 //=====================================
 // Cppmem program grammar
 //=====================================
 
 template<typename Iterator>
-grammar_cppmem<Iterator>::grammar_cppmem(char const* filename) :
+grammar_cppmem<Iterator>::grammar_cppmem(char const* filename, error_handler<Iterator>& error_h) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
     m_filename(filename)
 {
-  using ascii::char_;
+  ascii::char_type char_;
+  qi::lit_type lit;
+  qi::int_type int_;
+  qi::string_type string;
+  qi::no_skip_type no_skip;
+  qi::attr_type dummy;
 
   // Unused_type rules with semantic actions.
-  scope_begin                 = (qi::lit('{') - "{{{");
-  scope_end                   = qi::lit('}');
-  threads_begin               = qi::lit("{{{");
-  threads_next                = qi::lit("|||");
-  threads_end                 = qi::lit("}}}");
+  scope_begin                 = (lit('{') - "{{{");
+  scope_end                   = lit('}');
+  threads_begin               = lit("{{{");
+  threads_next                = lit("|||");
+  threads_end                 = lit("}}}");
 
   // int main() { ... [return 0;] }   // the optional return statement is ignored.
-  main                        = "int" >> qi::no_skip[whitespace] >> qi::string("main") >> "()" >> main_scope;
-  main_scope                  = scope_begin >> -body >> -return_statement >> scope_end;
-  return_statement            = "return" >> qi::no_skip[whitespace] >> qi::int_ >> ';';
+  main                        = "int" > no_skip[whitespace] > string("main") > "()" > main_scope;
+  main_scope                  = scope_begin > -body > -return_statement > scope_end;
+  return_statement            = "return" > no_skip[whitespace] > int_ > ';';
 
   // void function_name() { ... }
-  function                    = ("void" >> qi::no_skip[whitespace] >> function_name >> "()" >> scope);
+  function                    = "void" > no_skip[whitespace] > function_name > "()" > scope;
   function_name               = vardecl.identifier;
-  scope                       = scope_begin >> -body > scope_end;
+  scope                       = scope_begin > -body > scope_end;
 
   // The body of a function.
-  body                        = +(vardecl | statement | scope | threads) >> qi::attr(false);
-  threads                     = threads_begin > body >> +(threads_next > body) > threads_end >> qi::attr(false);
+  body                        = +(vardecl | statement | scope | threads) >> dummy(false);
+  threads                     = threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
 
   // Statements.
   catchall                    = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
   statement                   = /*assignment |*/ catchall;
-  //assignment                  = m_symbols >> '=' >> qi::int_ >> ';';
+  //assignment                  = m_symbols >> '=' >> int_ >> ';';
 
   cppmem                      = *(vardecl | function) > main;
 
@@ -104,6 +118,30 @@ grammar_cppmem<Iterator>::grammar_cppmem(char const* filename) :
       (catchall)
       (cppmem)
   );
+
+  using qi::on_error;
+  using qi::on_success;
+  using qi::fail;
+  using phoenix::construct;
+  using phoenix::val;
+  using error_handler_function = phoenix::function<error_handler<Iterator>>;
+//  using annotation_function = function<annotation<Iterator>>;
+
+  qi::_1_type _1;
+  qi::_2_type _2;
+  qi::_3_type _3;
+  qi::_4_type _4;
+  qi::_val_type _val;
+
+  // Error handling: on error in start, call error_h.
+  on_error<fail>
+  (
+      cppmem
+    , error_handler_function(error_h)("Error! Expecting ", _4, _3)
+  );
+
+  // Annotation: on success in start, call annotation.
+//  on_success(function, annotation_function(error_h.iters)(_val, _1));
 }
 
 } // namespace parser
