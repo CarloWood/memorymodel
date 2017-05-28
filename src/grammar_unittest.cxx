@@ -3,6 +3,8 @@
 
 namespace parser {
 
+namespace phoenix = boost::phoenix;
+
 //=====================================
 // Unit test grammar
 //=====================================
@@ -10,17 +12,19 @@ namespace parser {
 template<typename Iterator>
 grammar_unittest<Iterator>::grammar_unittest(error_handler<Iterator>& error_h) :
     grammar_unittest::base_type(unittest, "grammar_unittest"),
-    cppmem("UNITTEST", error_h)
+    cppmem(error_h)
 {
-  unittest = cppmem.main
-           | cppmem.vardecl
+  qi::eoi_type eoi;
+
+  unittest = (cppmem.vardecl.type >> eoi)
+           | (cppmem.vardecl.memory_location >> eoi)
+           | (cppmem.vardecl.register_location >> eoi)
+           | (cppmem.vardecl >> eoi)
+           | cppmem.main
            | cppmem.function
            | cppmem.scope
            | cppmem.threads
-           | cppmem.statement
-           | cppmem.vardecl.type
-           | cppmem.vardecl.memory_location
-           | cppmem.vardecl.register_location;
+           | cppmem.statement;
 
   // Names of grammar rules.
   unittest.name("unittest");
@@ -29,11 +33,24 @@ grammar_unittest<Iterator>::grammar_unittest(error_handler<Iterator>& error_h) :
   BOOST_SPIRIT_DEBUG_NODES(
       (unittest)
   );
+
+  using qi::on_error;
+  using qi::fail;
+  using error_handler_function = phoenix::function<error_handler<Iterator>>;
+
+  qi::_3_type _3;
+  qi::_4_type _4;
+
+  // Error handling: on error in start, call error_h.
+  on_error<fail>
+  (
+      unittest
+    , error_handler_function(error_h)("Error! Expecting ", _4, _3)
+  );
+
 }
 
 } // namespace parser
 
-#include <boost/spirit/include/support_line_pos_iterator.hpp>
-
-// Instantiate grammar templates.
+// Instantiate grammar template.
 template struct parser::grammar_unittest<std::string::const_iterator>;

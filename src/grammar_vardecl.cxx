@@ -1,5 +1,6 @@
 #include "sys.h"
 #include "grammar_vardecl.h"
+#include "annotation.h"
 
 BOOST_FUSION_ADAPT_STRUCT(
     ast::memory_location,
@@ -20,7 +21,7 @@ namespace parser {
 //=====================================
 
 template<typename Iterator>
-grammar_vardecl<Iterator>::grammar_vardecl() :
+grammar_vardecl<Iterator>::grammar_vardecl(error_handler<Iterator>& error_h) :
     grammar_vardecl::base_type(vardecl, "grammar_vardecl")
 {
   ascii::alpha_type alpha;
@@ -76,12 +77,20 @@ grammar_vardecl<Iterator>::grammar_vardecl() :
       (identifier)
       (vardecl)
   );
+
+  using annotation_function = boost::phoenix::function<annotation<Iterator>>;
+
+  qi::_1_type _1;
+  qi::_val_type _val;
+
+  // Annotation: on success in vardecl, call annotation.
+  on_success(
+      vardecl
+    , annotation_function(error_h)(_val, _1)
+  );
 }
 
 } // namespace parser
 
-#include <boost/spirit/include/support_line_pos_iterator.hpp>
-
-// Instantiate grammar templates.
-template struct parser::grammar_vardecl<boost::spirit::line_pos_iterator<std::string::const_iterator>>;
+// Instantiate grammar template.
 template struct parser::grammar_vardecl<std::string::const_iterator>;

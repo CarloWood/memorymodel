@@ -2,6 +2,7 @@
 
 #include "grammar_whitespace.h"
 #include "ast.h"
+#include "error_handler.h"
 
 namespace parser {
 
@@ -31,7 +32,7 @@ class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Ite
   rule<ast::vardecl>           vardecl;
 
  public:
-  grammar_vardecl();
+  grammar_vardecl(error_handler<Iterator>& error_h);
 };
 
 } // namespace parser

@@ -45,9 +45,15 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, function_name const& function_name)
+{
+  os << function_name.name;
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, function const& function)
 {
-  if (function.m_function_name == "main")
+  if (function.m_function_name.name == "main")
     os << "int ";
   else
     os << "void ";

@@ -43,8 +43,5 @@ grammar_whitespace<Iterator>::grammar_whitespace() :
 
 } // namespace parser
 
-#include <boost/spirit/include/support_line_pos_iterator.hpp>
-
-// Instantiate grammar templates.
-template struct parser::grammar_whitespace<boost::spirit::line_pos_iterator<std::string::const_iterator>>;
+// Instantiate grammar template.
 template struct parser::grammar_whitespace<std::string::const_iterator>;

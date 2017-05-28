@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "grammar_cppmem.h"
-//#include "annotation.h"
+#include "annotation.h"
 #include <boost/spirit/include/phoenix_function.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>
@@ -40,9 +40,9 @@ namespace phoenix = boost::phoenix;
 //=====================================
 
 template<typename Iterator>
-grammar_cppmem<Iterator>::grammar_cppmem(char const* filename, error_handler<Iterator>& error_h) :
+grammar_cppmem<Iterator>::grammar_cppmem(error_handler<Iterator>& error_h) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
-    m_filename(filename)
+    vardecl(error_h)
 {
   ascii::char_type char_;
   qi::lit_type lit;
@@ -122,13 +122,10 @@ grammar_cppmem<Iterator>::grammar_cppmem(char const* filename, error_handler<Ite
   using qi::on_error;
   using qi::on_success;
   using qi::fail;
-  using phoenix::construct;
-  using phoenix::val;
   using error_handler_function = phoenix::function<error_handler<Iterator>>;
-//  using annotation_function = function<annotation<Iterator>>;
+  using annotation_function = phoenix::function<annotation<Iterator>>;
 
   qi::_1_type _1;
-  qi::_2_type _2;
   qi::_3_type _3;
   qi::_4_type _4;
   qi::_val_type _val;
@@ -140,14 +137,24 @@ grammar_cppmem<Iterator>::grammar_cppmem(char const* filename, error_handler<Ite
     , error_handler_function(error_h)("Error! Expecting ", _4, _3)
   );
 
-  // Annotation: on success in start, call annotation.
-//  on_success(function, annotation_function(error_h.iters)(_val, _1));
+  // Annotation: on success in function, call annotation.
+  on_success(
+      function
+    , annotation_function(error_h)(_val, _1)
+  );
+
+  on_success(
+      scope_begin
+    , annotation_function(error_h)(true, _1)
+  );
+
+  on_success(
+      scope_end
+    , annotation_function(error_h)(false, _1)
+  );
 }
 
 } // namespace parser
 
-#include <boost/spirit/include/support_line_pos_iterator.hpp>
-
-// Instantiate grammar templates.
-template struct parser::grammar_cppmem<boost::spirit::line_pos_iterator<std::string::const_iterator>>;
+// Instantiate grammar template.
 template struct parser::grammar_cppmem<std::string::const_iterator>;

@@ -3,6 +3,7 @@
 #include <iosfwd>
 #include <string>
 #include <vector>
+#include <list>
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/include/at_c.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
@@ -10,6 +11,11 @@
 #include <boost/optional.hpp>
 
 namespace ast {
+
+struct tagged
+{
+  int id;
+};
 
 enum Type { type_int, type_atomic_int };
 
@@ -50,7 +56,7 @@ struct register_location
 };
 
 // memory_location = identifier - register_location;
-struct memory_location
+struct memory_location : tagged
 {
   std::string m_name;
 
@@ -67,6 +73,127 @@ struct memory_location
   friend bool operator==(memory_location const& ml1, char const* ml2) { return ml1.m_name == ml2; }
 
   friend std::ostream& operator<<(std::ostream& os, memory_location const& memory_location);
+};
+
+struct nil {};
+struct unary;
+struct function_call;
+struct expression;
+
+struct identifier : tagged
+{
+  identifier(std::string const& name = "") : name(name) { }
+  std::string name;
+};
+
+typedef boost::variant<
+    nil
+  , bool
+  , unsigned int
+  , identifier
+  , boost::recursive_wrapper<unary>
+  , boost::recursive_wrapper<function_call>
+  , boost::recursive_wrapper<expression>
+>
+operand;
+
+enum optoken
+{
+  // precedence 1
+  op_comma,
+
+  // precedence 2
+  op_assign,
+  op_plus_assign,
+  op_minus_assign,
+  op_times_assign,
+  op_divide_assign,
+  op_mod_assign,
+  op_bit_and_assign,
+  op_bit_xor_assign,
+  op_bitor_assign,
+  op_shift_left_assign,
+  op_shift_right_assign,
+
+  // precedence 3
+  op_logical_or,
+
+  // precedence 4
+  op_logical_and,
+
+  // precedence 5
+  op_bit_or,
+
+  // precedence 6
+  op_bit_xor,
+
+  // precedence 7
+  op_bit_and,
+
+  // precedence 8
+  op_equal,
+  op_not_equal,
+
+  // precedence 9
+  op_less,
+  op_less_equal,
+  op_greater,
+  op_greater_equal,
+
+  // precedence 10
+  op_shift_left,
+  op_shift_right,
+
+  // precedence 11
+  op_plus,
+  op_minus,
+
+  // precedence 12
+  op_times,
+  op_divide,
+  op_mod,
+
+  // precedence 13
+  op_positive,
+  op_negative,
+  op_pre_incr,
+  op_pre_decr,
+  op_compl,
+  op_not,
+
+  // precedence 14
+  op_post_incr,
+  op_post_decr,
+};
+
+struct unary
+{
+  optoken operator_;
+  operand operand_;
+};
+
+struct operation
+{
+  optoken operator_;
+  operand operand_;
+};
+
+struct function_call
+{
+  identifier function_name;
+  std::list<expression> args;
+};
+
+struct expression
+{
+  operand first;
+  std::list<operation> rest;
+};
+
+struct assignment
+{
+  memory_location lhs;
+  expression rhs;
 };
 
 // TYPE MEMORY_LOCATION [= INT_];
@@ -139,16 +266,26 @@ struct threads
 };
 
 // IDENTIFIER
-struct function_name : std::string
+struct function_name
 {
-  function_name() { }
-  template<typename Iterator>
-  function_name(Iterator const& begin, Iterator const& end) : std::string(begin, end) { }
+  std::string name;
+
+  function_name(std::string const& name = "") : name(name) { }
+
+  // Ugly stuff necessary to make this work with boost::spirit (wtf!?!)
+  using value_type = std::string::value_type;
+  bool empty() const { return name.empty(); }
+  void insert(std::string::const_iterator at, value_type c) { name.insert(at, c); }
+  std::string::const_iterator end() const { return name.end(); }
+  template<typename Iterator> function_name(Iterator const& begin, Iterator const& end) : name(begin, end) { }
+
+  friend std::ostream& operator<<(std::ostream& os, function_name const& function_name);
 };
 
 // void FUNCTION_NAME()
 // SCOPE
-struct function {
+struct function : tagged
+{
   function_name m_function_name;
   scope m_scope;
 

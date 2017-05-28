@@ -15,8 +15,6 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   template<typename T> using rule = qi::rule<Iterator, T(), skipper<Iterator>>;
   using rule_noskip = qi::rule<Iterator, qi::unused_type()>;     // Rules appearing inside lexeme or no_skip etc, must not have a skipper.
 
-  char const* const m_filename;
-
   // Needs access to the rules.
   friend class grammar_unittest<Iterator>;
 
@@ -45,7 +43,7 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::cppmem>             cppmem;
 
  public:
-  grammar_cppmem(char const* filename, error_handler<Iterator>& error_handler);
+  grammar_cppmem(error_handler<Iterator>& error_handler);
 };
 
 } // namespace parser
