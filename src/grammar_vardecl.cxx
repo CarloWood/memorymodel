@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "grammar_vardecl.h"
-#include "annotation.h"
+#include "position_handler.h"
 
 BOOST_FUSION_ADAPT_STRUCT(
     ast::memory_location,
@@ -21,7 +21,7 @@ namespace parser {
 //=====================================
 
 template<typename Iterator>
-grammar_vardecl<Iterator>::grammar_vardecl(error_handler<Iterator>& error_h) :
+grammar_vardecl<Iterator>::grammar_vardecl(position_handler<Iterator>& handler) :
     grammar_vardecl::base_type(vardecl, "grammar_vardecl")
 {
   ascii::alpha_type alpha;
@@ -78,15 +78,15 @@ grammar_vardecl<Iterator>::grammar_vardecl(error_handler<Iterator>& error_h) :
       (vardecl)
   );
 
-  using annotation_function = boost::phoenix::function<annotation<Iterator>>;
+  using handler_function = boost::phoenix::function<position_handler<Iterator>>;
 
   qi::_1_type _1;
   qi::_val_type _val;
 
-  // Annotation: on success in vardecl, call annotation.
+  // Annotation: on success in vardecl, call position_handler.
   on_success(
       vardecl
-    , annotation_function(error_h)(_val, _1)
+    , handler_function(handler)(_val, _1)
   );
 }
 

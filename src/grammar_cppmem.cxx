@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "grammar_cppmem.h"
-#include "annotation.h"
+#include "position_handler.h"
 #include <boost/spirit/include/phoenix_function.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>
@@ -40,9 +40,9 @@ namespace phoenix = boost::phoenix;
 //=====================================
 
 template<typename Iterator>
-grammar_cppmem<Iterator>::grammar_cppmem(error_handler<Iterator>& error_h) :
+grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
-    vardecl(error_h)
+    vardecl(handler)
 {
   ascii::char_type char_;
   qi::lit_type lit;
@@ -122,35 +122,34 @@ grammar_cppmem<Iterator>::grammar_cppmem(error_handler<Iterator>& error_h) :
   using qi::on_error;
   using qi::on_success;
   using qi::fail;
-  using error_handler_function = phoenix::function<error_handler<Iterator>>;
-  using annotation_function = phoenix::function<annotation<Iterator>>;
+  using handler_function = phoenix::function<position_handler<Iterator>>;
 
   qi::_1_type _1;
   qi::_3_type _3;
   qi::_4_type _4;
   qi::_val_type _val;
 
-  // Error handling: on error in start, call error_h.
+  // Error handling: on error in start, call handler.
   on_error<fail>
   (
       cppmem
-    , error_handler_function(error_h)("Error! Expecting ", _4, _3)
+    , handler_function(handler)("Error! Expecting ", _4, _3)
   );
 
-  // Annotation: on success in function, call annotation.
+  // Annotation: on success in function, call position_handler.
   on_success(
       function
-    , annotation_function(error_h)(_val, _1)
+    , handler_function(handler)(_val, _1)
   );
 
   on_success(
       scope_begin
-    , annotation_function(error_h)(true, _1)
+    , handler_function(handler)(true, _1)
   );
 
   on_success(
       scope_end
-    , annotation_function(error_h)(false, _1)
+    , handler_function(handler)(false, _1)
   );
 }
 

@@ -10,9 +10,9 @@ namespace phoenix = boost::phoenix;
 //=====================================
 
 template<typename Iterator>
-grammar_unittest<Iterator>::grammar_unittest(error_handler<Iterator>& error_h) :
+grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler) :
     grammar_unittest::base_type(unittest, "grammar_unittest"),
-    cppmem(error_h)
+    cppmem(handler)
 {
   qi::eoi_type eoi;
 
@@ -36,16 +36,16 @@ grammar_unittest<Iterator>::grammar_unittest(error_handler<Iterator>& error_h) :
 
   using qi::on_error;
   using qi::fail;
-  using error_handler_function = phoenix::function<error_handler<Iterator>>;
+  using position_handler_function = phoenix::function<position_handler<Iterator>>;
 
   qi::_3_type _3;
   qi::_4_type _4;
 
-  // Error handling: on error in start, call error_h.
+  // Error handling: on error in start, call handler.
   on_error<fail>
   (
       unittest
-    , error_handler_function(error_h)("Error! Expecting ", _4, _3)
+    , position_handler_function(handler)("Error! Expecting ", _4, _3)
   );
 
 }

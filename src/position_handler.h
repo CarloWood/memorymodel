@@ -4,12 +4,12 @@
 #include "debug.h"
 
 template<typename Iterator>
-struct error_handler
+struct position_handler
 {
   template <typename, typename, typename>
   struct result { typedef void type; };
 
-  error_handler(char const* filename, Iterator first, Iterator last) : m_filename(filename), first(first), last(last) {}
+  position_handler(char const* filename, Iterator first, Iterator last) : m_filename(filename), first(first), last(last) {}
 
   boost::iterator_range<Iterator> get_line_and_range(Iterator pos, int& line, int& col) const
   {
@@ -101,9 +101,29 @@ struct error_handler
     return ss.str();
   }
 
-  int pos_to_id(Iterator /*pos*/)
+  int pos_to_id(Iterator /*pos*/) const
   {
     return 0;
+  }
+
+  void operator()(ast::function& ast, Iterator pos) const
+  {
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");
+    ast.id = pos_to_id(pos);
+    Debug(show(dc::notice, pos));
+  }
+
+  void operator()(ast::vardecl& ast, Iterator pos) const
+  {
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ")");
+    ast.m_memory_location.id = pos_to_id(pos);
+    Debug(show(dc::notice, pos));
+  }
+
+  void operator()(bool begin, Iterator pos) const
+  {
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ")");
+    Debug(show(dc::notice, pos));
   }
 
   char const* const m_filename;

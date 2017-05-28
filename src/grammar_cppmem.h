@@ -1,7 +1,7 @@
 #pragma once
 
 #include "grammar_vardecl.h"
-#include "error_handler.h"
+#include "position_handler.h"
 
 namespace parser {
 
@@ -43,7 +43,7 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::cppmem>             cppmem;
 
  public:
-  grammar_cppmem(error_handler<Iterator>& error_handler);
+  grammar_cppmem(position_handler<Iterator>& position_handler);
 };
 
 } // namespace parser
