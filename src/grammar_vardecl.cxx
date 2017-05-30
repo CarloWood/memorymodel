@@ -21,7 +21,7 @@ namespace parser {
 //=====================================
 
 template<typename Iterator>
-grammar_vardecl<Iterator>::grammar_vardecl(position_handler<Iterator>& handler) :
+grammar_vardecl<Iterator>::grammar_vardecl(grammar_statement<Iterator>& statement_g, position_handler<Iterator>& handler) :
     grammar_vardecl::base_type(vardecl, "grammar_vardecl")
 {
   ascii::alpha_type alpha;
@@ -86,7 +86,7 @@ grammar_vardecl<Iterator>::grammar_vardecl(position_handler<Iterator>& handler) 
   // Annotation: on success in vardecl, call position_handler.
   on_success(
       vardecl
-    , handler_function(handler)(_val, _1)
+    , handler_function(handler)(_val, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
   );
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include "grammar_statement.h"
 #include "debug.h"
 
 template<typename Iterator>
@@ -106,23 +107,26 @@ struct position_handler
     return 0;
   }
 
-  void operator()(ast::function& ast, Iterator pos) const
+  void operator()(ast::function& ast, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ", stgp)");
     ast.id = pos_to_id(pos);
+    stgp->function(ast.m_function_name.name);
     Debug(show(dc::notice, pos));
   }
 
-  void operator()(ast::vardecl& ast, Iterator pos) const
+  void operator()(ast::vardecl& ast, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ")");
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ", stgp)");
     ast.m_memory_location.id = pos_to_id(pos);
+    stgp->vardecl(ast.m_memory_location.m_name);
     Debug(show(dc::notice, pos));
   }
 
-  void operator()(bool begin, Iterator pos) const
+  void operator()(bool begin, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ")");
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ", stgp)");
+    stgp->scope(begin);
     Debug(show(dc::notice, pos));
   }
 

@@ -13,6 +13,9 @@ template<typename Iterator>
 class grammar_unittest;
 
 template<typename Iterator>
+struct grammar_statement;
+
+template<typename Iterator>
 class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Iterator>>
 {
  private:
@@ -32,7 +35,7 @@ class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Ite
   rule<ast::vardecl>           vardecl;
 
  public:
-  grammar_vardecl(position_handler<Iterator>& handler);
+  grammar_vardecl(grammar_statement<Iterator>& statement, position_handler<Iterator>& handler);
 };
 
 } // namespace parser

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "grammar_vardecl.h"
+#include "grammar_statement.h"
 #include "position_handler.h"
 
 namespace parser {
@@ -25,10 +26,8 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule_noskip                   threads_next;
   rule_noskip                   threads_end;
 
-  rule<ast::statement>          catchall;
-
   grammar_vardecl<Iterator>     vardecl;
-  rule<ast::statement>          statement;
+  grammar_statement<Iterator>   statement_g;
   rule<qi::unused_type>         assignment;
   rule<ast::body>               body;
   rule<ast::scope>              scope;

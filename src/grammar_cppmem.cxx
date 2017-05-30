@@ -42,7 +42,7 @@ namespace phoenix = boost::phoenix;
 template<typename Iterator>
 grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
-    vardecl(handler)
+    vardecl(statement_g, handler), statement_g(handler)
 {
   ascii::char_type char_;
   qi::lit_type lit;
@@ -69,13 +69,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   scope                       = scope_begin > -body > scope_end;
 
   // The body of a function.
-  body                        = +(vardecl | statement | scope | threads) >> dummy(false);
+  body                        = +(vardecl | statement_g | scope | threads) >> dummy(false);
   threads                     = threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
-
-  // Statements.
-  catchall                    = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
-  statement                   = /*assignment |*/ catchall;
-  //assignment                  = m_symbols >> '=' >> int_ >> ';';
 
   cppmem                      = *(vardecl | function) > main;
 
@@ -93,9 +88,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   scope.name("scope");
   body.name("body");
   threads.name("threads");
-  statement.name("statement");
   assignment.name("assignment");
-  catchall.name("catchall");
   cppmem.name("cppmem");
 
   // Debugging and error handling and reporting support.
@@ -113,9 +106,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (scope)
       (body)
       (threads)
-      (statement)
       (assignment)
-      (catchall)
       (cppmem)
   );
 
@@ -137,19 +128,22 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   );
 
   // Annotation: on success in function, call position_handler.
+  // The trick with the static_cast and taking the pointer rather
+  // than just passing statement (by reference) is the only way
+  // this will compile (wtf !?!).
   on_success(
       function
-    , handler_function(handler)(_val, _1)
+    , handler_function(handler)(_val, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
   );
 
   on_success(
       scope_begin
-    , handler_function(handler)(true, _1)
+    , handler_function(handler)(true, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
   );
 
   on_success(
       scope_end
-    , handler_function(handler)(false, _1)
+    , handler_function(handler)(false, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
   );
 }
 
