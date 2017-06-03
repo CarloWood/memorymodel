@@ -3,6 +3,7 @@
 #include <iostream>
 #include "grammar_statement.h"
 #include "debug.h"
+#include "Symbols.h"
 
 template<typename Iterator>
 struct position_handler
@@ -102,36 +103,46 @@ struct position_handler
     return ss.str();
   }
 
-  int pos_to_id(Iterator /*pos*/) const
+  int pos_to_id(Iterator pos) const
   {
-    return 0;
+    int id;
+    int const size = m_iters.size();
+    for (id = 0; id != size; ++id)
+      if (m_iters[id] == pos)
+        return id;
+    m_iters.push_back(pos);
+    return id;
   }
 
-  void operator()(ast::function& ast, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
+  void operator()(ast::function& ast, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ", stgp)");
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");
     ast.id = pos_to_id(pos);
-    stgp->function(ast.m_function_name.name);
+    //m_functions[ast.id] = &ast;
+    parser::Symbols::instance().function(ast);
     Debug(show(dc::notice, pos));
   }
 
-  void operator()(ast::vardecl& ast, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
+  void operator()(ast::vardecl& ast, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ", stgp)");
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ")");
     ast.m_memory_location.id = pos_to_id(pos);
-    stgp->vardecl(ast.m_memory_location.m_name);
+    //m_memory_locations[ast.m_memory_location.id] = &ast.m_memory_location;
+    parser::Symbols::instance().vardecl(ast.m_memory_location);
     Debug(show(dc::notice, pos));
   }
 
-  void operator()(bool begin, Iterator pos, parser::grammar_statement<Iterator>* stgp) const
+  void operator()(bool begin, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ", stgp)");
-    stgp->scope(begin);
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ")");
+    parser::Symbols::instance().scope(begin);
     Debug(show(dc::notice, pos));
   }
 
   char const* const m_filename;
   Iterator first;
   Iterator last;
-  std::vector<Iterator> iters;
+  mutable std::vector<Iterator> m_iters;
+  //mutable std::map<int, ast::memory_location*> m_memory_locations;
+  //mutable std::map<int, ast::function*> m_functions;
 };

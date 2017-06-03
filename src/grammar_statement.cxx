@@ -1,6 +1,13 @@
 #include "sys.h"
 #include "grammar_statement.h"
 #include "position_handler.h"
+#include "Symbols.h"
+
+BOOST_FUSION_ADAPT_STRUCT(
+  ast::assignment,
+  (int, lhs),
+  (/*ast::expression*/int, rhs)
+)
 
 namespace parser {
 
@@ -15,19 +22,19 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     grammar_statement::base_type(statement, "grammar_statement")
 {
   qi::char_type char_;
+  qi::int_type int_;
+  auto& memory_locations(Symbols::instance().memory_locations);
 
   // Statements.
-  catchall                    = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
-  statement                   = /*assignment |*/ catchall;
-  //assignment                  = m_symbols >> '=' >> int_ >> ';';
-
-  // Names of grammar rules.
-  statement.name("statement");
+  //catchall                    = !(char_('{') | char_('|') | "return") >> +(char_ - (char_('}') | ';')) >> ';';
+  statement                   = assignment;
+  assignment                  = memory_locations >> '=' >> int_ >> ';';
 
   // Debugging and error handling and reporting support.
+  using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
-      (catchall)
-      (statement)
+    (statement)
+    (assignment)
   );
 
   using qi::on_error;

@@ -21,7 +21,7 @@ namespace parser {
 //=====================================
 
 template<typename Iterator>
-grammar_vardecl<Iterator>::grammar_vardecl(grammar_statement<Iterator>& statement_g, position_handler<Iterator>& handler) :
+grammar_vardecl<Iterator>::grammar_vardecl(position_handler<Iterator>& handler) :
     grammar_vardecl::base_type(vardecl, "grammar_vardecl")
 {
   ascii::alpha_type alpha;
@@ -58,16 +58,8 @@ grammar_vardecl<Iterator>::grammar_vardecl(grammar_statement<Iterator>& statemen
   vardecl =
       type >> no_skip[whitespace] >> memory_location >> -("=" > int_) >> ";";
 
-  // Names of grammar rules.
-  identifier_begin_char.name("identifier_begin_char");
-  identifier_char.name("identifier_char");
-  type.name("type");
-  memory_location.name("memory_location");
-  register_location.name("register_location");
-  identifier.name("identifier");
-  vardecl.name("vardecl");
-
   // Debugging and error handling and reporting support.
+  using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
       (identifier_begin_char)
       (identifier_char)
@@ -86,7 +78,7 @@ grammar_vardecl<Iterator>::grammar_vardecl(grammar_statement<Iterator>& statemen
   // Annotation: on success in vardecl, call position_handler.
   on_success(
       vardecl
-    , handler_function(handler)(_val, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
+    , handler_function(handler)(_val, _1)
   );
 }
 

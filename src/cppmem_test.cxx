@@ -1,9 +1,13 @@
 #define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MAIN
+#define BOOST_TEST_NO_MAIN
+
 #include "sys.h"
+#include "debug.h"
+#include "cppmem_parser.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/variant/get.hpp>
-#include "cppmem_parser.h"
+#include <iostream>
 
 using namespace ast;
 
@@ -22,8 +26,8 @@ using namespace ast;
 #define vardecl_simple_nr               9
 #define vardecl_init_nr                10
 #define type_comment3_nr               11
-#define scope_anything_nr              12
-#define scope_vardecl_nr               13
+#define scope_vardecl_nr               12
+#define scope_assignment_nr            13
 #define scope_recursive_nr             14
 #define function_wrlock_nr             15
 #define threads_simple_nr              16
@@ -211,28 +215,10 @@ BOOST_AUTO_TEST_CASE(type_comment3)
 }
 #endif
 
-#if DO_TEST(scope_anything)
-BOOST_AUTO_TEST_CASE(scope_anything)
-{
-  std::string const text{"{\n  y = 4 ;\n}\n"};
-
-  ast::nonterminal value;
-  cppmem::parse(text, value);
-
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
-  //std::cout << "Result: \"" << sc << "\"." << std::endl;
-  BOOST_REQUIRE(sc.m_body);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_statement);
-  BOOST_REQUIRE(boost::get<statement>(sc.m_body->m_body_nodes.front()) == "y=4");
-}
-#endif
-
 #if DO_TEST(scope_vardecl)
 BOOST_AUTO_TEST_CASE(scope_vardecl)
 {
-  std::string const text{"{\n  int y = 4 ;\n}\n"};
+  std::string const text{"{\n int  y = 4;\n}\n"};
 
   ast::nonterminal value;
   cppmem::parse(text, value);
@@ -244,6 +230,31 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
   BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
   BOOST_REQUIRE(boost::get<vardecl>(sc.m_body->m_body_nodes.front()) == vardecl(type_int, "y", 4U));
+}
+#endif
+
+#if DO_TEST(scope_assignment)
+BOOST_AUTO_TEST_CASE(scope_assignment)
+{
+  std::string const text{"{ int y=0;   y = 4 ;\n}\n"};
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ast::scope sc(boost::get<scope>(value));
+  //std::cout << "Result: \"" << sc << "\"." << std::endl;
+  BOOST_REQUIRE(sc.m_body);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 2);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_statement);
+  ast::statement const& s(boost::get<statement>(sc.m_body->m_body_nodes.back()));
+  BOOST_REQUIRE(s.which() == SN_assignment);
+  std::stringstream ss;
+  ss << s;
+  std::string out = ss.str();
+  std::cout << "s = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "y = 4;");
 }
 #endif
 
@@ -288,7 +299,7 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
   ast::function const& f = boost::get<function>(value);
   std::stringstream ss;
   ss << f;
-  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
+  //std::cout << "f = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
 }
 #endif
@@ -339,6 +350,14 @@ BOOST_AUTO_TEST_CASE(function_main)
 }
 #endif
 
+int BOOST_TEST_CALL_DECL
+main( int argc, char* argv[] )
+{
+  Debug(NAMESPACE_DEBUG::init());
+
+  return ::boost::unit_test::unit_test_main( &init_unit_test, argc, argv );
+}
+
 namespace ast {
 
 bool scope::operator==(std::string const& stmt) const
@@ -346,7 +365,12 @@ bool scope::operator==(std::string const& stmt) const
   assert(m_body);
   assert(m_body->m_body_nodes.size() == 1);
   assert(m_body->m_body_nodes.front().which() == BN_statement);
-  return boost::get<statement>(m_body->m_body_nodes.front()) == stmt;
+  ast::statement const& s(boost::get<statement>(m_body->m_body_nodes.front()));
+  std::stringstream ss;
+  ss << s;
+  //std::cout << "s = \"" << out << "\"." << std::endl;
+  std::string out = ss.str();
+  return out == stmt;
 }
 
 } // namespace ast

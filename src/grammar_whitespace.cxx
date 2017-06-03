@@ -28,12 +28,8 @@ grammar_whitespace<Iterator>::grammar_whitespace() :
   whitespace  =
       +(+space | c_comment | cpp_comment);
 
-  // Names of grammar rules.
-  cpp_comment.name("cpp_comment");
-  c_comment.name("c_comment");
-  whitespace.name("whitespace");
-
   // Debugging and error handling and reporting support.
+  using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
       (cpp_comment)
       (c_comment)

@@ -1,5 +1,6 @@
 #include "sys.h"
 #include "ast.h"
+#include "Symbols.h"
 #include <iostream>
 
 namespace ast {
@@ -39,9 +40,38 @@ std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
   return os;
 }
 
+#if 0
 std::ostream& operator<<(std::ostream& os, statement const& statement)
 {
-  os << "\e[31m" << static_cast<std::string const&>(statement) << "\e[0m" << ';';
+  os << "\e[31m";
+  switch (statement.which())
+  {
+    case SN_assignment:
+      break;
+    case SN_if_statement:
+      break;
+    case SN_while_statement:
+      break;
+  }
+  return os << "\e[0m" << ';';
+}
+#endif
+
+std::ostream& operator<<(std::ostream& os, assignment const& assignment)
+{
+  os << parser::Symbols::instance().id_to_string(assignment.lhs) << " = " << assignment.rhs << ';';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
+{
+  os << "IF_STATEMENT";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, while_statement const& while_statement)
+{
+  os << "WHILE_STATEMENT";
   return os;
 }
 

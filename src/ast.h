@@ -38,7 +38,7 @@ struct type
 };
 
 // register_location = 'r' > uint_;
-struct register_location
+struct register_location : tagged
 {
   unsigned int m_id;
 
@@ -61,6 +61,7 @@ struct memory_location : tagged
   std::string m_name;
 
   memory_location() { }
+  memory_location(std::string const& name) : m_name(name) { }
   memory_location(char const* name) : m_name(name) { }
 
   friend bool operator!=(memory_location const& ml1, std::string const& ml2) { return ml1.m_name != ml2; }
@@ -192,8 +193,33 @@ struct expression
 
 struct assignment
 {
-  memory_location lhs;
-  expression rhs;
+  int lhs;
+  //expression rhs;
+  int rhs;
+
+  friend std::ostream& operator<<(std::ostream& os, assignment const& assignment);
+};
+
+struct if_statement;
+struct while_statement;
+enum Statement              { SN_assignment,                       SN_if_statement,                        SN_while_statement };
+using statement = boost::variant<assignment, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+
+struct if_statement
+{
+  expression condition;
+  statement then;
+  boost::optional<statement> else_;
+
+  friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
+};
+
+struct while_statement
+{
+  expression condition;
+  statement body;
+
+  friend std::ostream& operator<<(std::ostream& os, while_statement const& while_statement);
 };
 
 // TYPE MEMORY_LOCATION [= INT_];
@@ -222,11 +248,6 @@ struct vardecl {
 
   friend std::ostream& operator<<(std::ostream& os, vardecl const& vardecl);
 };
-
-struct statement : std::string {
-  friend std::ostream& operator<<(std::ostream& os, statement const& statement);
-};
-
 
 struct scope;
 struct threads;

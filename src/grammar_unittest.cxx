@@ -26,10 +26,8 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
            | cppmem.threads
            | cppmem.statement_g;
 
-  // Names of grammar rules.
-  unittest.name("unittest");
-
   // Debugging and error handling and reporting support.
+  using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
       (unittest)
   );

@@ -42,7 +42,7 @@ namespace phoenix = boost::phoenix;
 template<typename Iterator>
 grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
-    vardecl(statement_g, handler), statement_g(handler)
+    vardecl(handler), statement_g(handler)
 {
   ascii::char_type char_;
   qi::lit_type lit;
@@ -74,24 +74,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   cppmem                      = *(vardecl | function) > main;
 
-  // Names of grammar rules.
-  scope_begin.name("scope_begin");
-  scope_end.name("scope_end");
-  threads_begin.name("threads_begin");
-  threads_next.name("threads_next");
-  threads_end.name("threads_end");
-  main.name("main");
-  main_scope.name("main_scope");
-  return_statement.name("return_statement");
-  function.name("function");
-  function_name.name("function_name");
-  scope.name("scope");
-  body.name("body");
-  threads.name("threads");
-  assignment.name("assignment");
-  cppmem.name("cppmem");
-
   // Debugging and error handling and reporting support.
+  using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
       (scope_begin)
       (scope_end)
@@ -128,22 +112,19 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   );
 
   // Annotation: on success in function, call position_handler.
-  // The trick with the static_cast and taking the pointer rather
-  // than just passing statement (by reference) is the only way
-  // this will compile (wtf !?!).
   on_success(
       function
-    , handler_function(handler)(_val, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
+    , handler_function(handler)(_val, _1)
   );
 
   on_success(
       scope_begin
-    , handler_function(handler)(true, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
+    , handler_function(handler)(true, _1)
   );
 
   on_success(
       scope_end
-    , handler_function(handler)(false, _1, static_cast<grammar_statement<Iterator>*>(&statement_g))
+    , handler_function(handler)(false, _1)
   );
 }
 
