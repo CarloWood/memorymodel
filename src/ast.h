@@ -14,7 +14,7 @@ namespace ast {
 
 struct tagged
 {
-  int id;
+  mutable int id;
 };
 
 enum Type { type_int, type_atomic_int };
@@ -187,15 +187,28 @@ struct function_call
 
 struct expression
 {
-  operand first;
-  std::list<operation> rest;
+  int v;
+  //operand first;
+  //std::list<operation> rest;
+};
+
+struct register_assignment
+{
+  register_location lhs;
+  expression rhs;
+
+  friend std::ostream& operator<<(std::ostream& os, register_assignment const& register_assignment);
 };
 
 struct assignment
 {
   int lhs;
-  //expression rhs;
-  int rhs;
+  expression rhs;
+
+  assignment() = default;
+
+  // Convert a register_assignment to an assignment.
+  assignment(register_assignment const& ra);
 
   friend std::ostream& operator<<(std::ostream& os, assignment const& assignment);
 };

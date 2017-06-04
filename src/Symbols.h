@@ -27,6 +27,7 @@ class Symbols : public Singleton<Symbols> {
   void function(ast::function const& name);
   void vardecl(ast::memory_location const& memory_location);
   void regdecl(ast::register_location const& register_location);
+  int set_register_id(ast::register_location const& register_location);
   void scope(bool begin);
   std::string id_to_string(int id);
 };

@@ -90,7 +90,6 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (scope)
       (body)
       (threads)
-      (assignment)
       (cppmem)
   );
 

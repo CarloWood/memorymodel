@@ -15,7 +15,20 @@ void Symbols::vardecl(ast::memory_location const& memory_location)
 
 void Symbols::regdecl(ast::register_location const& register_location)
 {
-  register_locations.add(std::string("r") + std::to_string(register_location.m_id), register_location.id);
+  std::string name = "r";
+  name += std::to_string(register_location.m_id);
+  register_locations.add(name, register_location.id);
+}
+
+int Symbols::set_register_id(ast::register_location const& register_location)
+{
+  std::string name = "r";
+  name += std::to_string(register_location.m_id);
+  int* p = register_locations.find(name);
+  // regdecl should already have been called.
+  assert(p);
+  register_location.id = *p;
+  return *p;
 }
 
 void Symbols::scope(bool begin)
@@ -53,10 +66,16 @@ private:
 
 std::string Symbols::id_to_string(int id)
 {
-  DoutEntering(dc::notice, "Symbols::id_to_string(" << id << ")");
   std::string found;
   SymbolSearcher symbol_searcher(id, found);
   memory_locations.for_each(symbol_searcher);
+  if (!found.empty())
+    return found;
+  register_locations.for_each(symbol_searcher);
+  if (!found.empty())
+    return found;
+  function_names.for_each(symbol_searcher);
+  assert(!found.empty());
   return found;
 }
 

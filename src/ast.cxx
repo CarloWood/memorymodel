@@ -57,6 +57,18 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
 }
 #endif
 
+std::ostream& operator<<(std::ostream& os, expression const& expression)
+{
+  os << expression.v;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, register_assignment const& register_assignment)
+{
+  os << register_assignment.lhs << " = " << register_assignment.rhs << ';';
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, assignment const& assignment)
 {
   os << parser::Symbols::instance().id_to_string(assignment.lhs) << " = " << assignment.rhs << ';';
@@ -140,6 +152,10 @@ std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
     last = dn;
   }
   return os;
+}
+
+assignment::assignment(register_assignment const& ra) : lhs(parser::Symbols::instance().set_register_id(ra.lhs)), rhs(ra.rhs)
+{
 }
 
 } // namespace ast

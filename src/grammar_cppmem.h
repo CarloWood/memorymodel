@@ -28,7 +28,6 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
 
   grammar_vardecl<Iterator>     vardecl;
   grammar_statement<Iterator>   statement_g;
-  rule<qi::unused_type>         assignment;
   rule<ast::body>               body;
   rule<ast::scope>              scope;
   rule<ast::function_name>      function_name;

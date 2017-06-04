@@ -13,6 +13,9 @@ template<typename Iterator>
 class grammar_unittest;
 
 template<typename Iterator>
+class grammar_statement;
+
+template<typename Iterator>
 class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Iterator>>
 {
  private:
@@ -21,6 +24,7 @@ class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Ite
 
   friend class grammar_cppmem<Iterator>;
   friend class grammar_unittest<Iterator>;
+  friend class grammar_statement<Iterator>;
 
   grammar_whitespace<Iterator> whitespace;
   rule_noskip                  identifier_begin_char;

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <iostream>
-#include "grammar_statement.h"
 #include "debug.h"
 #include "Symbols.h"
+#include <iostream>
+#include <memory>
 
 template<typename Iterator>
 struct position_handler
@@ -11,7 +11,8 @@ struct position_handler
   template <typename, typename, typename>
   struct result { typedef void type; };
 
-  position_handler(char const* filename, Iterator first, Iterator last) : m_filename(filename), first(first), last(last) {}
+  position_handler(char const* filename, Iterator first, Iterator last) :
+      m_filename(filename), first(first), last(last), m_iters(std::make_shared<std::vector<Iterator>>()) {}
 
   boost::iterator_range<Iterator> get_line_and_range(Iterator pos, int& line, int& col) const
   {
@@ -106,11 +107,11 @@ struct position_handler
   int pos_to_id(Iterator pos) const
   {
     int id;
-    int const size = m_iters.size();
+    int const size = m_iters->size();
     for (id = 0; id != size; ++id)
-      if (m_iters[id] == pos)
+      if ((*m_iters)[id] == pos)
         return id;
-    m_iters.push_back(pos);
+    m_iters->push_back(pos);
     return id;
   }
 
@@ -132,6 +133,14 @@ struct position_handler
     Debug(show(dc::notice, pos));
   }
 
+  void operator()(ast::register_assignment& ast, Iterator pos) const
+  {
+    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::register_assignment& {" << ast << "}, " << location(pos) << ")");
+    ast.lhs.id = pos_to_id(pos);
+    parser::Symbols::instance().regdecl(ast.lhs);
+    Debug(show(dc::notice, pos));
+  }
+
   void operator()(bool begin, Iterator pos) const
   {
     DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ")");
@@ -140,9 +149,10 @@ struct position_handler
   }
 
   char const* const m_filename;
-  Iterator first;
-  Iterator last;
-  mutable std::vector<Iterator> m_iters;
+  Iterator const first;
+  Iterator const last;
+  std::shared_ptr<std::vector<Iterator>> m_iters;
+
   //mutable std::map<int, ast::memory_location*> m_memory_locations;
   //mutable std::map<int, ast::function*> m_functions;
 };

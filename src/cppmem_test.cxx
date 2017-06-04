@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
 #if DO_TEST(scope_assignment)
 BOOST_AUTO_TEST_CASE(scope_assignment)
 {
-  std::string const text{"{ int y=0;   y = 4 ;\n}\n"};
+  std::string const text{"{ int y=0;   y = 4 ; r2 = 3;\n}\n"};
 
   ast::nonterminal value;
   cppmem::parse(text, value);
@@ -245,16 +245,24 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   ast::scope sc(boost::get<scope>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 2);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_statement);
-  ast::statement const& s(boost::get<statement>(sc.m_body->m_body_nodes.back()));
-  BOOST_REQUIRE(s.which() == SN_assignment);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 3);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes[0].which() == BN_vardecl);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes[1].which() == BN_statement);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes[2].which() == BN_statement);
+  ast::statement const& s1(boost::get<statement>(sc.m_body->m_body_nodes[1]));
+  ast::statement const& s2(boost::get<statement>(sc.m_body->m_body_nodes[2]));
+  BOOST_REQUIRE(s1.which() == SN_assignment);
+  BOOST_REQUIRE(s2.which() == SN_assignment);
   std::stringstream ss;
-  ss << s;
+  ss << s1;
   std::string out = ss.str();
-  std::cout << "s = \"" << out << "\"." << std::endl;
+  //std::cout << "s1 = \"" << out << "\"." << std::endl;
   BOOST_REQUIRE(out == "y = 4;");
+  ss.str("");
+  ss << s2;
+  out = ss.str();
+  //std::cout << "s2 = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "r2 = 3;");
 }
 #endif
 
