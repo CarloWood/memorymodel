@@ -95,11 +95,8 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
   register_assignment =
       vardecl.register_location >> '=' > expression;
 
-  register_assignment2 =
-      register_assignment;
-
   statement =
-      (register_assignment2 | assignment | load_statement | store_statement) > ';';
+      (register_assignment | assignment | load_statement | store_statement) > ';';
 
   // Debugging and error handling and reporting support.
   using qi::debug;
