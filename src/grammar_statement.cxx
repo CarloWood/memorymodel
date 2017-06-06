@@ -1,11 +1,26 @@
 #include "sys.h"
+#include "debug.h"
 #include "grammar_statement.h"
 #include "position_handler.h"
 #include "Symbols.h"
 
 BOOST_FUSION_ADAPT_STRUCT(
-  ast::expression,
-  (int, v)
+  ast::statement,
+  (ast::statement_node, m_statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+  ast::load_statement,
+  (int, m_memory_location_id),
+  (std::memory_order, m_memory_order),
+  (boost::optional<int>, m_readsvalue)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+  ast::store_statement,
+  (int, m_memory_location_id),
+  (ast::expression, m_val),
+  (std::memory_order, m_memory_order)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -40,32 +55,61 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     grammar_statement::base_type(statement, "grammar_statement"), vardecl(handler)
 {
   qi::int_type int_;
-  using namespace qi::labels;
-  auto& memory_locations(Symbols::instance().memory_locations);
+  auto& na_memory_locations(Symbols::instance().na_memory_locations);
+  auto& atomic_memory_locations(Symbols::instance().atomic_memory_locations);
   auto& register_locations(Symbols::instance().register_locations);
 
-  statement =
-      (register_assignment2 | assignment);
+  memory_order.add
+      ("std::memory_order_relaxed", std::memory_order_relaxed)
+      ("memory_order_relaxed", std::memory_order_relaxed)
+      ("mo_relaxed", std::memory_order_relaxed)
+      ("std::memory_order_consume", std::memory_order_consume)
+      ("memory_order_consume", std::memory_order_consume)
+      ("mo_consume", std::memory_order_consume)
+      ("std::memory_order_acquire", std::memory_order_acquire)
+      ("memory_order_acquire", std::memory_order_acquire)
+      ("mo_acquire", std::memory_order_acquire)
+      ("std::memory_order_release", std::memory_order_release)
+      ("memory_order_release", std::memory_order_release)
+      ("mo_release", std::memory_order_release)
+      ("std::memory_order_acq_rel", std::memory_order_acq_rel)
+      ("memory_order_acq_rel", std::memory_order_acq_rel)
+      ("mo_acq_rel", std::memory_order_acq_rel)
+      ("std::memory_order_seq_cst", std::memory_order_seq_cst)
+      ("memory_order_seq_cst", std::memory_order_seq_cst)
+      ("mo_seq_cst", std::memory_order_seq_cst)
+  ;
+
+  load_statement =
+      atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | qi::attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
+
+  store_statement =
+      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | qi::attr(std::memory_order_seq_cst)) >> ')';
 
   expression =
-      int_;
+      (int_ | na_memory_locations | load_statement);
+
+  assignment =
+      na_memory_locations >> '=' >> expression;
+
+  register_assignment =
+      vardecl.register_location >> '=' >> expression;
 
   register_assignment2 =
       register_assignment;
 
-  register_assignment =
-      vardecl.register_location >> '=' >> expression >> ';';
-
-  assignment =
-      memory_locations >> '=' >> expression >> ';';
+  statement =
+      (register_assignment2 | assignment | load_statement | store_statement) > ';';
 
   // Debugging and error handling and reporting support.
   using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
     (statement)
+    (expression)
+    (register_assignment)
     (assignment)
-    (memory_locations)
-    (register_locations)
+    (load_statement)
+    (store_statement)
   );
 
   using qi::on_error;

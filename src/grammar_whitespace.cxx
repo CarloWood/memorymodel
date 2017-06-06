@@ -12,6 +12,7 @@ grammar_whitespace<Iterator>::grammar_whitespace() :
     grammar_whitespace::base_type(whitespace, "grammar_whitespace")
 {
   qi::eol_type eol;
+  qi::lit_type lit;
   ascii::char_type char_;
   ascii::space_type space;
   repository::confix_type confix;

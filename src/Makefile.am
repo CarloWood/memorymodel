@@ -15,6 +15,8 @@ libcppmem_a_SOURCES = \
 		 grammar_cppmem.h \
 		 grammar_unittest.cxx \
 		 grammar_unittest.h \
+		 position_handler.cxx \
+		 position_handler.h \
 		 Symbols.cxx \
 		 Symbols.h \
 		 ast.cxx \

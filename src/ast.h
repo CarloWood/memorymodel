@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <atomic>
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/include/at_c.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
@@ -58,6 +59,7 @@ struct register_location : tagged
 // memory_location = identifier - register_location;
 struct memory_location : tagged
 {
+  type m_type;
   std::string m_name;
 
   memory_location() { }
@@ -76,120 +78,30 @@ struct memory_location : tagged
   friend std::ostream& operator<<(std::ostream& os, memory_location const& memory_location);
 };
 
-struct nil {};
-struct unary;
-struct function_call;
-struct expression;
-
 struct identifier : tagged
 {
   identifier(std::string const& name = "") : name(name) { }
   std::string name;
 };
 
-typedef boost::variant<
-    nil
-  , bool
-  , unsigned int
-  , identifier
-  , boost::recursive_wrapper<unary>
-  , boost::recursive_wrapper<function_call>
-  , boost::recursive_wrapper<expression>
->
-operand;
-
-enum optoken
+struct load_statement
 {
-  // precedence 1
-  op_comma,
+  int m_memory_location_id;
+  std::memory_order m_memory_order;
+  boost::optional<int> m_readsvalue;
 
-  // precedence 2
-  op_assign,
-  op_plus_assign,
-  op_minus_assign,
-  op_times_assign,
-  op_divide_assign,
-  op_mod_assign,
-  op_bit_and_assign,
-  op_bit_xor_assign,
-  op_bitor_assign,
-  op_shift_left_assign,
-  op_shift_right_assign,
-
-  // precedence 3
-  op_logical_or,
-
-  // precedence 4
-  op_logical_and,
-
-  // precedence 5
-  op_bit_or,
-
-  // precedence 6
-  op_bit_xor,
-
-  // precedence 7
-  op_bit_and,
-
-  // precedence 8
-  op_equal,
-  op_not_equal,
-
-  // precedence 9
-  op_less,
-  op_less_equal,
-  op_greater,
-  op_greater_equal,
-
-  // precedence 10
-  op_shift_left,
-  op_shift_right,
-
-  // precedence 11
-  op_plus,
-  op_minus,
-
-  // precedence 12
-  op_times,
-  op_divide,
-  op_mod,
-
-  // precedence 13
-  op_positive,
-  op_negative,
-  op_pre_incr,
-  op_pre_decr,
-  op_compl,
-  op_not,
-
-  // precedence 14
-  op_post_incr,
-  op_post_decr,
+  friend std::ostream& operator<<(std::ostream& os, load_statement const& load_statement);
 };
 
-struct unary
-{
-  optoken operator_;
-  operand operand_;
-};
+using expression = boost::variant<int, load_statement>;
 
-struct operation
+struct store_statement
 {
-  optoken operator_;
-  operand operand_;
-};
+  int m_memory_location_id;
+  expression m_val;
+  std::memory_order m_memory_order;
 
-struct function_call
-{
-  identifier function_name;
-  std::list<expression> args;
-};
-
-struct expression
-{
-  int v;
-  //operand first;
-  //std::list<operation> rest;
+  friend std::ostream& operator<<(std::ostream& os, store_statement const& store_statement);
 };
 
 struct register_assignment
@@ -215,8 +127,15 @@ struct assignment
 
 struct if_statement;
 struct while_statement;
-enum Statement              { SN_assignment,                       SN_if_statement,                        SN_while_statement };
-using statement = boost::variant<assignment, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+enum Statement                   { SN_assignment, SN_load_statement, SN_store_statement,                       SN_if_statement,                        SN_while_statement };
+using statement_node = boost::variant<assignment,    load_statement,    store_statement, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+
+struct statement
+{
+  statement_node m_statement;
+
+  friend std::ostream& operator<<(std::ostream& os, statement const& statement);
+};
 
 struct if_statement
 {

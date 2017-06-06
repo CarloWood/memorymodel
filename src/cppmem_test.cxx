@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 17
+#define MAX_TEST 18
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -30,8 +30,9 @@ using namespace ast;
 #define scope_assignment_nr            13
 #define scope_recursive_nr             14
 #define function_wrlock_nr             15
-#define threads_simple_nr              16
-#define function_main_nr               17
+#define function_main_nr               16
+#define threads_simple_nr              17
+#define load_store_nr                  18
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -251,8 +252,8 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   BOOST_REQUIRE(sc.m_body->m_body_nodes[2].which() == BN_statement);
   ast::statement const& s1(boost::get<statement>(sc.m_body->m_body_nodes[1]));
   ast::statement const& s2(boost::get<statement>(sc.m_body->m_body_nodes[2]));
-  BOOST_REQUIRE(s1.which() == SN_assignment);
-  BOOST_REQUIRE(s2.which() == SN_assignment);
+  BOOST_REQUIRE(s1.m_statement.which() == SN_assignment);
+  BOOST_REQUIRE(s2.m_statement.which() == SN_assignment);
   std::stringstream ss;
   ss << s1;
   std::string out = ss.str();
@@ -271,7 +272,7 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
 {
   std::string const text{
     "{\n"
-    "  int y = 4;\n"
+    "  atomic_int y = 4;\n"
     "  atomic_int x;\n"
     "  {\n"
     "    { x.store(1); }\n"
@@ -291,7 +292,7 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   //std::cout << "s = \"" << out << "\"." << std::endl;
   find_and_replace(out, "\e[31m", "");
   find_and_replace(out, "\e[0m", "");
-  BOOST_REQUIRE(out == "{ int y = 4; atomic_int x; { { x.store(1); }r0=y.load(std::memory_order_relaxed); } }");
+  BOOST_REQUIRE(out == "{ atomic_int y = 4; atomic_int x; { { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
 }
 #endif
 
@@ -312,35 +313,6 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
 }
 #endif
 
-#if DO_TEST(threads_simple)
-BOOST_AUTO_TEST_CASE(threads_simple)
-{
-  std::string const text{
-      "{{{\n"
-    "    x.store(1, mo_release);\n"
-    "  |||\n"
-    "    {\n"
-    "      r1 = x.load(mo_acquire).readsvalue(1);\n"
-    "      y.store(1, mo_release);\n"
-    "    }\n"
-    "  |||\n"
-    "      r2 = y.load(mo_acquire).readsvalue(1);\n"
-    "      r3 = x.load(mo_relaxed);\n"
-    "  }}}\n"
-  };
-
-  ast::nonterminal value;
-  cppmem::parse(text, value);
-
-  BOOST_REQUIRE_EQUAL(NT_threads, value.which());
-  ast::threads const& t = boost::get<threads>(value);
-  std::stringstream ss;
-  ss << t;
-  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
-  //BOOST_REQUIRE(ss.str() == "void wrlock() { int y = 4; }");
-}
-#endif
-
 #if DO_TEST(function_main)
 BOOST_AUTO_TEST_CASE(function_main)
 {
@@ -358,9 +330,85 @@ BOOST_AUTO_TEST_CASE(function_main)
 }
 #endif
 
+#if DO_TEST(threads_simple)
+BOOST_AUTO_TEST_CASE(threads_simple)
+{
+  std::string const text{
+    "  {{{\n"
+    "    r0 = 0;\n"
+    "  |||\n"
+    "    {\n"
+    "      int x = 42;\n"
+    "      r1 = 1;\n"
+    "      r2 = 2;\n"
+    "    }\n"
+    "  |||\n"
+    "      r3 = 3;\n"
+    "      r4 = 4;\n"
+    "  }}}\n"
+  };
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_threads, value.which());
+  ast::threads const& t = boost::get<threads>(value);
+  std::stringstream ss;
+  ss << t;
+  //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{{{ r0 = 0; ||| { int x = 42; r1 = 1; r2 = 2; } ||| r3 = 3; r4 = 4; }}}");
+}
+#endif
+
+#if DO_TEST(load_store)
+BOOST_AUTO_TEST_CASE(load_store)
+{
+  std::string const text{
+    "int main() {\n"
+    "  atomic_int x;\n"
+    "  atomic_int y;\n"
+    "  r0 = 0;\n"
+    "  {{{\n"
+    "    x.store(1, mo_release);\n"
+    "  |||\n"
+    "    {\n"
+    "      r1 = x.load(mo_acquire).readsvalue(1);\n"
+    "      y.store(1, mo_release);\n"
+    "    }\n"
+    "  |||\n"
+    "      r2 = y.load(mo_acquire).readsvalue(1);\n"
+    "      r3 = x.load(mo_relaxed);\n"
+    "  }}}\n"
+    "}"
+  };
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_function, value.which());
+  ast::function const& f = boost::get<function>(value);
+  BOOST_REQUIRE(f.m_scope.m_body);
+  boost::optional<body> body = f.m_scope.m_body;
+  BOOST_REQUIRE(body->m_body_nodes.size() == 4);
+  body_node& node = body->m_body_nodes[3];
+  BOOST_REQUIRE_EQUAL(BN_threads, node.which());
+  ast::threads const& th = boost::get<threads>(node);
+  std::stringstream ss;
+  ss << th;
+  //std::cout << "th = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{{{ x.store(1, std::memory_order_release); "
+                            "||| { r1 = x.load(std::memory_order_acquire).readsvalue(1); y.store(1, std::memory_order_release); } "
+                            "||| r2 = y.load(std::memory_order_acquire).readsvalue(1); r3 = x.load(std::memory_order_relaxed); "
+                            "}}}");
+}
+#endif
+
 int BOOST_TEST_CALL_DECL
 main( int argc, char* argv[] )
 {
+#ifdef DEBUGGLOBAL
+  GlobalObjectManager::main_entered();
+#endif
   Debug(NAMESPACE_DEBUG::init());
 
   return ::boost::unit_test::unit_test_main( &init_unit_test, argc, argv );

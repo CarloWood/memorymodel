@@ -5,6 +5,12 @@
 #include <iostream>
 #include <memory>
 
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+extern channel_ct poshandler;
+NAMESPACE_DEBUG_CHANNELS_END
+#endif
+
 template<typename Iterator>
 struct position_handler
 {
@@ -12,7 +18,10 @@ struct position_handler
   struct result { typedef void type; };
 
   position_handler(char const* filename, Iterator first, Iterator last) :
-      m_filename(filename), first(first), last(last), m_iters(std::make_shared<std::vector<Iterator>>()) {}
+      m_filename(filename), first(first), last(last), m_iters(std::make_shared<std::vector<Iterator>>())
+  {
+    parser::Symbols::instance().reset();
+  }
 
   boost::iterator_range<Iterator> get_line_and_range(Iterator pos, int& line, int& col) const
   {
@@ -117,35 +126,36 @@ struct position_handler
 
   void operator()(ast::function& ast, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");
     ast.id = pos_to_id(pos);
     //m_functions[ast.id] = &ast;
     parser::Symbols::instance().function(ast);
-    Debug(show(dc::notice, pos));
+    Debug(show(dc::poshandler, pos));
   }
 
   void operator()(ast::vardecl& ast, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ")");
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::vardecl& {" << ast << "}, " << location(pos) << ")");
     ast.m_memory_location.id = pos_to_id(pos);
+    ast.m_memory_location.m_type = ast.m_type;
     //m_memory_locations[ast.m_memory_location.id] = &ast.m_memory_location;
     parser::Symbols::instance().vardecl(ast.m_memory_location);
-    Debug(show(dc::notice, pos));
+    Debug(show(dc::poshandler, pos));
   }
 
   void operator()(ast::register_assignment& ast, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator(ast::register_assignment& {" << ast << "}, " << location(pos) << ")");
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::register_assignment& {" << ast << "}, " << location(pos) << ")");
     ast.lhs.id = pos_to_id(pos);
     parser::Symbols::instance().regdecl(ast.lhs);
-    Debug(show(dc::notice, pos));
+    Debug(show(dc::poshandler, pos));
   }
 
-  void operator()(bool begin, Iterator pos) const
+  void operator()(int begin, Iterator pos) const
   {
-    DoutEntering(dc::notice, "position_handler<Iterator>::operator()(" << (begin ? "scope_begin" : "scope_end") << ", " << location(pos) << ")");
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator()(" << ((begin == 1) ? "scope_begin" : (begin == 0) ? "scope_end" : "scope_end/scope_begin") << ", " << location(pos) << ")");
     parser::Symbols::instance().scope(begin);
-    Debug(show(dc::notice, pos));
+    Debug(show(dc::poshandler, pos));
   }
 
   char const* const m_filename;

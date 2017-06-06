@@ -40,38 +40,53 @@ std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
   return os;
 }
 
-#if 0
 std::ostream& operator<<(std::ostream& os, statement const& statement)
 {
-  os << "\e[31m";
-  switch (statement.which())
-  {
-    case SN_assignment:
-      break;
-    case SN_if_statement:
-      break;
-    case SN_while_statement:
-      break;
-  }
-  return os << "\e[0m" << ';';
+  return os << statement.m_statement << ';';
 }
-#endif
 
-std::ostream& operator<<(std::ostream& os, expression const& expression)
+#define CASE_WRITE(x) do { case x: return os << #x; } while(0)
+
+std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order)
 {
-  os << expression.v;
+  switch (memory_order)
+  {
+    CASE_WRITE(std::memory_order_relaxed);
+    CASE_WRITE(std::memory_order_consume);
+    CASE_WRITE(std::memory_order_acquire);
+    CASE_WRITE(std::memory_order_release);
+    CASE_WRITE(std::memory_order_acq_rel);
+    CASE_WRITE(std::memory_order_seq_cst);
+  }
+  return os << "<unknown memory order>";
+}
+
+std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
+{
+  os << parser::Symbols::instance().id_to_string(load_statement.m_memory_location_id) << ".load(" << load_statement.m_memory_order << ")";
+  if (load_statement.m_readsvalue)
+    os << ".readsvalue(" << load_statement.m_readsvalue.get() << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, store_statement const& store_statement)
+{
+  os << parser::Symbols::instance().id_to_string(store_statement.m_memory_location_id) << ".store(" << store_statement.m_val;
+  if (store_statement.m_memory_order != std::memory_order_seq_cst)
+    os << ", " << store_statement.m_memory_order;
+  os << ')';
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, register_assignment const& register_assignment)
 {
-  os << register_assignment.lhs << " = " << register_assignment.rhs << ';';
+  os << register_assignment.lhs << " = " << register_assignment.rhs;
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, assignment const& assignment)
 {
-  os << parser::Symbols::instance().id_to_string(assignment.lhs) << " = " << assignment.rhs << ';';
+  os << parser::Symbols::instance().id_to_string(assignment.lhs) << " = " << assignment.rhs;
   return os;
 }
 

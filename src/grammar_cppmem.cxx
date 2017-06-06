@@ -51,7 +51,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   qi::no_skip_type no_skip;
   qi::attr_type dummy;
 
-  // Unused_type rules with semantic actions.
+  // Unused_type rules with on_success actions.
   scope_begin                 = (lit('{') - "{{{");
   scope_end                   = lit('}');
   threads_begin               = lit("{{{");
@@ -118,12 +118,27 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   on_success(
       scope_begin
-    , handler_function(handler)(true, _1)
+    , handler_function(handler)(1, _1)
   );
 
   on_success(
       scope_end
-    , handler_function(handler)(false, _1)
+    , handler_function(handler)(0, _1)
+  );
+
+  on_success(
+      threads_begin
+    , handler_function(handler)(1, _1)
+  );
+
+  on_success(
+      threads_next
+    , handler_function(handler)(2, _1)
+  );
+
+  on_success(
+      threads_end
+    , handler_function(handler)(0, _1)
   );
 }
 
