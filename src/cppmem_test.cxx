@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 18
+#define MAX_TEST 19
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -33,6 +33,7 @@ using namespace ast;
 #define function_main_nr               16
 #define threads_simple_nr              17
 #define load_store_nr                  18
+#define var_assignment_nr              19
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -400,6 +401,23 @@ BOOST_AUTO_TEST_CASE(load_store)
                             "||| { r1 = x.load(std::memory_order_acquire).readsvalue(1); y.store(1, std::memory_order_release); } "
                             "||| r2 = y.load(std::memory_order_acquire).readsvalue(1); r3 = x.load(std::memory_order_relaxed); "
                             "}}}");
+}
+#endif
+
+#if DO_TEST(var_assignment)
+BOOST_AUTO_TEST_CASE(var_assignment)
+{
+  std::string const text{"{ int y = 4; int x = 5; r1 = y; y = x; x = r1; y = 1; }"};
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ast::scope sc(boost::get<scope>(value));
+  std::stringstream ss;
+  ss << sc;
+  //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{ int y = 4; int x = 5; r1 = y; y = x; x = r1; y = 1; }");
 }
 #endif
 

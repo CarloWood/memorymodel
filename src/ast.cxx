@@ -5,6 +5,12 @@
 
 namespace ast {
 
+std::ostream& operator<<(std::ostream& os, tag const& tag)
+{
+  os << parser::Symbols::instance().tag_to_string(tag);
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, type const& type)
 {
   switch (type.m_type)
@@ -63,7 +69,7 @@ std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order
 
 std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
 {
-  os << parser::Symbols::instance().id_to_string(load_statement.m_memory_location_id) << ".load(" << load_statement.m_memory_order << ")";
+  os << load_statement.m_memory_location_id << ".load(" << load_statement.m_memory_order << ")";
   if (load_statement.m_readsvalue)
     os << ".readsvalue(" << load_statement.m_readsvalue.get() << ')';
   return os;
@@ -71,7 +77,7 @@ std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
 
 std::ostream& operator<<(std::ostream& os, store_statement const& store_statement)
 {
-  os << parser::Symbols::instance().id_to_string(store_statement.m_memory_location_id) << ".store(" << store_statement.m_val;
+  os << store_statement.m_memory_location_id << ".store(" << store_statement.m_val;
   if (store_statement.m_memory_order != std::memory_order_seq_cst)
     os << ", " << store_statement.m_memory_order;
   os << ')';
@@ -86,7 +92,7 @@ std::ostream& operator<<(std::ostream& os, register_assignment const& register_a
 
 std::ostream& operator<<(std::ostream& os, assignment const& assignment)
 {
-  os << parser::Symbols::instance().id_to_string(assignment.lhs) << " = " << assignment.rhs;
+  os << assignment.lhs << " = " << assignment.rhs;
   return os;
 }
 

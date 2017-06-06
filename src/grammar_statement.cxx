@@ -11,14 +11,14 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
   ast::load_statement,
-  (int, m_memory_location_id),
+  (ast::tag, m_memory_location_id),
   (std::memory_order, m_memory_order),
   (boost::optional<int>, m_readsvalue)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
   ast::store_statement,
-  (int, m_memory_location_id),
+  (ast::tag, m_memory_location_id),
   (ast::expression, m_val),
   (std::memory_order, m_memory_order)
 )
@@ -31,7 +31,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
   ast::assignment,
-  (int, lhs),
+  (ast::tag, lhs),
   (ast::expression, rhs)
 )
 
@@ -87,13 +87,13 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
       atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | qi::attr(std::memory_order_seq_cst)) >> ')';
 
   expression =
-      (int_ | na_memory_locations | load_statement);
+      (int_ | register_locations | na_memory_locations | load_statement);
 
   assignment =
-      na_memory_locations >> '=' >> expression;
+      na_memory_locations >> '=' > expression;
 
   register_assignment =
-      vardecl.register_location >> '=' >> expression;
+      vardecl.register_location >> '=' > expression;
 
   register_assignment2 =
       register_assignment;

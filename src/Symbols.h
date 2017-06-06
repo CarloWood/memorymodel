@@ -22,23 +22,23 @@ class Symbols : public Singleton<Symbols> {
   std::stack<std::map<int, std::string>> m_register_stack;
 
  public:
-  qi::symbols<char, int> function_names;
+  qi::symbols<char, ast::tag> function_names;
   std::map<int, std::string> function_names_map;
-  qi::symbols<char, int> na_memory_locations;
+  qi::symbols<char, ast::tag> na_memory_locations;
   std::map<int, std::string> na_memory_locations_map;
-  qi::symbols<char, int> atomic_memory_locations;
+  qi::symbols<char, ast::tag> atomic_memory_locations;
   std::map<int, std::string> atomic_memory_locations_map;
-  qi::symbols<char, int> register_locations;
+  qi::symbols<char, ast::tag> register_locations;
   std::map<int, std::string> register_locations_map;
   std::map<int, std::string> all_symbols;
 
   void function(ast::function const& name);
   void vardecl(ast::memory_location const& memory_location);
   void regdecl(ast::register_location const& register_location);
-  int set_register_id(ast::register_location const& register_location);
+  ast::tag set_register_id(ast::register_location const& register_location);
   void scope(int begin);
-  std::string id_to_string(int id);
-  void print(boost::spirit::qi::symbols<char, int>&) const;
+  std::string tag_to_string(ast::tag id);
+  void print(boost::spirit::qi::symbols<char, ast::tag>&) const;
   void reset();
 };
 

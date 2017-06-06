@@ -13,7 +13,7 @@ namespace parser {
 void Symbols::function(ast::function const& function)
 {
   DoutEntering(dc::symbols, "Symbols::function(\"" << function << "\") with id " << function.id);
-  function_names.add(function.m_function_name.name, function.id);
+  function_names.add(function.m_function_name.name, function);
   function_names_map[function.id] = function.m_function_name.name;
   all_symbols[function.id] = function.m_function_name.name;
 }
@@ -24,12 +24,12 @@ void Symbols::vardecl(ast::memory_location const& memory_location)
       (memory_location.m_type == ast::type_atomic_int ? "[atomic]" : "[non-atomic]") << ") with id " << memory_location.id);
   if (memory_location.m_type == ast::type_atomic_int)
   {
-    atomic_memory_locations.add(memory_location.m_name, memory_location.id);
+    atomic_memory_locations.add(memory_location.m_name, memory_location);
     atomic_memory_locations_map[memory_location.id] = memory_location.m_name;
   }
   else
   {
-    na_memory_locations.add(memory_location.m_name, memory_location.id);
+    na_memory_locations.add(memory_location.m_name, memory_location);
     na_memory_locations_map[memory_location.id] = memory_location.m_name;
   }
   all_symbols[memory_location.id] = memory_location.m_name;
@@ -40,19 +40,19 @@ void Symbols::regdecl(ast::register_location const& register_location)
   DoutEntering(dc::symbols, "Symbols::regdecl(\"" << register_location << "\") with id " << register_location.id);
   std::string name = "r";
   name += std::to_string(register_location.m_id);
-  register_locations.add(name, register_location.id);
+  register_locations.add(name, register_location);
   register_locations_map[register_location.id] = name;
   all_symbols[register_location.id] = name;
 }
 
-int Symbols::set_register_id(ast::register_location const& register_location)
+ast::tag Symbols::set_register_id(ast::register_location const& register_location)
 {
   std::string name = "r";
   name += std::to_string(register_location.m_id);
-  int* p = register_locations.find(name);
+  ast::tag* p = register_locations.find(name);
   // regdecl should already have been called.
   assert(p);
-  register_location.id = *p;
+  assert(register_location.id == p->id);
   return *p;
 }
 
@@ -73,11 +73,11 @@ void Symbols::scope(int begin)
     register_locations.clear();
 
     for (auto& naml : na_memory_locations_map)
-      na_memory_locations.add(naml.second.c_str(), naml.first);
+      na_memory_locations.add(naml.second.c_str(), ast::tag(naml.first));
     for (auto& aml : atomic_memory_locations_map)
-      atomic_memory_locations.add(aml.second.c_str(), aml.first);
+      atomic_memory_locations.add(aml.second.c_str(), ast::tag(aml.first));
     for (auto& rl : register_locations_map)
-      register_locations.add(rl.second.c_str(), rl.first);
+      register_locations.add(rl.second.c_str(), ast::tag(rl.first));
 
     m_na_symbol_stack.pop();
     m_symbol_stack.pop();
@@ -114,37 +114,20 @@ void Symbols::reset()
     m_register_stack.pop();
 }
 
-struct SymbolSearcher
+std::string Symbols::tag_to_string(ast::tag id)
 {
-  SymbolSearcher(int id, std::string& result) : m_id(id), m_found(result) { }
-
-  void operator() (std::string const& s, int id)
-  {
-    if (id == m_id)
-    {
-      m_found = s;
-    }
-  }
-
-private:
-  int m_id;
-  std::string& m_found;
-};
-
-std::string Symbols::id_to_string(int id)
-{
-  return all_symbols[id];
+  return all_symbols[id.id];
 }
 
 struct SymbolPrinter
 {
-  void operator() (std::string const& s, int id)
+  void operator() (std::string const& s, ast::tag id)
   {
-    Dout(dc::symbols, "\"" << s << "\" : " << id);
+    Dout(dc::symbols, "\"" << s << "\" : " << id.id);
   }
 };
 
-void Symbols::print(boost::spirit::qi::symbols<char, int>& table) const
+void Symbols::print(boost::spirit::qi::symbols<char, ast::tag>& table) const
 {
   SymbolPrinter symbol_printer;
   table.for_each(symbol_printer);

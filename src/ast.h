@@ -13,9 +13,13 @@
 
 namespace ast {
 
-struct tagged
+struct tag
 {
-  mutable int id;
+  int id;
+  tag() { }
+  explicit tag(int id_) : id(id_) { }
+
+  friend std::ostream& operator<<(std::ostream& os, tag const& tag);
 };
 
 enum Type { type_int, type_atomic_int };
@@ -39,7 +43,7 @@ struct type
 };
 
 // register_location = 'r' > uint_;
-struct register_location : tagged
+struct register_location : tag
 {
   unsigned int m_id;
 
@@ -57,7 +61,7 @@ struct register_location : tagged
 };
 
 // memory_location = identifier - register_location;
-struct memory_location : tagged
+struct memory_location : tag
 {
   type m_type;
   std::string m_name;
@@ -78,7 +82,7 @@ struct memory_location : tagged
   friend std::ostream& operator<<(std::ostream& os, memory_location const& memory_location);
 };
 
-struct identifier : tagged
+struct identifier : tag
 {
   identifier(std::string const& name = "") : name(name) { }
   std::string name;
@@ -86,18 +90,18 @@ struct identifier : tagged
 
 struct load_statement
 {
-  int m_memory_location_id;
+  tag m_memory_location_id;
   std::memory_order m_memory_order;
   boost::optional<int> m_readsvalue;
 
   friend std::ostream& operator<<(std::ostream& os, load_statement const& load_statement);
 };
 
-using expression = boost::variant<int, load_statement>;
+using expression = boost::variant<int, tag, load_statement>;
 
 struct store_statement
 {
-  int m_memory_location_id;
+  tag m_memory_location_id;
   expression m_val;
   std::memory_order m_memory_order;
 
@@ -114,7 +118,7 @@ struct register_assignment
 
 struct assignment
 {
-  int lhs;
+  tag lhs;
   expression rhs;
 
   assignment() = default;
@@ -237,7 +241,7 @@ struct function_name
 
 // void FUNCTION_NAME()
 // SCOPE
-struct function : tagged
+struct function : tag
 {
   function_name m_function_name;
   scope m_scope;
