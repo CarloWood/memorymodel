@@ -51,6 +51,40 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
   return os << statement.m_statement << ';';
 }
 
+std::ostream& operator<<(std::ostream& os, operators op)
+{
+  switch (op)
+  {
+    case op_eq:
+      return os << "==";
+    case op_ne:
+      return os << "!=";
+  }
+  return os << "<UNKNOWN OP>";
+}
+
+std::ostream& operator<<(std::ostream& os, simple_expression const& simple_expression)
+{
+  if (simple_expression.m_simple_expression_node.which() == 3)
+    return os << '(' << simple_expression.m_simple_expression_node << ')';
+  return os << simple_expression.m_simple_expression_node;
+}
+
+std::ostream& operator<<(std::ostream& os, unary_expression const& unary_expression)
+{
+  if (unary_expression.m_negated)
+    os << '!';
+  return os << unary_expression.m_simple_expression;
+}
+
+std::ostream& operator<<(std::ostream& os, expression const& expression)
+{
+  os << expression.m_first;
+  for (auto& oe : expression.m_other)
+    os << ' ' << oe.first << ' ' << oe.second;
+  return os;
+}
+
 #define CASE_WRITE(x) do { case x: return os << #x; } while(0)
 
 std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order)

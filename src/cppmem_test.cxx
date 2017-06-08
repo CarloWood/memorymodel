@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 19
+#define MAX_TEST 20
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -34,6 +34,7 @@ using namespace ast;
 #define threads_simple_nr              17
 #define load_store_nr                  18
 #define var_assignment_nr              19
+#define expressions_nr                 20
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -418,6 +419,23 @@ BOOST_AUTO_TEST_CASE(var_assignment)
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "{ int y = 4; int x = 5; r1 = y; y = x; x = r1; y = 1; }");
+}
+#endif
+
+#if DO_TEST(expressions)
+BOOST_AUTO_TEST_CASE(expressions)
+{
+  std::string const text{"{ int x; r1 = x == x; }"};
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ast::scope sc(boost::get<scope>(value));
+  std::stringstream ss;
+  ss << sc;
+  //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{ int x; r1 = x == x; }");
 }
 #endif
 

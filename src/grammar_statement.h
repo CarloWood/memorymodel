@@ -18,6 +18,9 @@ class grammar_statement : public qi::grammar<Iterator, ast::statement(), skipper
 
   grammar_whitespace<Iterator>                  whitespace;
   grammar_vardecl<Iterator>                     vardecl;
+  qi::symbols<char, ast::operators>             operators;
+  rule<ast::simple_expression>                  simple_expression;
+  rule<ast::unary_expression>                   unary_expression;
   rule<ast::expression>                         expression;
   rule<ast::statement>                          statement;
   rule<ast::register_assignment>                register_assignment;

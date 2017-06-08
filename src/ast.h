@@ -97,7 +97,35 @@ struct load_statement
   friend std::ostream& operator<<(std::ostream& os, load_statement const& load_statement);
 };
 
-using expression = boost::variant<int, tag, load_statement>;
+struct expression;
+enum operators { op_eq, op_ne };
+
+using simple_expression_node = boost::variant<int, tag, load_statement, boost::recursive_wrapper<expression>>;
+
+struct simple_expression
+{
+  simple_expression_node m_simple_expression_node;
+
+  friend std::ostream& operator<<(std::ostream& os, simple_expression const& simple_expression);
+};
+
+struct unary_expression
+{
+  bool m_negated = false;
+  simple_expression m_simple_expression;
+
+  friend std::ostream& operator<<(std::ostream& os, unary_expression const& unary_expression);
+};
+
+struct expression
+{
+  using other_type = std::vector<std::pair<operators, expression>>;
+
+  unary_expression m_first;
+  other_type m_other;
+
+  friend std::ostream& operator<<(std::ostream& os, expression const& expression);
+};
 
 struct store_statement
 {

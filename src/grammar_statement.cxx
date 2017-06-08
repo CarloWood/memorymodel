@@ -3,6 +3,7 @@
 #include "grammar_statement.h"
 #include "position_handler.h"
 #include "Symbols.h"
+#include <boost/fusion/include/std_pair.hpp>
 
 BOOST_FUSION_ADAPT_STRUCT(
   ast::statement,
@@ -35,16 +36,13 @@ BOOST_FUSION_ADAPT_STRUCT(
   (ast::expression, rhs)
 )
 
+BOOST_FUSION_ADAPT_STRUCT(ast::simple_expression, m_simple_expression_node)
+BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_negated, m_simple_expression)
+BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_first, m_other)
+
 namespace parser {
 
 namespace phoenix = boost::phoenix;
-
-struct new_register_handler {
-  int operator()(ast::register_location& /*register_location*/)
-  {
-    return 0;
-  }
-};
 
 //=====================================
 // The statement grammar
@@ -54,10 +52,10 @@ template<typename Iterator>
 grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handler) :
     grammar_statement::base_type(statement, "grammar_statement"), vardecl(handler)
 {
-  qi::int_type int_;
   auto& na_memory_locations(Symbols::instance().na_memory_locations);
   auto& atomic_memory_locations(Symbols::instance().atomic_memory_locations);
   auto& register_locations(Symbols::instance().register_locations);
+  using namespace qi;
 
   memory_order.add
       ("std::memory_order_relaxed", std::memory_order_relaxed)
@@ -80,14 +78,29 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
       ("mo_seq_cst", std::memory_order_seq_cst)
   ;
 
+  operators.add
+      ("==", ast::op_eq)
+      ("!=", ast::op_ne)
+  ;
+
   load_statement =
-      atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | qi::attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
+      atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
 
   store_statement =
-      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | qi::attr(std::memory_order_seq_cst)) >> ')';
+      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | attr(std::memory_order_seq_cst)) >> ')';
+
+  simple_expression =
+    ( '(' > expression > ')' )
+    | int_
+    | register_locations
+    | na_memory_locations
+    | load_statement;
+
+  unary_expression =
+      matches['!'] >> simple_expression;
 
   expression =
-      (int_ | register_locations | na_memory_locations | load_statement);
+      unary_expression >> *(operators > expression);
 
   assignment =
       na_memory_locations >> '=' > expression;
@@ -99,9 +112,11 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
       (register_assignment | assignment | load_statement | store_statement) > ';';
 
   // Debugging and error handling and reporting support.
-  using qi::debug;
+  using qi::debug;      // This macro uses plain 'debug', that is otherwise confused with our namespace of the same name.
   BOOST_SPIRIT_DEBUG_NODES(
     (statement)
+    (simple_expression)
+    (unary_expression)
     (expression)
     (register_assignment)
     (assignment)
@@ -109,15 +124,7 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     (store_statement)
   );
 
-  using qi::on_error;
-  using qi::on_success;
-  using qi::fail;
   using handler_function = phoenix::function<position_handler<Iterator>>;
-
-  qi::_1_type _1;
-  qi::_3_type _3;
-  qi::_4_type _4;
-  qi::_val_type _val;
 
   // Error handling: on error in start, call handler.
   on_error<fail>
