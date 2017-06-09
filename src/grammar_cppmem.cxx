@@ -26,12 +26,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
     vardecl(handler), statement_g(handler)
 {
-  ascii::char_type char_;
-  qi::lit_type lit;
-  qi::int_type int_;
-  qi::string_type string;
-  qi::no_skip_type no_skip;
-  qi::attr_type dummy;
+  using namespace qi;
+  attr_type dummy;
 
   // Unused_type rules with on_success actions.
   scope_begin                 = (lit('{') - "{{{");
@@ -75,15 +71,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (cppmem)
   );
 
-  using qi::on_error;
-  using qi::on_success;
-  using qi::fail;
   using handler_function = phoenix::function<position_handler<Iterator>>;
-
-  qi::_1_type _1;
-  qi::_3_type _3;
-  qi::_4_type _4;
-  qi::_val_type _val;
 
   // Error handling: on error in start, call handler.
   on_error<fail>

@@ -14,7 +14,7 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
     grammar_unittest::base_type(unittest, "grammar_unittest"),
     cppmem(handler)
 {
-  qi::eoi_type eoi;
+  using namespace qi;
 
   unittest = (cppmem.vardecl.type >> eoi)
            | (cppmem.vardecl.memory_location >> eoi)
@@ -32,12 +32,7 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
       (unittest)
   );
 
-  using qi::on_error;
-  using qi::fail;
   using position_handler_function = phoenix::function<position_handler<Iterator>>;
-
-  qi::_3_type _3;
-  qi::_4_type _4;
 
   // Error handling: on error in start, call handler.
   on_error<fail>

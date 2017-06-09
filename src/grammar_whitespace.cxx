@@ -11,11 +11,11 @@ template<typename Iterator>
 grammar_whitespace<Iterator>::grammar_whitespace() :
     grammar_whitespace::base_type(whitespace, "grammar_whitespace")
 {
-  qi::eol_type eol;
-  qi::lit_type lit;
-  ascii::char_type char_;
-  ascii::space_type space;
-  repository::confix_type confix;
+  using namespace qi;
+  using namespace ascii;
+  using namespace repository;
+  using qi::char_;
+  using qi::space;
 
   // A C++ comment. Everything between '//' and eol.
   cpp_comment =
