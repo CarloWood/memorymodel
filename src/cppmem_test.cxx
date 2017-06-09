@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 20
+#define MAX_TEST 21
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -35,6 +35,7 @@ using namespace ast;
 #define load_store_nr                  18
 #define var_assignment_nr              19
 #define expressions_nr                 20
+#define expressions2_nr                21
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -436,6 +437,23 @@ BOOST_AUTO_TEST_CASE(expressions)
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "{ int x; r1 = x == x; }");
+}
+#endif
+
+#if DO_TEST(expressions2)
+BOOST_AUTO_TEST_CASE(expressions2)
+{
+  std::string const text{"{ atomic_int x; int y; y = ((x.load()) == 3); }"};
+
+  ast::nonterminal value;
+  cppmem::parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
+  ast::scope sc(boost::get<scope>(value));
+  std::stringstream ss;
+  ss << sc;
+  //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "{ atomic_int x; int y; y = ((x.load()) == 3); }");
 }
 #endif
 

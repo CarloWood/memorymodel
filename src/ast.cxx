@@ -103,7 +103,10 @@ std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order
 
 std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
 {
-  os << load_statement.m_memory_location_id << ".load(" << load_statement.m_memory_order << ")";
+  os << load_statement.m_memory_location_id << ".load(";
+  if (load_statement.m_memory_order != std::memory_order_seq_cst)
+    os << load_statement.m_memory_order;
+  os << ")";
   if (load_statement.m_readsvalue)
     os << ".readsvalue(" << load_statement.m_readsvalue.get() << ')';
   return os;
