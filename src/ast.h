@@ -117,14 +117,19 @@ struct unary_expression
   friend std::ostream& operator<<(std::ostream& os, unary_expression const& unary_expression);
 };
 
+struct chain;
 struct expression
 {
-  using other_type = std::vector<std::pair<operators, expression>>;
-
-  unary_expression m_first;
-  other_type m_other;
+  unary_expression m_operand;
+  std::vector<chain> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, expression const& expression);
+};
+
+struct chain
+{
+  operators op;
+  expression operand;
 };
 
 struct store_statement

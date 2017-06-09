@@ -79,9 +79,9 @@ std::ostream& operator<<(std::ostream& os, unary_expression const& unary_express
 
 std::ostream& operator<<(std::ostream& os, expression const& expression)
 {
-  os << expression.m_first;
-  for (auto& oe : expression.m_other)
-    os << ' ' << oe.first << ' ' << oe.second;
+  os << expression.m_operand;
+  for (auto& chain : expression.m_chained)
+    os << ' ' << chain.op << ' ' << chain.operand;
   return os;
 }
 

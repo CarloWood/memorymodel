@@ -32,7 +32,10 @@ bool parse(char const* filename, std::string const& text, ast::cppmem& out)
   if (!r)
     return false;
   if (begin != end)
+  {
+    std::cerr << "Remaining unparsed input: '" << std::string(begin, end) << "'.\n";
     throw std::domain_error("code after main()");
+  }
   return true;
 }
 

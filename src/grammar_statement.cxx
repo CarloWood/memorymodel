@@ -3,42 +3,16 @@
 #include "grammar_statement.h"
 #include "position_handler.h"
 #include "Symbols.h"
-#include <boost/fusion/include/std_pair.hpp>
 
-BOOST_FUSION_ADAPT_STRUCT(
-  ast::statement,
-  (ast::statement_node, m_statement)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-  ast::load_statement,
-  (ast::tag, m_memory_location_id),
-  (std::memory_order, m_memory_order),
-  (boost::optional<int>, m_readsvalue)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-  ast::store_statement,
-  (ast::tag, m_memory_location_id),
-  (ast::expression, m_val),
-  (std::memory_order, m_memory_order)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-  ast::register_assignment,
-  (ast::register_location, lhs),
-  (ast::expression, rhs)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-  ast::assignment,
-  (ast::tag, lhs),
-  (ast::expression, rhs)
-)
-
+BOOST_FUSION_ADAPT_STRUCT(ast::statement, m_statement)
+BOOST_FUSION_ADAPT_STRUCT(ast::load_statement, m_memory_location_id, m_memory_order, m_readsvalue)
+BOOST_FUSION_ADAPT_STRUCT(ast::store_statement, m_memory_location_id, m_val, m_memory_order)
+BOOST_FUSION_ADAPT_STRUCT(ast::register_assignment, lhs, rhs)
+BOOST_FUSION_ADAPT_STRUCT(ast::assignment, lhs, rhs)
 BOOST_FUSION_ADAPT_STRUCT(ast::simple_expression, m_simple_expression_node)
 BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_negated, m_simple_expression)
-BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_first, m_other)
+BOOST_FUSION_ADAPT_STRUCT(ast::chain, op, operand)
+BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_operand, m_chained)
 
 namespace parser {
 

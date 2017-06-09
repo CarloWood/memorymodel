@@ -8,28 +8,10 @@
 #include <boost/spirit/include/phoenix_stl.hpp>
 #include <boost/spirit/include/phoenix_object.hpp>
 
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::function,
-    (ast::function_name, m_function_name),
-    (ast::scope, m_scope)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::body,
-    (ast::body::container_type, m_body_nodes),
-    (bool, m_dummy)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::scope,
-    (boost::optional<ast::body>, m_body)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::threads,
-    (ast::threads::container_type, m_threads),
-    (bool, m_dummy)
-)
+BOOST_FUSION_ADAPT_STRUCT(ast::function, m_function_name, m_scope)
+BOOST_FUSION_ADAPT_STRUCT(ast::body, m_body_nodes, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::scope, m_body)
+BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
 
 namespace parser {
 

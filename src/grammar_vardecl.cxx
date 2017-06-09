@@ -2,17 +2,8 @@
 #include "grammar_vardecl.h"
 #include "position_handler.h"
 
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::memory_location,
-    (std::string, m_name)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    ast::vardecl,
-    (ast::type, m_type),
-    (ast::memory_location, m_memory_location),
-    (boost::optional<int>, m_initial_value)
-)
+BOOST_FUSION_ADAPT_STRUCT(ast::memory_location, m_name)
+BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)
 
 namespace parser {
 
