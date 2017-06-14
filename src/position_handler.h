@@ -124,6 +124,11 @@ struct position_handler
     return id;
   }
 
+  Iterator id_to_pos(int id) const
+  {
+    return m_iters->find(id);
+  }
+
   void operator()(ast::function& ast, Iterator pos) const
   {
     DoutEntering(dc::poshandler, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");

@@ -135,8 +135,8 @@ struct chain
 struct store_statement
 {
   tag m_memory_location_id;
-  expression m_val;
   std::memory_order m_memory_order;
+  expression m_val;
 
   friend std::ostream& operator<<(std::ostream& os, store_statement const& store_statement);
 };
@@ -210,6 +210,8 @@ struct vardecl {
         if (boost::fusion::at_c<2>(attr))
           m_initial_value = boost::fusion::at_c<2>(attr).get();
       }
+
+  int tag() const { return m_memory_location.id; }
 
   friend bool operator==(vardecl const& vd1, vardecl const& vd2) {
     return vd1.m_type == vd2.m_type && vd1.m_memory_location == vd2.m_memory_location && vd1.m_initial_value == vd2.m_initial_value;

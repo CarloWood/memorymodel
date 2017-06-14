@@ -1,9 +1,45 @@
 #include "sys.h"
 #include "debug.h"
 #include "cppmem_parser.h"
+#include <boost/variant/get.hpp>
 #include <iostream>
 #include <string>
 #include <fstream>
+
+std::map<std::string, ast::function> functions;
+
+void execute_body(std::string name, ast::body const& body)
+{
+  DoutEntering(dc::notice, "execute_body(\"" << name << "\")");
+  for (auto& node : body.m_body_nodes)
+  {
+    switch (node.which())
+    {
+      case ast::BN_vardecl:
+      {
+        auto const& vd(boost::get<ast::vardecl>(node));
+        Dout(dc::notice, "Found: " << vd);
+        break;
+      }
+      case ast::BN_statement:
+        break;
+      case ast::BN_scope:
+      {
+        auto const& b(boost::get<ast::scope>(node).m_body);
+        if (b)
+          execute_body("scope", *b);
+        break;
+      }
+      case ast::BN_threads:
+      {
+        auto const& t(boost::get<ast::threads>(node));
+        for (auto& b : t.m_threads)
+          execute_body("thread", b);
+        break;
+      }
+    }
+  }
+}
 
 int main(int argc, char* argv[])
 {
@@ -52,5 +88,29 @@ int main(int argc, char* argv[])
     Dout(dc::warning, "Parser threw exception: " << error.what());
   }
 
-  std::cout << "Result: " << ast << std::endl;
+  std::cout << "Abstract Syntax Tree: " << ast << std::endl;
+
+  // Collect all global variables and their initialization, if any.
+  for (auto& node : ast)
+    if (node.which() == ast::DN_vardecl)
+    {
+      ast::vardecl& vardecl{boost::get<ast::vardecl>(node)};
+      std::cout << "Global definition: " << vardecl << std::endl;
+    }
+
+  // Collect all function definitions.
+  for (auto& node : ast)
+    if (node.which() == ast::DN_function)
+    {
+      ast::function& function{boost::get<ast::function>(node)};
+      //std::cout << "Function definition: " << function << std::endl;
+      std::string name = function.m_function_name.name;
+      functions[name] = function;
+    }
+
+  std::string const name = "test1";
+  ast::function const& main_function = functions[name];
+
+  // Execute main()
+  execute_body(name, *main_function.m_scope.m_body);
 }
