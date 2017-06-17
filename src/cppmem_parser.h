@@ -1,11 +1,16 @@
 #pragma once
 
 #include <string>
-#include "ast.h"
+
+namespace ast {
+struct cppmem;
+}
+
+template<typename Iterator> struct position_handler;
 
 namespace cppmem {
 
-void parse(std::string const& text, ast::nonterminal& out);
-bool parse(char const* filename, std::string const& text, ast::cppmem& out);
+using iterator_type = std::string::const_iterator;
+bool parse(iterator_type& begin, iterator_type const& end, position_handler<iterator_type>& handler, ast::cppmem& out);
 
 } // namespace cppmem

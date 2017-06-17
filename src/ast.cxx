@@ -133,6 +133,12 @@ std::ostream& operator<<(std::ostream& os, assignment const& assignment)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, function_call const& function_call)
+{
+  os << function_call.m_function << "()";
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
 {
   os << "IF_STATEMENT";

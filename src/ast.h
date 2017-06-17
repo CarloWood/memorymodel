@@ -162,10 +162,17 @@ struct assignment
   friend std::ostream& operator<<(std::ostream& os, assignment const& assignment);
 };
 
+struct function_call
+{
+  tag m_function;
+
+  friend std::ostream& operator<<(std::ostream& os, function_call const& function_call);
+};
+
 struct if_statement;
 struct while_statement;
-enum Statement                   { SN_assignment, SN_load_statement, SN_store_statement,                       SN_if_statement,                        SN_while_statement };
-using statement_node = boost::variant<assignment,    load_statement,    store_statement, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+enum Statement                   { SN_assignment, SN_load_statement, SN_store_statement, SN_function_call,                       SN_if_statement,                        SN_while_statement };
+using statement_node = boost::variant<assignment,    load_statement,    store_statement,    function_call, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
 
 struct statement
 {
@@ -210,8 +217,6 @@ struct vardecl {
         if (boost::fusion::at_c<2>(attr))
           m_initial_value = boost::fusion::at_c<2>(attr).get();
       }
-
-  int tag() const { return m_memory_location.id; }
 
   friend bool operator==(vardecl const& vd1, vardecl const& vd2) {
     return vd1.m_type == vd2.m_type && vd1.m_memory_location == vd2.m_memory_location && vd1.m_initial_value == vd2.m_initial_value;

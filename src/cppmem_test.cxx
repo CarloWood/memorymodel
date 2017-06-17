@@ -4,7 +4,7 @@
 
 #include "sys.h"
 #include "debug.h"
-#include "cppmem_parser.h"
+#include "grammar_unittest.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/variant/get.hpp>
 #include <iostream>
@@ -42,6 +42,18 @@ using namespace ast;
 #define MAX_TEST MIN_TEST
 #endif
 
+void parse(std::string const& text, ast::nonterminal& out)
+{
+  using iterator_type = std::string::const_iterator;
+  iterator_type begin(text.begin());
+  iterator_type const end(text.end());
+  parser::skipper<iterator_type> skipper;
+  position_handler<iterator_type> handler("<unit_test>", begin, end);
+  bool r = boost::spirit::qi::phrase_parse(begin, end, parser::grammar_unittest<iterator_type>(handler), skipper, out);
+  if (!r || begin != end)
+    throw std::domain_error("invalid cppmem input");
+}
+
 void find_and_replace(std::string& str, std::string const& old_str, std::string const& new_str)
 {
   std::string::size_type pos = 0u;
@@ -60,7 +72,7 @@ BOOST_AUTO_TEST_CASE(type_type_int)
   std::string const text{"int"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_int);
@@ -73,7 +85,7 @@ BOOST_AUTO_TEST_CASE(type_type_atomic_int)
   std::string const text{"atomic_int"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
@@ -86,7 +98,7 @@ BOOST_AUTO_TEST_CASE(type_comment1)
   std::string const text{"/* */atomic_int/* */"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_atomic_int);
@@ -99,7 +111,7 @@ BOOST_AUTO_TEST_CASE(type_comment2)
   std::string const text{"atomic_/**/int"};
 
   ast::nonterminal value;
-  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
+  BOOST_CHECK_THROW(parse(text, value), std::domain_error);
 }
 #endif
 
@@ -109,7 +121,7 @@ BOOST_AUTO_TEST_CASE(memory_location_internal)
   std::string const text{"internal"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == "internal");
@@ -122,7 +134,7 @@ BOOST_AUTO_TEST_CASE(register_r42)
   std::string const text{"r42"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_register_location, value.which());
   BOOST_REQUIRE(boost::get<register_location>(value) == 42U);
@@ -135,7 +147,7 @@ BOOST_AUTO_TEST_CASE(memory_location_r2d2)
   std::string const text{"r2d2"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == "r2d2");
@@ -151,11 +163,11 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment1)
   std::string const right_text{"r 0"};
 
   ast::nonterminal value;
-  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
-  BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
+  BOOST_CHECK_THROW(parse(text, value), std::domain_error);
+  BOOST_CHECK_THROW(parse(right_text, value), std::domain_error);
 
   // The behavior when text would be interpreted as wrong_text is different:
-  BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
+  BOOST_CHECK_NO_THROW(parse(wrong_text, value));
   BOOST_REQUIRE_EQUAL(NT_register_location, value.which());
   BOOST_REQUIRE(boost::get<register_location>(value) == 0U);
 }
@@ -170,11 +182,11 @@ BOOST_AUTO_TEST_CASE(memory_location_r_comment2)
   std::string const right_text{"r4 _"};
 
   ast::nonterminal value;
-  BOOST_CHECK_THROW(cppmem::parse(text, value), std::domain_error);
-  BOOST_CHECK_THROW(cppmem::parse(right_text, value), std::domain_error);
+  BOOST_CHECK_THROW(parse(text, value), std::domain_error);
+  BOOST_CHECK_THROW(parse(right_text, value), std::domain_error);
 
   // The behavior when text would be interpreted as wrong_text is different:
-  BOOST_CHECK_NO_THROW(cppmem::parse(wrong_text, value));
+  BOOST_CHECK_NO_THROW(parse(wrong_text, value));
   BOOST_REQUIRE_EQUAL(NT_memory_location, value.which());
   BOOST_REQUIRE(boost::get<memory_location>(value) == wrong_text);
 }
@@ -186,7 +198,7 @@ BOOST_AUTO_TEST_CASE(vardecl_simple)
   std::string const text{"atomic_int x;"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
   BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x"));
@@ -199,7 +211,7 @@ BOOST_AUTO_TEST_CASE(vardecl_init)
   std::string const text{"int int3 = 123;"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
   BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_int, "int3", 123));
@@ -212,7 +224,7 @@ BOOST_AUTO_TEST_CASE(type_comment3)
   std::string const text{"atomic_int/**/x = 3;"};
 
   ast::nonterminal value;
-  BOOST_CHECK_NO_THROW(cppmem::parse(text, value));
+  BOOST_CHECK_NO_THROW(parse(text, value));
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
   BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x", 3));
@@ -225,7 +237,7 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
   std::string const text{"{\n int  y = 4;\n}\n"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope sc(boost::get<scope>(value));
@@ -243,7 +255,7 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   std::string const text{"{ int y=0;   y = 4 ; r2 = 3;\n}\n"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope sc(boost::get<scope>(value));
@@ -285,7 +297,7 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   };
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope const& s = boost::get<scope>(value);
@@ -305,7 +317,7 @@ BOOST_AUTO_TEST_CASE(function_wrlock)
   std::string const text{"void wrlock()\n{\n  int y = 4;\n}\n"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
   ast::function const& f = boost::get<function>(value);
@@ -322,7 +334,7 @@ BOOST_AUTO_TEST_CASE(function_main)
   std::string const text{"int main()\n{\n  return 0;\n}\n"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
   ast::function const& f = boost::get<function>(value);
@@ -352,7 +364,7 @@ BOOST_AUTO_TEST_CASE(threads_simple)
   };
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_threads, value.which());
   ast::threads const& t = boost::get<threads>(value);
@@ -386,7 +398,7 @@ BOOST_AUTO_TEST_CASE(load_store)
   };
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
   ast::function const& f = boost::get<function>(value);
@@ -412,7 +424,7 @@ BOOST_AUTO_TEST_CASE(var_assignment)
   std::string const text{"{ int y = 4; int x = 5; r1 = y; y = x; x = r1; y = 1; }"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope sc(boost::get<scope>(value));
@@ -429,7 +441,7 @@ BOOST_AUTO_TEST_CASE(expressions)
   std::string const text{"{ int x; r1 = x == x; }"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope sc(boost::get<scope>(value));
@@ -446,7 +458,7 @@ BOOST_AUTO_TEST_CASE(expressions2)
   std::string const text{"{ atomic_int x; int y; y = ((x.load()) == 3); }"};
 
   ast::nonterminal value;
-  cppmem::parse(text, value);
+  parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_scope, value.which());
   ast::scope sc(boost::get<scope>(value));

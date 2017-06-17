@@ -1,0 +1,70 @@
+cppmem = std::vector<definition_node>
+
+definition_node = boost::variant<vardecl, function>
+
+type
+  Type (type_int or type_atomic_int)
+
+vardecl
+  type
+  memory_location
+  int (initial value) [optional]
+
+memory_location : tag
+  type                          (the same as in vardecl)
+  std::string (name)
+
+function : tag
+  function_name
+  scope
+
+function_name
+  std::string (name)
+
+scope
+  body [optional]
+
+body
+  std::vector<body_node>        (body::container_type)
+
+body_node = boost::variant<vardecl, statement, scope, threads>
+
+threads
+  std::vector<body>             (threads::container_type)
+
+statement
+  statement_node
+
+statement_node = boost::variant<assignment, load_statement, store_statement>
+
+load_statement
+  tag (of memory_location to load from)
+  std::memory_order
+  int (readsvalue) [optional]
+
+store_statement
+  tag (of memory_location to store into)
+  std::memory_order
+  expression
+
+assignment
+  tag (left hand side)
+  expression
+
+expression
+  unary_expression
+  std::vector<chain>
+
+chain
+  operators (op_eq or op_ne)
+  expression
+
+unary_expression
+  bool (negated or not)
+  simple_expression
+
+simple_expression
+  simple_expression_node
+
+simple_expression_node = boost::variant<int, tag, load_statement, <expression>
+  (where the tag is a symbol of either register_locations or na_memory_locations)

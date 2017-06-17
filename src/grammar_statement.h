@@ -26,6 +26,7 @@ class grammar_statement : public qi::grammar<Iterator, ast::statement(), skipper
   rule<ast::register_assignment>                register_assignment;
   rule<ast::assignment>                         assignment;
   qi::symbols<char, std::memory_order>          memory_order;
+  rule<ast::function_call>                      function_call;
   rule<ast::load_statement>                     load_statement;
   rule<ast::store_statement>                    store_statement;
 

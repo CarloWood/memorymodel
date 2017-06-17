@@ -2,7 +2,7 @@
 #include "debug.h"
 #include "grammar_statement.h"
 #include "position_handler.h"
-#include "Symbols.h"
+#include "SymbolsImpl.h"
 
 BOOST_FUSION_ADAPT_STRUCT(ast::statement, m_statement)
 BOOST_FUSION_ADAPT_STRUCT(ast::load_statement, m_memory_location_id, m_memory_order, m_readsvalue)
@@ -13,6 +13,7 @@ BOOST_FUSION_ADAPT_STRUCT(ast::simple_expression, m_simple_expression_node)
 BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_negated, m_simple_expression)
 BOOST_FUSION_ADAPT_STRUCT(ast::chain, op, operand)
 BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_operand, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::function_call, m_function)
 
 namespace parser {
 
@@ -26,9 +27,10 @@ template<typename Iterator>
 grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handler) :
     grammar_statement::base_type(statement, "grammar_statement"), vardecl(handler)
 {
-  auto& na_memory_locations(Symbols::instance().na_memory_locations);
-  auto& atomic_memory_locations(Symbols::instance().atomic_memory_locations);
-  auto& register_locations(Symbols::instance().register_locations);
+  auto& na_memory_locations(Symbols::instance().m_impl->na_memory_locations);
+  auto& atomic_memory_locations(Symbols::instance().m_impl->atomic_memory_locations);
+  auto& register_locations(Symbols::instance().m_impl->register_locations);
+  auto& function_names(Symbols::instance().m_impl->function_names);
   using namespace qi;
 
   memory_order.add
@@ -82,8 +84,11 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
   register_assignment =
       vardecl.register_location >> '=' > expression;
 
+  function_call =
+      function_names >> '(' >> ')';
+
   statement =
-      (register_assignment | assignment | load_statement | store_statement) > ';';
+      (register_assignment | assignment | load_statement | store_statement | function_call) > ';';
 
   // Debugging and error handling and reporting support.
   using qi::debug;      // This macro uses plain 'debug', that is otherwise confused with our namespace of the same name.
@@ -96,6 +101,7 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     (assignment)
     (load_statement)
     (store_statement)
+    (function_call)
   );
 
   using handler_function = phoenix::function<position_handler<Iterator>>;

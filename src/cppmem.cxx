@@ -1,44 +1,155 @@
 #include "sys.h"
 #include "debug.h"
+#include "ast.h"
+#include "position_handler.h"
 #include "cppmem_parser.h"
 #include <boost/variant/get.hpp>
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <stack>
 
-std::map<std::string, ast::function> functions;
+struct TagCompare { bool operator()(ast::tag const& t1, ast::tag const& t2) const { return t1.id < t2.id; } };
+std::map<ast::tag, ast::function, TagCompare> functions;
+using iterator_type = std::string::const_iterator;
 
-void execute_body(std::string name, ast::body const& body)
+class Symbols {
+ private:
+  std::vector<std::pair<std::string, ast::vardecl>> m_symbols;
+  std::stack<int> m_stack;
+ public:
+  void add(ast::vardecl const& vardecl);
+  void scope_start(bool is_thread);
+  void scope_end();
+  ast::vardecl const& find(std::string var_name) const;
+};
+
+void Symbols::add(ast::vardecl const& vardecl)
 {
-  DoutEntering(dc::notice, "execute_body(\"" << name << "\")");
+  m_symbols.push_back(std::make_pair(vardecl.m_memory_location.m_name, vardecl));
+}
+
+Symbols symbols;
+
+void execute_body(std::string name, ast::body const& body, position_handler<iterator_type>& handler);
+
+void Symbols::scope_start(bool is_thread)
+{
+  if (is_thread)
+    Dout(dc::notice, "New thread:");
+  Dout(dc::notice, "{");
+  Debug(libcw_do.inc_indent(2));
+  m_stack.push(m_symbols.size());
+}
+
+void Symbols::scope_end()
+{
+  Debug(libcw_do.dec_indent(2));
+  Dout(dc::notice, "}");
+  m_symbols.resize(m_stack.top());
+  m_stack.pop();
+}
+
+ast::vardecl const& Symbols::find(std::string var_name) const
+{
+  auto iter = m_symbols.rbegin();
+  while (iter != m_symbols.rend())
+  {
+    if (iter->first == var_name)
+      break;
+    ++iter;
+  }
+  assert(iter != m_symbols.rend());
+  return iter->second;
+}
+
+void execute_statement(ast::statement const& statement, position_handler<iterator_type>& handler)
+{
+  auto const& node = statement.m_statement;
+  switch (node.which())
+  {
+    case ast::SN_assignment:
+    {
+      auto const& assignment(boost::get<ast::assignment>(node));
+      Dout(dc::notice, assignment << "; [write to: " << handler.location(handler.id_to_pos(assignment.lhs)) << "]");
+      break;
+    }
+    case ast::SN_load_statement:
+    {
+      auto const& load_statement(boost::get<ast::load_statement>(node));
+      Dout(dc::notice, load_statement << "; [load from: " << handler.location(handler.id_to_pos(load_statement.m_memory_location_id)) << "]");
+      break;
+    }
+    case ast::SN_store_statement:
+    {
+      auto const& store_statement(boost::get<ast::store_statement>(node));
+      Dout(dc::notice, store_statement << "; [write to: " << handler.location(handler.id_to_pos(store_statement.m_memory_location_id)) << "]");
+      break;
+    }
+    case ast::SN_function_call:
+    {
+      auto const& function_call(boost::get<ast::function_call>(node));
+#ifdef CWDEBUG
+      Dout(dc::notice, function_call.m_function << "();");
+      debug::Mark mark;
+#endif
+      auto const& function(functions[function_call.m_function]);
+      execute_body(function.m_function_name.name, *function.m_scope.m_body, handler);
+      break;
+    }
+    case ast::SN_if_statement:
+      break;
+    case ast:: SN_while_statement:
+      break;
+  }
+}
+
+void execute_body(std::string name, ast::body const& body, position_handler<iterator_type>& handler)
+{
+#ifdef CWDEBUG
+  if (name != "scope" && name != "thread")
+  {
+    if (name == "main")
+      Dout(dc::notice, "int " << name << "()");
+    else
+      Dout(dc::notice, "void " << name << "()");
+  }
+#endif
+  symbols.scope_start(name == "thread");
   for (auto& node : body.m_body_nodes)
   {
     switch (node.which())
     {
       case ast::BN_vardecl:
       {
-        auto const& vd(boost::get<ast::vardecl>(node));
-        Dout(dc::notice, "Found: " << vd);
+        auto const& vardecl(boost::get<ast::vardecl>(node));
+        Dout(dc::notice, vardecl << " [" << handler.location(handler.id_to_pos(vardecl.m_memory_location)) << "]");
+        symbols.add(vardecl);
         break;
       }
       case ast::BN_statement:
+      {
+        auto const& s(boost::get<ast::statement>(node));
+        execute_statement(s, handler);
         break;
+      }
       case ast::BN_scope:
       {
         auto const& b(boost::get<ast::scope>(node).m_body);
         if (b)
-          execute_body("scope", *b);
+          execute_body("scope", *b, handler);
         break;
       }
       case ast::BN_threads:
       {
         auto const& t(boost::get<ast::threads>(node));
         for (auto& b : t.m_threads)
-          execute_body("thread", b);
+          execute_body("thread", b, handler);
         break;
       }
     }
   }
+  symbols.scope_end();
 }
 
 int main(int argc, char* argv[])
@@ -75,13 +186,13 @@ int main(int argc, char* argv[])
   in.close();
 
   ast::cppmem ast;
+  iterator_type begin(source_code.begin());
+  iterator_type const end(source_code.end());
+  position_handler<iterator_type> handler(filename, begin, end);
   try
   {
-    if (!cppmem::parse(filename, source_code, ast))
-    {
-      std::cerr << "Parse failure." << std::endl;
+    if (!cppmem::parse(begin, end, handler, ast))
       return 1;
-    }
   }
   catch (std::exception const& error)
   {
@@ -95,22 +206,22 @@ int main(int argc, char* argv[])
     if (node.which() == ast::DN_vardecl)
     {
       ast::vardecl& vardecl{boost::get<ast::vardecl>(node)};
-      std::cout << "Global definition: " << vardecl << std::endl;
+      Dout(dc::notice, vardecl << " [" << handler.location(handler.id_to_pos(vardecl.m_memory_location)) << "]");
+      symbols.add(vardecl);
     }
 
   // Collect all function definitions.
+  ast::function const* main_function;
   for (auto& node : ast)
     if (node.which() == ast::DN_function)
     {
       ast::function& function{boost::get<ast::function>(node)};
+      functions[function] = function;
       //std::cout << "Function definition: " << function << std::endl;
-      std::string name = function.m_function_name.name;
-      functions[name] = function;
+      if (function.m_function_name.name == "main")
+        main_function = &functions[function];
     }
 
-  std::string const name = "test1";
-  ast::function const& main_function = functions[name];
-
   // Execute main()
-  execute_body(name, *main_function.m_scope.m_body);
+  execute_body("main", *main_function->m_scope.m_body, handler);
 }

@@ -2,6 +2,7 @@
 
 #include "debug.h"
 #include "Symbols.h"
+#include <boost/range/iterator_range.hpp>
 #include <iostream>
 #include <memory>
 
@@ -124,9 +125,11 @@ struct position_handler
     return id;
   }
 
-  Iterator id_to_pos(int id) const
+  Iterator id_to_pos(ast::tag const& tag) const
   {
-    return m_iters->find(id);
+    int id = tag.id;
+    assert(id >= 0 && id < (int)m_iters->size());
+    return (*m_iters)[id];
   }
 
   void operator()(ast::function& ast, Iterator pos) const
@@ -167,7 +170,4 @@ struct position_handler
   Iterator const first;
   Iterator const last;
   std::shared_ptr<std::vector<Iterator>> m_iters;
-
-  //mutable std::map<int, ast::memory_location*> m_memory_locations;
-  //mutable std::map<int, ast::function*> m_functions;
 };
