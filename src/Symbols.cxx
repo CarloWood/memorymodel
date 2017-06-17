@@ -55,6 +55,31 @@ void Symbols::regdecl(ast::register_location const& register_location)
   m_impl->all_symbols[register_location.id] = name;
 }
 
+bool Symbols::is_register(ast::tag tag)
+{
+  std::string name = m_impl->all_symbols[tag.id];
+  bool result = false;
+  bool first = true;
+  for (char c : name)
+  {
+    if (first)
+    {
+      if (c != 'r')
+        return false;
+      first = false;
+      continue;
+    }
+    if (std::isdigit(c))
+    {
+      result = true;
+      continue;
+    }
+    else
+      return false;
+  }
+  return result;
+}
+
 ast::tag Symbols::set_register_id(ast::register_location const& register_location)
 {
   std::string name = "r";

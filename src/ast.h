@@ -20,6 +20,7 @@ struct tag
   explicit tag(int id_) : id(id_) { }
 
   friend std::ostream& operator<<(std::ostream& os, tag const& tag);
+  friend bool operator!=(tag const& tag1, tag const& tag2) { return tag1.id != tag2.id; }
 };
 
 enum Type { type_int, type_atomic_int };
@@ -100,7 +101,8 @@ struct load_statement
 struct expression;
 enum operators { op_eq, op_ne };
 
-using simple_expression_node = boost::variant<int, tag, load_statement, boost::recursive_wrapper<expression>>;
+enum SimpleExpression                    { SE_int, SE_tag, SE_load_statement,                       SE_expression };
+using simple_expression_node = boost::variant<int,    tag,    load_statement, boost::recursive_wrapper<expression>>;
 
 struct simple_expression
 {

@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "position_handler.h"
 #include "cppmem_parser.h"
+#include "utils/AIAlert.h"
 #include <boost/variant/get.hpp>
 #include <iostream>
 #include <string>
@@ -63,6 +64,59 @@ ast::vardecl const& Symbols::find(std::string var_name) const
   return iter->second;
 }
 
+void execute_expression(ast::expression const& expression, position_handler<iterator_type>& handler);
+
+void execute_simple_expression(ast::simple_expression const& simple_expression, position_handler<iterator_type>& handler)
+{
+  auto const& node = simple_expression.m_simple_expression_node;
+  switch (node.which())
+  {
+    case ast::SE_int:
+      //auto const& literal(boost::get<int>(node));
+      break;
+    case ast::SE_tag:
+    {
+      auto const& tag(boost::get<ast::tag>(node));
+      Dout(dc::notice, "[read from '" << tag << "' " << handler.location(handler.id_to_pos(tag)) << "]");
+      // Check if that variable wasn't masked by an atomic int.
+      std::string name = parser::Symbols::instance().tag_to_string(tag);
+      ast::vardecl const& vardecl{symbols.find(name)};
+      if (vardecl.m_memory_location != tag)
+      {
+        std::string position{handler.location(handler.id_to_pos(vardecl.m_memory_location))};
+        THROW_ALERT("Please use [MEMORY_LOCATION].load() for atomic_int declared at [POSITION] instead of [MEMORY_LOCATION]",
+                    AIArgs("[MEMORY_LOCATION]", vardecl.m_memory_location)("[POSITION]", position));
+      }
+      break;
+    }
+    case ast::SE_load_statement:
+    {
+      auto const& load_statement(boost::get<ast::load_statement>(node));
+      Dout(dc::notice, "[load from: " << handler.location(handler.id_to_pos(load_statement.m_memory_location_id)) << "]");
+      break;
+    }
+    case ast::SE_expression:
+    {
+      auto const& expression(boost::get<ast::expression>(node));
+      execute_expression(expression, handler);
+      break;
+    }
+  }
+}
+
+void execute_expression(ast::expression const& expression, position_handler<iterator_type>& handler)
+{
+#ifdef CWDEBUG
+  debug::Mark marker('!');
+#endif
+  ast::unary_expression const& unary_expression(expression.m_operand);
+  execute_simple_expression(unary_expression.m_simple_expression, handler);
+  for (auto& chain : expression.m_chained)
+  {
+    execute_expression(chain.operand, handler);
+  }
+}
+
 void execute_statement(ast::statement const& statement, position_handler<iterator_type>& handler)
 {
   auto const& node = statement.m_statement;
@@ -71,7 +125,11 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
     case ast::SN_assignment:
     {
       auto const& assignment(boost::get<ast::assignment>(node));
-      Dout(dc::notice, assignment << "; [write to: " << handler.location(handler.id_to_pos(assignment.lhs)) << "]");
+      if (!parser::Symbols::instance().is_register(assignment.lhs))
+        Dout(dc::notice, assignment << "; [write to: " << handler.location(handler.id_to_pos(assignment.lhs)) << "]");
+      else
+        Dout(dc::notice, assignment << ";");
+      execute_expression(assignment.rhs, handler);
       break;
     }
     case ast::SN_load_statement:
@@ -84,6 +142,7 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
     {
       auto const& store_statement(boost::get<ast::store_statement>(node));
       Dout(dc::notice, store_statement << "; [write to: " << handler.location(handler.id_to_pos(store_statement.m_memory_location_id)) << "]");
+      execute_expression(store_statement.m_val, handler);
       break;
     }
     case ast::SN_function_call:
@@ -129,8 +188,15 @@ void execute_body(std::string name, ast::body const& body, position_handler<iter
       }
       case ast::BN_statement:
       {
-        auto const& s(boost::get<ast::statement>(node));
-        execute_statement(s, handler);
+        auto const& statement(boost::get<ast::statement>(node));
+        try
+        {
+          execute_statement(statement, handler);
+        }
+        catch (AIAlert::Error const& alert)
+        {
+          THROW_ALERT(alert, " in `[STATEMENT]`", AIArgs("[STATEMENT]", statement.m_statement));
+        }
         break;
       }
       case ast::BN_scope:
@@ -222,6 +288,18 @@ int main(int argc, char* argv[])
         main_function = &functions[function];
     }
 
-  // Execute main()
-  execute_body("main", *main_function->m_scope.m_body, handler);
+  try
+  {
+    // Execute main()
+    execute_body("main", *main_function->m_scope.m_body, handler);
+  }
+  catch (AIAlert::Error const& error)
+  {
+    for (auto&& line : error.lines())
+    {
+      if (line.prepend_newline()) std::cerr << std::endl;
+      std::cerr << translate::getString(line.getXmlDesc(), line.args());
+    }
+    std::cerr << '.' << std::endl;
+  }
 }

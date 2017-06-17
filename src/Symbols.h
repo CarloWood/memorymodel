@@ -22,6 +22,7 @@ class Symbols : public Singleton<Symbols> {
   void vardecl(ast::memory_location const& memory_location);
   void regdecl(ast::register_location const& register_location);
   ast::tag set_register_id(ast::register_location const& register_location);
+  bool is_register(ast::tag id);
   void scope(int begin);
   std::string tag_to_string(ast::tag id);
   void reset();

@@ -69,8 +69,8 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     ( '(' > expression > ')' )
     | int_
     | register_locations
-    | na_memory_locations
-    | load_statement;
+    | load_statement
+    | na_memory_locations;
 
   unary_expression =
       matches['!'] >> simple_expression;
