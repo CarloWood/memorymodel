@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "debug.h"
-#include "grammar_statement.h"
+#include "grammar_cppmem.h"
 #include "position_handler.h"
 #include "SymbolsImpl.h"
 
@@ -14,6 +14,7 @@ BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_negated, m_simple_expression)
 BOOST_FUSION_ADAPT_STRUCT(ast::chain, op, operand)
 BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_operand, m_chained)
 BOOST_FUSION_ADAPT_STRUCT(ast::function_call, m_function)
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_add_explicit, m_memory_location_id, m_expression, m_memory_order);
 
 namespace parser {
 
@@ -24,13 +25,15 @@ namespace phoenix = boost::phoenix;
 //=====================================
 
 template<typename Iterator>
-grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handler) :
-    grammar_statement::base_type(statement, "grammar_statement"), vardecl(handler)
+grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handler, grammar_cppmem<Iterator>& cppmem) :
+    grammar_statement::base_type(statement, "grammar_statement")
 {
-  auto& na_memory_locations(Symbols::instance().m_impl->na_memory_locations);
-  auto& atomic_memory_locations(Symbols::instance().m_impl->atomic_memory_locations);
-  auto& register_locations(Symbols::instance().m_impl->register_locations);
-  auto& function_names(Symbols::instance().m_impl->function_names);
+  auto& na_memory_locations{Symbols::instance().m_impl->na_memory_locations};
+  auto& atomic_memory_locations{Symbols::instance().m_impl->atomic_memory_locations};
+  auto& register_locations{Symbols::instance().m_impl->register_locations};
+  auto& function_names{Symbols::instance().m_impl->function_names};
+  auto& if_statement{cppmem.if_statement};
+  auto& while_statement{cppmem.while_statement};
   using namespace qi;
 
   memory_order.add
@@ -59,6 +62,9 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
       ("!=", ast::op_ne)
   ;
 
+  atomic_fetch_add_explicit =
+      -lit("std::") >> "atomic_fetch_add_explicit" >> '(' >> '&' >> atomic_memory_locations >> ',' >> expression >> ',' >> memory_order >> ')';
+
   load_statement =
       atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
 
@@ -68,7 +74,9 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
   simple_expression =
     ( '(' > expression > ')' )
     | int_
+    | bool_
     | register_locations
+    | atomic_fetch_add_explicit
     | load_statement
     | na_memory_locations;
 
@@ -81,14 +89,19 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
   assignment =
       na_memory_locations >> '=' > expression;
 
+  register_location =
+      lexeme[ 'r' >> uint_ >> !(alnum | char_('_')) ];
+
   register_assignment =
-      vardecl.register_location >> '=' > expression;
+      register_location >> '=' > expression;
 
   function_call =
       function_names >> '(' >> ')';
 
   statement =
-      (register_assignment | assignment | load_statement | store_statement | function_call) > ';';
+    ( (register_assignment | assignment | load_statement | store_statement | function_call) > ';')
+    | if_statement
+    | while_statement;
 
   // Debugging and error handling and reporting support.
   using qi::debug;      // This macro uses plain 'debug', that is otherwise confused with our namespace of the same name.
@@ -101,7 +114,10 @@ grammar_statement<Iterator>::grammar_statement(position_handler<Iterator>& handl
     (assignment)
     (load_statement)
     (store_statement)
+    (register_location)
     (function_call)
+    (if_statement)
+    (while_statement)
   );
 
   using handler_function = phoenix::function<position_handler<Iterator>>;

@@ -10,6 +10,9 @@ template <typename Iterator>
 class grammar_unittest;
 
 template <typename Iterator>
+class grammar_statement;
+
+template <typename Iterator>
 class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Iterator>>
 {
  private:
@@ -18,6 +21,7 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
 
   // Needs access to the rules.
   friend class grammar_unittest<Iterator>;
+  friend class grammar_statement<Iterator>;
 
   grammar_whitespace<Iterator>  whitespace;
   rule_noskip                   scope_begin;
@@ -27,7 +31,9 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule_noskip                   threads_end;
 
   grammar_vardecl<Iterator>     vardecl;
-  grammar_statement<Iterator>   statement_g;
+  grammar_statement<Iterator>   statement;
+  rule<ast::if_statement>       if_statement;
+  rule<ast::while_statement>    while_statement;
   rule<ast::body>               body;
   rule<ast::scope>              scope;
   rule<ast::function_name>      function_name;

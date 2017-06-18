@@ -1,6 +1,7 @@
 #pragma once
 
 #include "grammar_whitespace.h"
+#include "grammar_statement.h"
 #include "ast.h"
 #include "position_handler.h"
 
@@ -13,9 +14,6 @@ template<typename Iterator>
 class grammar_unittest;
 
 template<typename Iterator>
-class grammar_statement;
-
-template<typename Iterator>
 class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Iterator>>
 {
  private:
@@ -24,9 +22,9 @@ class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Ite
 
   friend class grammar_cppmem<Iterator>;
   friend class grammar_unittest<Iterator>;
-  friend class grammar_statement<Iterator>;
 
   grammar_whitespace<Iterator> whitespace;
+  grammar_statement<Iterator>  statement;
   rule_noskip                  identifier_begin_char;
   rule_noskip                  identifier_char;
   rule<std::string>            identifier;
@@ -36,7 +34,7 @@ class grammar_vardecl : public qi::grammar<Iterator, ast::vardecl(), skipper<Ite
   rule<ast::vardecl>           vardecl;
 
  public:
-  grammar_vardecl(position_handler<Iterator>& handler);
+  grammar_vardecl(position_handler<Iterator>& handler, grammar_cppmem<Iterator>& cppmem);
 };
 
 } // namespace parser

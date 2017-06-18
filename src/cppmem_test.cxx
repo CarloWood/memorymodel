@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 21
+#define MAX_TEST 22
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -36,6 +36,7 @@ using namespace ast;
 #define var_assignment_nr              19
 #define expressions_nr                 20
 #define expressions2_nr                21
+#define type_type_bool_nr              22
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -76,6 +77,19 @@ BOOST_AUTO_TEST_CASE(type_type_int)
 
   BOOST_REQUIRE_EQUAL(NT_type, value.which());
   BOOST_REQUIRE(boost::get<type>(value) == type_int);
+}
+#endif
+
+#if DO_TEST(type_type_bool)
+BOOST_AUTO_TEST_CASE(type_type_bool)
+{
+  std::string const text{"bool"};
+
+  ast::nonterminal value;
+  parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_type, value.which());
+  BOOST_REQUIRE(boost::get<type>(value) == type_bool);
 }
 #endif
 
@@ -201,7 +215,11 @@ BOOST_AUTO_TEST_CASE(vardecl_simple)
   parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
-  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x"));
+  std::stringstream ss;
+  ss << boost::get<vardecl>(value);
+  std::string out = ss.str();
+  //std::cout << "value = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "atomic_int x;");
 }
 #endif
 
@@ -214,7 +232,11 @@ BOOST_AUTO_TEST_CASE(vardecl_init)
   parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
-  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_int, "int3", 123));
+  std::stringstream ss;
+  ss << boost::get<vardecl>(value);
+  std::string out = ss.str();
+  //std::cout << "value = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "int int3 = 123;");
 }
 #endif
 
@@ -227,14 +249,18 @@ BOOST_AUTO_TEST_CASE(type_comment3)
   BOOST_CHECK_NO_THROW(parse(text, value));
 
   BOOST_REQUIRE_EQUAL(NT_vardecl, value.which());
-  BOOST_REQUIRE(boost::get<vardecl>(value) == vardecl(type_atomic_int, "x", 3));
+  std::stringstream ss;
+  ss << boost::get<vardecl>(value);
+  std::string out = ss.str();
+  //std::cout << "value = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "atomic_int x = 3;");
 }
 #endif
 
 #if DO_TEST(scope_vardecl)
 BOOST_AUTO_TEST_CASE(scope_vardecl)
 {
-  std::string const text{"{\n int  y = 4;\n}\n"};
+  std::string const text{"{\n int  y = 4;\n bool b = true;}\n"};
 
   ast::nonterminal value;
   parse(text, value);
@@ -243,9 +269,14 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
   ast::scope sc(boost::get<scope>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 1);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 2);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
-  BOOST_REQUIRE(boost::get<vardecl>(sc.m_body->m_body_nodes.front()) == vardecl(type_int, "y", 4U));
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_vardecl);
+  std::stringstream ss;
+  ss << boost::get<scope>(value);
+  std::string out = ss.str();
+  //std::cout << "value = \"" << out << "\"." << std::endl;
+  BOOST_REQUIRE(out == "{ int y = 4; bool b = true; }");
 }
 #endif
 

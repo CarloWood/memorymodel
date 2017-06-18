@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "Symbols.h"
 #include <iostream>
+#include <boost/variant/get.hpp>
 
 namespace ast {
 
@@ -15,6 +16,9 @@ std::ostream& operator<<(std::ostream& os, type const& type)
 {
   switch (type.m_type)
   {
+    case type_bool:
+      os << "bool";
+      break;
     case type_int:
       os << "int";
       break;
@@ -65,8 +69,13 @@ std::ostream& operator<<(std::ostream& os, operators op)
 
 std::ostream& operator<<(std::ostream& os, simple_expression const& simple_expression)
 {
-  if (simple_expression.m_simple_expression_node.which() == 3)
+  if (simple_expression.m_simple_expression_node.which() == SE_expression)
     return os << '(' << simple_expression.m_simple_expression_node << ')';
+  if (simple_expression.m_simple_expression_node.which() == SE_bool)
+  {
+    bool val = boost::get<bool>(simple_expression.m_simple_expression_node);
+    return os << (val ? "true" : "false");
+  }
   return os << simple_expression.m_simple_expression_node;
 }
 
@@ -109,6 +118,15 @@ std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
   os << ")";
   if (load_statement.m_readsvalue)
     os << ".readsvalue(" << load_statement.m_readsvalue.get() << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, atomic_fetch_add_explicit const& atomic_fetch_add_explicit)
+{
+  os << "atomic_fetch_add_explicit(&" << atomic_fetch_add_explicit.m_memory_location_id << ", " << atomic_fetch_add_explicit.m_expression;
+  if (atomic_fetch_add_explicit.m_memory_order != std::memory_order_seq_cst)
+    os << ", " << atomic_fetch_add_explicit.m_memory_order;
+  os << ')';
   return os;
 }
 

@@ -12,6 +12,8 @@ BOOST_FUSION_ADAPT_STRUCT(ast::function, m_function_name, m_scope)
 BOOST_FUSION_ADAPT_STRUCT(ast::body, m_body_nodes, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::scope, m_body)
 BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then/*, m_else*/);
+BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_body);
 
 namespace parser {
 
@@ -24,10 +26,11 @@ namespace phoenix = boost::phoenix;
 template<typename Iterator>
 grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     grammar_cppmem::base_type(cppmem, "grammar_cppmem"),
-    vardecl(handler), statement_g(handler)
+    vardecl(handler, *this), statement(handler, *this)
 {
   using namespace qi;
   attr_type dummy;
+  rule<ast::expression>& expression(statement.expression);
 
   // Unused_type rules with on_success actions.
   scope_begin                 = (lit('{') - "{{{");
@@ -37,20 +40,40 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   threads_end                 = lit("}}}");
 
   // int main() { ... [return 0;] }   // the optional return statement is ignored.
-  main                        = "int" > no_skip[whitespace] > string("main") > "()" > main_scope;
-  main_scope                  = scope_begin > -body > -return_statement > scope_end;
-  return_statement            = "return" > no_skip[whitespace] > int_ > ';';
+  main =
+      "int" > no_skip[whitespace] > string("main") > "()" > main_scope;
+
+  main_scope =
+      scope_begin > -body > -return_statement > scope_end;
+
+  return_statement =
+      "return" > no_skip[whitespace] > int_ > ';';
+
+  if_statement =
+      lit("if") >> '(' >> expression >> ')' >> statement /*>> -("else" > statement)*/;
+
+  while_statement =
+      lit("while") >> '(' >> expression >> ')' >> statement;
 
   // void function_name() { ... }
-  function                    = "void" > no_skip[whitespace] > function_name > "()" > scope;
-  function_name               = vardecl.identifier;
-  scope                       = scope_begin > -body > scope_end;
+  function =
+      "void" > no_skip[whitespace] > function_name > "()" > scope;
+
+  function_name =
+      vardecl.identifier;
+
+  scope =
+      scope_begin > -body > scope_end;
 
   // The body of a function.
-  body                        = +(vardecl | statement_g | scope | threads) >> dummy(false);
-  threads                     = threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
+  body =
+      +(vardecl | statement | scope | threads) >> dummy(false);
 
-  cppmem                      = *(vardecl | function) > main;
+  threads =
+      threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
+
+  cppmem =
+      *(vardecl | function) > main;
 
   // Debugging and error handling and reporting support.
   using qi::debug;

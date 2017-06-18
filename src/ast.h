@@ -23,7 +23,7 @@ struct tag
   friend bool operator!=(tag const& tag1, tag const& tag2) { return tag1.id != tag2.id; }
 };
 
-enum Type { type_int, type_atomic_int };
+enum Type { type_bool, type_int, type_atomic_int };
 
 // "int" | "atomic_int"
 struct type
@@ -99,10 +99,11 @@ struct load_statement
 };
 
 struct expression;
+struct atomic_fetch_add_explicit;
 enum operators { op_eq, op_ne };
 
-enum SimpleExpression                    { SE_int, SE_tag, SE_load_statement,                       SE_expression };
-using simple_expression_node = boost::variant<int,    tag,    load_statement, boost::recursive_wrapper<expression>>;
+enum SimpleExpression                    { SE_int, SE_bool, SE_tag,                       SE_atomic_fetch_add_explicit,  SE_load_statement,                       SE_expression };
+using simple_expression_node = boost::variant<int,    bool,    tag, boost::recursive_wrapper<atomic_fetch_add_explicit>,    load_statement, boost::recursive_wrapper<expression>>;
 
 struct simple_expression
 {
@@ -132,6 +133,15 @@ struct chain
 {
   operators op;
   expression operand;
+};
+
+struct atomic_fetch_add_explicit
+{
+  tag m_memory_location_id;
+  expression m_expression;
+  std::memory_order m_memory_order;
+
+  friend std::ostream& operator<<(std::ostream& os, atomic_fetch_add_explicit const& atomic_fetch_add_explicit);
 };
 
 struct store_statement
@@ -185,17 +195,17 @@ struct statement
 
 struct if_statement
 {
-  expression condition;
-  statement then;
-  boost::optional<statement> else_;
+  expression m_condition;
+  statement m_then;
+  //boost::optional<statement> m_else;
 
   friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
 };
 
 struct while_statement
 {
-  expression condition;
-  statement body;
+  expression m_condition;
+  statement m_body;
 
   friend std::ostream& operator<<(std::ostream& os, while_statement const& while_statement);
 };
@@ -204,25 +214,21 @@ struct while_statement
 struct vardecl {
   type m_type;
   memory_location m_memory_location;
-  boost::optional<int> m_initial_value;
+  boost::optional<expression> m_initial_value;
 
   vardecl() { }
   vardecl(type type, memory_location memory_location) : m_type(type), m_memory_location(memory_location) { }
-  vardecl(type type, memory_location memory_location, int initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
+  vardecl(type type, memory_location memory_location, expression initial_value) : m_type(type), m_memory_location(memory_location), m_initial_value(initial_value) { }
 #ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
-  vardecl(boost::fusion::vector<ast::type, ast::memory_location, boost::optional<int>> const& attr) :
+  vardecl(boost::fusion::vector<ast::type, ast::memory_location, boost::optional<expression>> const& attr) :
 #else
-  vardecl(boost::fusion::vector3<ast::type, ast::memory_location, boost::optional<int>> const& attr) :
+  vardecl(boost::fusion::vector3<ast::type, ast::memory_location, boost::optional<expression>> const& attr) :
 #endif
       m_type(boost::fusion::at_c<0>(attr)), m_memory_location(boost::fusion::at_c<1>(attr))
       {
         if (boost::fusion::at_c<2>(attr))
           m_initial_value = boost::fusion::at_c<2>(attr).get();
       }
-
-  friend bool operator==(vardecl const& vd1, vardecl const& vd2) {
-    return vd1.m_type == vd2.m_type && vd1.m_memory_location == vd2.m_memory_location && vd1.m_initial_value == vd2.m_initial_value;
-  }
 
   friend std::ostream& operator<<(std::ostream& os, vardecl const& vardecl);
 };
