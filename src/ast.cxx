@@ -52,7 +52,10 @@ std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
 
 std::ostream& operator<<(std::ostream& os, statement const& statement)
 {
-  return os << statement.m_statement << ';';
+  os << statement.m_statement;
+  if (statement.m_statement.which() <= SN_function_call)
+    os << ';';
+  return os;
 }
 
 std::ostream& operator<<(std::ostream& os, operators op)
@@ -157,15 +160,21 @@ std::ostream& operator<<(std::ostream& os, function_call const& function_call)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, statement_or_scope const& statement_or_scope)
+{
+  os << statement_or_scope.m_body;
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
 {
-  os << "IF_STATEMENT";
+  os << "if (" << if_statement.m_condition << ") " << if_statement.m_then;
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, while_statement const& while_statement)
 {
-  os << "WHILE_STATEMENT";
+  os << "while (" << while_statement.m_condition << ") " << while_statement.m_body;
   return os;
 }
 

@@ -7,10 +7,6 @@ libcppmem_a_SOURCES = \
 		 grammar_general.h \
 		 grammar_whitespace.cxx \
 		 grammar_whitespace.h \
-		 grammar_vardecl.cxx \
-		 grammar_vardecl.h \
-		 grammar_statement.cxx \
-		 grammar_statement.h \
 		 grammar_cppmem.cxx \
 		 grammar_cppmem.h \
 		 grammar_unittest.cxx \

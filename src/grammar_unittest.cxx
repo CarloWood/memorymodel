@@ -16,9 +16,9 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
 {
   using namespace qi;
 
-  unittest = (cppmem.vardecl.type >> eoi)
-           | (cppmem.vardecl.memory_location >> eoi)
-           | (cppmem.vardecl.register_location >> eoi)
+  unittest = (cppmem.type >> eoi)
+           | (cppmem.memory_location >> eoi)
+           | (cppmem.register_location >> eoi)
            | (cppmem.vardecl >> eoi)
            | cppmem.main
            | cppmem.function

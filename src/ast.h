@@ -193,23 +193,6 @@ struct statement
   friend std::ostream& operator<<(std::ostream& os, statement const& statement);
 };
 
-struct if_statement
-{
-  expression m_condition;
-  statement m_then;
-  //boost::optional<statement> m_else;
-
-  friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
-};
-
-struct while_statement
-{
-  expression m_condition;
-  statement m_body;
-
-  friend std::ostream& operator<<(std::ostream& os, while_statement const& while_statement);
-};
-
 // TYPE MEMORY_LOCATION [= INT_];
 struct vardecl {
   type m_type;
@@ -257,6 +240,33 @@ struct scope
 
   // For the test suite.
   bool operator==(std::string const& statement) const;
+};
+
+enum StatementOrScopeNode                 { SS_statement, SS_scope };
+using statement_or_scope_node = boost::variant<statement,    scope>;
+
+struct statement_or_scope
+{
+  statement_or_scope_node m_body;
+
+  friend std::ostream& operator<<(std::ostream& os, statement_or_scope const& statement_or_scope);
+};
+
+struct if_statement
+{
+  expression m_condition;
+  statement_or_scope m_then;
+  //boost::optional<statement_or_scope> m_else;
+
+  friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
+};
+
+struct while_statement
+{
+  expression m_condition;
+  statement_or_scope m_body;
+
+  friend std::ostream& operator<<(std::ostream& os, while_statement const& while_statement);
 };
 
 struct threads
