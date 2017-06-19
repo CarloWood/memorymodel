@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 22
+#define MAX_TEST 23
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -37,6 +37,7 @@ using namespace ast;
 #define expressions_nr                 20
 #define expressions2_nr                21
 #define type_type_bool_nr              22
+#define declarations_nr                23
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -497,6 +498,23 @@ BOOST_AUTO_TEST_CASE(expressions2)
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "{ atomic_int x; int y; y = ((x.load()) == 3); }");
+}
+#endif
+
+#if DO_TEST(declarations)
+BOOST_AUTO_TEST_CASE(declarations)
+{
+  std::string const text{"std::mutex m1; mutex m2; condition_variable cv1; std::condition_variable condition_variable2; int main() { std::unique_lock<std::mutex> mutex(m2); }"};
+
+  ast::nonterminal value;
+  parse(text, value);
+
+  BOOST_REQUIRE_EQUAL(NT_cppmem, value.which());
+  ast::cppmem prog(boost::get<cppmem>(value));
+  std::stringstream ss;
+  ss << prog;
+  std::cout << "prog = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "mutex m1; mutex m2; condition_variable cv1; condition_variable condition_variable2; int main() { unique_lock<mutex> mutex(m2); }");
 }
 #endif
 

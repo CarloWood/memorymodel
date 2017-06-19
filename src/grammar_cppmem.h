@@ -34,6 +34,9 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::register_location>                  register_location;
   rule<ast::memory_location>                    memory_location;
   rule<ast::vardecl>                            vardecl;
+  rule<ast::mutex_decl>                         mutex_decl;
+  rule<ast::condition_variable_decl>            condition_variable_decl;
+  rule<ast::unique_lock_decl>                   unique_lock_decl;
 
   qi::symbols<char, ast::operators>             operators;
   rule<ast::simple_expression>                  simple_expression;
@@ -48,7 +51,6 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::load_statement>                     load_statement;
   rule<ast::store_statement>                    store_statement;
   rule<ast::break_statement>                    break_statement;
-  rule<ast::unique_lock_decl>                   unique_lock_decl;
 
   rule<ast::if_statement>                       if_statement;
   rule<ast::while_statement>                    while_statement;

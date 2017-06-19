@@ -24,7 +24,8 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
            | cppmem.function
            | cppmem.scope
            | cppmem.threads
-           | cppmem.statement;
+           | cppmem.statement
+           | cppmem;
 
   // Debugging and error handling and reporting support.
   using qi::debug;

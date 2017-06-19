@@ -32,9 +32,9 @@ grammar_whitespace<Iterator>::grammar_whitespace() :
   // Debugging and error handling and reporting support.
   using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
-      (cpp_comment)
-      (c_comment)
-      (whitespace)
+      //(cpp_comment)
+      //(c_comment)
+      //(whitespace)
   );
 }
 

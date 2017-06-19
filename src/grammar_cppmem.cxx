@@ -11,6 +11,9 @@
 
 BOOST_FUSION_ADAPT_STRUCT(ast::memory_location, m_name)
 BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_decl, m_name);
+BOOST_FUSION_ADAPT_STRUCT(ast::condition_variable_decl, m_name);
+BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex);
 BOOST_FUSION_ADAPT_STRUCT(ast::statement, m_statement)
 BOOST_FUSION_ADAPT_STRUCT(ast::load_statement, m_memory_location_id, m_memory_order, m_readsvalue)
 BOOST_FUSION_ADAPT_STRUCT(ast::store_statement, m_memory_location_id, m_val, m_memory_order)
@@ -29,7 +32,6 @@ BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then/*, m_else*/);
 BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_body);
 BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
-BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex);
 
 namespace parser {
 
@@ -47,7 +49,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   auto& atomic_memory_locations{Symbols::instance().m_impl->atomic_memory_locations};
   auto& register_locations{Symbols::instance().m_impl->register_locations};
   auto& function_names{Symbols::instance().m_impl->function_names};
-  auto& mutex_decls{Symbols::instance().m_impl->mutex_decls};
+  auto& mutexes{Symbols::instance().m_impl->mutexes};
   auto& condition_variables{Symbols::instance().m_impl->condition_variables};
   auto& unique_locks{Symbols::instance().m_impl->unique_locks};
   using namespace qi;
@@ -119,9 +121,6 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   break_statement =
       "break" >> dummy(false);
 
-  unique_lock_decl =
-      -lit("std::") >> "unique_lock" > '<' >> -lit("std::") > "mutex" > '>' > identifier > '(' > mutex_decls > ')';
-
   statement =
     ( (break_statement | register_assignment | assignment | load_statement | store_statement | function_call) > ';')
     | if_statement
@@ -162,13 +161,13 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   // The body of a function.
   body =
-      +(unique_lock_decl | vardecl | statement | scope | threads) >> dummy(false);
+      +(mutex_decl | condition_variable_decl | unique_lock_decl | vardecl | statement | scope | threads) >> dummy(false);
 
   threads =
       threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
 
   cppmem =
-      *(vardecl | function) > main;
+      *(mutex_decl | condition_variable_decl | vardecl | function) > main;
 
   // No-skipper rules.
   identifier_begin_char = alpha | char_('_');
@@ -195,18 +194,30 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   // Variable declaration (global or inside a scope).
   vardecl =
-      type >> no_skip[whitespace] >> memory_location >> -("=" > expression) >> ";";
+      type >> no_skip[whitespace] >> memory_location >> -('=' > expression) >> ';';
+
+  mutex_decl =
+      -lit("std::") >> "mutex" >> no_skip[whitespace] >> identifier > ';';
+
+  condition_variable_decl =
+      -lit("std::") >> "condition_variable" >> no_skip[whitespace] >> identifier > ';';
+
+  unique_lock_decl =
+      -lit("std::") >> "unique_lock" > '<' >> -lit("std::") > "mutex" > '>' > identifier > '(' > mutexes > ')' > ';';
 
   // Debugging and error handling and reporting support.
   using qi::debug;
   BOOST_SPIRIT_DEBUG_NODES(
-      (identifier_begin_char)
-      (identifier_char)
+      //(identifier_begin_char)
+      //(identifier_char)
       (type)
       (memory_location)
       (register_location)
       (identifier)
       (vardecl)
+      (mutex_decl)
+      (condition_variable_decl)
+      (unique_lock_decl)
       (scope_begin)
       (scope_end)
       (threads_begin)
@@ -259,6 +270,21 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   on_success(
       vardecl
+    , handler_function(handler)(_val, _1)
+  );
+
+  on_success(
+      mutex_decl
+    , handler_function(handler)(_val, _1)
+  );
+
+  on_success(
+      condition_variable_decl
+    , handler_function(handler)(_val, _1)
+  );
+
+  on_success(
+      unique_lock_decl
     , handler_function(handler)(_val, _1)
   );
 

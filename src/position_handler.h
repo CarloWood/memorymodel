@@ -151,6 +151,30 @@ struct position_handler
     Debug(show(dc::poshandler, pos));
   }
 
+  void operator()(ast::mutex_decl& ast, Iterator pos) const
+  {
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::mutex_decl& {" << ast << "}, " << location(pos) << ")");
+    ast.id = pos_to_id(pos);
+    parser::Symbols::instance().mutex_decl(ast);
+    Debug(show(dc::poshandler, pos));
+  }
+
+  void operator()(ast::condition_variable_decl& ast, Iterator pos) const
+  {
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::condition_variable_decl& {" << ast << "}, " << location(pos) << ")");
+    ast.id = pos_to_id(pos);
+    parser::Symbols::instance().condition_variable_decl(ast);
+    Debug(show(dc::poshandler, pos));
+  }
+
+  void operator()(ast::unique_lock_decl& ast, Iterator pos) const
+  {
+    DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::unique_lock_decl& {" << ast << "}, " << location(pos) << ")");
+    ast.id = pos_to_id(pos);
+    parser::Symbols::instance().unique_lock_decl(ast);
+    Debug(show(dc::poshandler, pos));
+  }
+
   void operator()(ast::register_assignment& ast, Iterator pos) const
   {
     DoutEntering(dc::poshandler, "position_handler<Iterator>::operator(ast::register_assignment& {" << ast << "}, " << location(pos) << ")");

@@ -188,6 +188,20 @@ struct break_statement
   friend std::ostream& operator<<(std::ostream& os, break_statement const& break_statement);
 };
 
+struct mutex_decl : tag
+{
+  std::string m_name;
+
+  friend std::ostream& operator<<(std::ostream& os, mutex_decl const& mutex_decl);
+};
+
+struct condition_variable_decl : tag
+{
+  std::string m_name;
+
+  friend std::ostream& operator<<(std::ostream& os, condition_variable_decl const& condition_variable_decl);
+};
+
 struct unique_lock_decl : tag
 {
   tag m_lock;
@@ -234,8 +248,8 @@ struct vardecl {
 
 struct scope;
 struct threads;
-enum BodyNode               { BN_unique_lock_decl, BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
-using body_node = boost::variant<unique_lock_decl,    vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
+enum BodyNode               { BN_mutex_decl, BN_condition_variable_decl,  BN_unique_lock_decl, BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
+using body_node = boost::variant<mutex_decl,    condition_variable_decl,     unique_lock_decl,    vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
 
 struct body
 {
@@ -322,8 +336,8 @@ struct function : tag
   friend std::ostream& operator<<(std::ostream& os, function const& function);
 };
 
-enum DefinitionNode               { DN_vardecl, DN_function };
-using definition_node = boost::variant<vardecl,    function>;
+enum DefinitionNode               { DN_mutex_decl, DN_condition_variable_decl, DN_vardecl, DN_function };
+using definition_node = boost::variant<mutex_decl,    condition_variable_decl,    vardecl,    function>;
 
 // *DEFINITION
 struct cppmem : public std::vector<definition_node>

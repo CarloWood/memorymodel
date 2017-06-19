@@ -45,6 +45,30 @@ void Symbols::vardecl(ast::memory_location const& memory_location)
   m_impl->all_symbols[memory_location.id] = memory_location.m_name;
 }
 
+void Symbols::mutex_decl(ast::mutex_decl const& mutex_decl)
+{
+  DoutEntering(dc::symbols, "Symbols::mutex_decl(\"" << mutex_decl << "\") with id " << mutex_decl.id);
+  m_impl->mutexes.add(mutex_decl.m_name, mutex_decl);
+  m_impl->mutexes_map[mutex_decl.id] = mutex_decl.m_name;
+  m_impl->all_symbols[mutex_decl.id] = mutex_decl.m_name;
+}
+
+void Symbols::condition_variable_decl(ast::condition_variable_decl const& condition_variable_decl)
+{
+  DoutEntering(dc::symbols, "Symbols::condition_variable_decl(\"" << condition_variable_decl << "\") with id " << condition_variable_decl.id);
+  m_impl->condition_variables.add(condition_variable_decl.m_name, condition_variable_decl);
+  m_impl->condition_variables_map[condition_variable_decl.id] = condition_variable_decl.m_name;
+  m_impl->all_symbols[condition_variable_decl.id] = condition_variable_decl.m_name;
+}
+
+void Symbols::unique_lock_decl(ast::unique_lock_decl const& unique_lock_decl)
+{
+  DoutEntering(dc::symbols, "Symbols::unique_lock_decl(\"" << unique_lock_decl << "\") with id " << unique_lock_decl.id);
+  m_impl->unique_locks.add(unique_lock_decl.m_name, unique_lock_decl);
+  m_impl->unique_locks_map[unique_lock_decl.id] = unique_lock_decl.m_name;
+  m_impl->all_symbols[unique_lock_decl.id] = unique_lock_decl.m_name;
+}
+
 void Symbols::regdecl(ast::register_location const& register_location)
 {
   DoutEntering(dc::symbols, "Symbols::regdecl(\"" << register_location << "\") with id " << register_location.id);
@@ -102,14 +126,14 @@ void Symbols::scope(int begin)
     m_impl->na_memory_locations_map = m_impl->m_na_symbol_stack.top();
     m_impl->atomic_memory_locations_map = m_impl->m_symbol_stack.top();
     m_impl->register_locations_map = m_impl->m_register_stack.top();
-    m_impl->mutex_decls_map = m_impl->m_mutex_stack.top();
+    m_impl->mutexes_map = m_impl->m_mutex_stack.top();
     m_impl->condition_variables_map = m_impl->m_condition_variable_stack.top();
     m_impl->unique_locks_map = m_impl->m_unique_lock_stack.top();
 
     m_impl->na_memory_locations.clear();
     m_impl->atomic_memory_locations.clear();
     m_impl->register_locations.clear();
-    m_impl->mutex_decls.clear();
+    m_impl->mutexes.clear();
     m_impl->condition_variables.clear();
     m_impl->unique_locks.clear();
 
@@ -119,8 +143,8 @@ void Symbols::scope(int begin)
       m_impl->atomic_memory_locations.add(aml.second.c_str(), ast::tag(aml.first));
     for (auto& rl : m_impl->register_locations_map)
       m_impl->register_locations.add(rl.second.c_str(), ast::tag(rl.first));
-    for (auto& md : m_impl->mutex_decls_map)
-      m_impl->mutex_decls.add(md.second.c_str(), ast::tag(md.first));
+    for (auto& md : m_impl->mutexes_map)
+      m_impl->mutexes.add(md.second.c_str(), ast::tag(md.first));
     for (auto& cv : m_impl->condition_variables_map)
       m_impl->condition_variables.add(cv.second.c_str(), ast::tag(cv.first));
     for (auto& ul : m_impl->unique_locks_map)
@@ -143,7 +167,7 @@ void Symbols::scope(int begin)
     m_impl->m_na_symbol_stack.push(m_impl->na_memory_locations_map);
     m_impl->m_symbol_stack.push(m_impl->atomic_memory_locations_map);
     m_impl->m_register_stack.push(m_impl->register_locations_map);
-    m_impl->m_mutex_stack.push(m_impl->mutex_decls_map);
+    m_impl->m_mutex_stack.push(m_impl->mutexes_map);
     m_impl->m_condition_variable_stack.push(m_impl->condition_variables_map);
     m_impl->m_unique_lock_stack.push(m_impl->unique_locks_map);
   }
@@ -159,8 +183,8 @@ void Symbols::reset()
   m_impl->atomic_memory_locations_map.clear();
   m_impl->register_locations.clear();
   m_impl->register_locations_map.clear();
-  m_impl->mutex_decls.clear();
-  m_impl->mutex_decls_map.clear();
+  m_impl->mutexes.clear();
+  m_impl->mutexes_map.clear();
   m_impl->condition_variables.clear();
   m_impl->condition_variables_map.clear();
   m_impl->unique_locks.clear();

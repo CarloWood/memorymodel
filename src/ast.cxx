@@ -29,9 +29,21 @@ std::ostream& operator<<(std::ostream& os, type const& type)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, mutex_decl const& mutex_decl)
+{
+  os << "mutex " << static_cast<tag const&>(mutex_decl) << ';';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, condition_variable_decl const& condition_variable_decl)
+{
+  os << "condition_variable " << static_cast<tag const&>(condition_variable_decl) << ';';
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, unique_lock_decl const& unique_lock_decl)
 {
-  os << "UNIQUE_LOCK";
+  os << "unique_lock<mutex> " << static_cast<tag const&>(unique_lock_decl) << '(' << unique_lock_decl.m_mutex << ");";
   return os;
 }
 
@@ -216,7 +228,11 @@ std::ostream& operator<<(std::ostream& os, body const& body)
   for (auto&& node : body.m_body_nodes)
   {
     int bn = node.which();
-    if (last == BN_unique_lock_decl || last == BN_vardecl || last == BN_statement)
+    if (last == BN_mutex_decl ||
+        last == BN_condition_variable_decl ||
+        last == BN_unique_lock_decl ||
+        last == BN_vardecl ||
+        last == BN_statement)
       os << ' ';
     os << node;
     last = bn;
@@ -245,7 +261,10 @@ std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
   for (auto&& definition : cppmem)
   {
     int dn = definition.which();
-    if (last == DN_vardecl || last == DN_function)
+    if (last == DN_mutex_decl ||
+        last == DN_condition_variable_decl ||
+        last == DN_vardecl ||
+        last == DN_function)
       os << ' ';
     os << definition;
     last = dn;

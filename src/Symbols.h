@@ -20,6 +20,9 @@ class Symbols : public Singleton<Symbols> {
  public:
   void function(ast::function const& name);
   void vardecl(ast::memory_location const& memory_location);
+  void mutex_decl(ast::mutex_decl const& mutex_decl);
+  void condition_variable_decl(ast::condition_variable_decl const& condition_variable_decl);
+  void unique_lock_decl(ast::unique_lock_decl const& unique_lock_decl);
   void regdecl(ast::register_location const& register_location);
   ast::tag set_register_id(ast::register_location const& register_location);
   bool is_register(ast::tag id);

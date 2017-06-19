@@ -29,8 +29,8 @@ class SymbolsImpl {
   std::map<int, std::string> atomic_memory_locations_map;
   qi::symbols<char, ast::tag> register_locations;
   std::map<int, std::string> register_locations_map;
-  qi::symbols<char, ast::tag> mutex_decls;
-  std::map<int, std::string> mutex_decls_map;
+  qi::symbols<char, ast::tag> mutexes;
+  std::map<int, std::string> mutexes_map;
   qi::symbols<char, ast::tag> condition_variables;
   std::map<int, std::string> condition_variables_map;
   qi::symbols<char, ast::tag> unique_locks;
