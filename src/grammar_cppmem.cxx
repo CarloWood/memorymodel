@@ -29,6 +29,8 @@ BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then/*, m_else*/);
 BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_body);
 BOOST_FUSION_ADAPT_STRUCT(ast::statement_or_scope, m_body);
+BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
+BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex);
 
 namespace parser {
 
@@ -46,6 +48,9 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   auto& atomic_memory_locations{Symbols::instance().m_impl->atomic_memory_locations};
   auto& register_locations{Symbols::instance().m_impl->register_locations};
   auto& function_names{Symbols::instance().m_impl->function_names};
+  auto& mutex_decls{Symbols::instance().m_impl->mutex_decls};
+  auto& condition_variables{Symbols::instance().m_impl->condition_variables};
+  auto& unique_locks{Symbols::instance().m_impl->unique_locks};
   using namespace qi;
   attr_type dummy;
 
@@ -73,6 +78,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   operators.add
       ("==", ast::op_eq)
       ("!=", ast::op_ne)
+      ("<",  ast::op_lt)
   ;
 
   atomic_fetch_add_explicit =
@@ -111,8 +117,14 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   function_call =
       function_names >> '(' >> ')';
 
+  break_statement =
+      "break" >> dummy(false);
+
+  unique_lock_decl =
+      -lit("std::") >> "unique_lock" > '<' >> -lit("std::") > "mutex" > '>' > identifier > '(' > mutex_decls > ')';
+
   statement =
-    ( (register_assignment | assignment | load_statement | store_statement | function_call) > ';')
+    ( (break_statement | register_assignment | assignment | load_statement | store_statement | function_call | unique_lock_decl) > ';')
     | if_statement
     | while_statement;
 
@@ -138,10 +150,10 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     | statement;
 
   if_statement =
-      lit("if") >> '(' >> expression >> ')' >> statement_or_scope /*>> -("else" > statement)*/;
+      lit("if") >> '(' >> expression >> ')' > statement_or_scope /*>> -("else" > statement)*/;
 
   while_statement =
-      lit("while") >> '(' >> expression >> ')' >> statement_or_scope;
+      lit("while") >> '(' >> expression >> ')' > statement_or_scope;
 
   // void function_name() { ... }
   function =
@@ -226,6 +238,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (function_call)
       (if_statement)
       (while_statement)
+      (statement_or_scope)
   );
 
   using handler_function = phoenix::function<position_handler<Iterator>>;

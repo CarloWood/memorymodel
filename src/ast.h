@@ -100,7 +100,7 @@ struct load_statement
 
 struct expression;
 struct atomic_fetch_add_explicit;
-enum operators { op_eq, op_ne };
+enum operators { op_eq, op_ne, op_lt };
 
 enum SimpleExpression                    { SE_int, SE_bool, SE_tag,                       SE_atomic_fetch_add_explicit,  SE_load_statement,                       SE_expression };
 using simple_expression_node = boost::variant<int,    bool,    tag, boost::recursive_wrapper<atomic_fetch_add_explicit>,    load_statement, boost::recursive_wrapper<expression>>;
@@ -181,10 +181,26 @@ struct function_call
   friend std::ostream& operator<<(std::ostream& os, function_call const& function_call);
 };
 
+struct break_statement
+{
+  bool m_dummy;
+
+  friend std::ostream& operator<<(std::ostream& os, break_statement const& break_statement);
+};
+
+struct unique_lock_decl : tag
+{
+  tag m_lock;
+  std::string m_name;
+  tag m_mutex;
+
+  friend std::ostream& operator<<(std::ostream& os, unique_lock_decl const& unique_lock_decl);
+};
+
 struct if_statement;
 struct while_statement;
-enum Statement                   { SN_assignment, SN_load_statement, SN_store_statement, SN_function_call,                       SN_if_statement,                        SN_while_statement };
-using statement_node = boost::variant<assignment,    load_statement,    store_statement,    function_call, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+enum Statement                   { SN_break_statement, SN_assignment, SN_load_statement, SN_store_statement, SN_function_call,                       SN_if_statement,                        SN_while_statement };
+using statement_node = boost::variant<break_statement,    assignment,    load_statement,    store_statement,    function_call, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
 
 struct statement
 {

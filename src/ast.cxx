@@ -29,6 +29,12 @@ std::ostream& operator<<(std::ostream& os, type const& type)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, unique_lock_decl const& unique_lock_decl)
+{
+  os << "UNIQUE_LOCK";
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, register_location const& register_location)
 {
   os << 'r' << register_location.m_id;
@@ -66,6 +72,8 @@ std::ostream& operator<<(std::ostream& os, operators op)
       return os << "==";
     case op_ne:
       return os << "!=";
+    case op_lt:
+      return os << "<";
   }
   return os << "<UNKNOWN OP>";
 }
@@ -157,6 +165,12 @@ std::ostream& operator<<(std::ostream& os, assignment const& assignment)
 std::ostream& operator<<(std::ostream& os, function_call const& function_call)
 {
   os << function_call.m_function << "()";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, break_statement const& /*break_statement*/)
+{
+  os << "break";
   return os;
 }
 

@@ -102,10 +102,16 @@ void Symbols::scope(int begin)
     m_impl->na_memory_locations_map = m_impl->m_na_symbol_stack.top();
     m_impl->atomic_memory_locations_map = m_impl->m_symbol_stack.top();
     m_impl->register_locations_map = m_impl->m_register_stack.top();
+    m_impl->mutex_decls_map = m_impl->m_mutex_stack.top();
+    m_impl->condition_variables_map = m_impl->m_condition_variable_stack.top();
+    m_impl->unique_locks_map = m_impl->m_unique_lock_stack.top();
 
     m_impl->na_memory_locations.clear();
     m_impl->atomic_memory_locations.clear();
     m_impl->register_locations.clear();
+    m_impl->mutex_decls.clear();
+    m_impl->condition_variables.clear();
+    m_impl->unique_locks.clear();
 
     for (auto& naml : m_impl->na_memory_locations_map)
       m_impl->na_memory_locations.add(naml.second.c_str(), ast::tag(naml.first));
@@ -113,10 +119,19 @@ void Symbols::scope(int begin)
       m_impl->atomic_memory_locations.add(aml.second.c_str(), ast::tag(aml.first));
     for (auto& rl : m_impl->register_locations_map)
       m_impl->register_locations.add(rl.second.c_str(), ast::tag(rl.first));
+    for (auto& md : m_impl->mutex_decls_map)
+      m_impl->mutex_decls.add(md.second.c_str(), ast::tag(md.first));
+    for (auto& cv : m_impl->condition_variables_map)
+      m_impl->condition_variables.add(cv.second.c_str(), ast::tag(cv.first));
+    for (auto& ul : m_impl->unique_locks_map)
+      m_impl->unique_locks.add(ul.second.c_str(), ast::tag(ul.first));
 
     m_impl->m_na_symbol_stack.pop();
     m_impl->m_symbol_stack.pop();
     m_impl->m_register_stack.pop();
+    m_impl->m_mutex_stack.pop();
+    m_impl->m_condition_variable_stack.pop();
+    m_impl->m_unique_lock_stack.pop();
 
     Dout(dc::symbols, "Popped from stack:");
     m_impl->print(m_impl->register_locations);
@@ -128,6 +143,9 @@ void Symbols::scope(int begin)
     m_impl->m_na_symbol_stack.push(m_impl->na_memory_locations_map);
     m_impl->m_symbol_stack.push(m_impl->atomic_memory_locations_map);
     m_impl->m_register_stack.push(m_impl->register_locations_map);
+    m_impl->m_mutex_stack.push(m_impl->mutex_decls_map);
+    m_impl->m_condition_variable_stack.push(m_impl->condition_variables_map);
+    m_impl->m_unique_lock_stack.push(m_impl->unique_locks_map);
   }
 }
 
@@ -141,12 +159,24 @@ void Symbols::reset()
   m_impl->atomic_memory_locations_map.clear();
   m_impl->register_locations.clear();
   m_impl->register_locations_map.clear();
+  m_impl->mutex_decls.clear();
+  m_impl->mutex_decls_map.clear();
+  m_impl->condition_variables.clear();
+  m_impl->condition_variables_map.clear();
+  m_impl->unique_locks.clear();
+  m_impl->unique_locks_map.clear();
   while (!m_impl->m_na_symbol_stack.empty())
     m_impl->m_na_symbol_stack.pop();
   while (!m_impl->m_symbol_stack.empty())
     m_impl->m_symbol_stack.pop();
   while (!m_impl->m_register_stack.empty())
     m_impl->m_register_stack.pop();
+  while (!m_impl->m_mutex_stack.empty())
+    m_impl->m_mutex_stack.pop();
+  while (!m_impl->m_condition_variable_stack.empty())
+    m_impl->m_condition_variable_stack.pop();
+  while (!m_impl->m_unique_lock_stack.empty())
+    m_impl->m_unique_lock_stack.pop();
 }
 
 std::string Symbols::tag_to_string(ast::tag id)
