@@ -50,7 +50,6 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::break_statement>                    break_statement;
   rule<ast::unique_lock_decl>                   unique_lock_decl;
 
-  rule<ast::statement_or_scope>                 statement_or_scope;
   rule<ast::if_statement>                       if_statement;
   rule<ast::while_statement>                    while_statement;
   rule<ast::body>                               body;

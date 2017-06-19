@@ -174,12 +174,6 @@ std::ostream& operator<<(std::ostream& os, break_statement const& /*break_statem
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, statement_or_scope const& statement_or_scope)
-{
-  os << statement_or_scope.m_body;
-  return os;
-}
-
 std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
 {
   os << "if (" << if_statement.m_condition << ") " << if_statement.m_then;
@@ -222,7 +216,7 @@ std::ostream& operator<<(std::ostream& os, body const& body)
   for (auto&& node : body.m_body_nodes)
   {
     int bn = node.which();
-    if (last == BN_vardecl || last == BN_statement)
+    if (last == BN_unique_lock_decl || last == BN_vardecl || last == BN_statement)
       os << ' ';
     os << node;
     last = bn;

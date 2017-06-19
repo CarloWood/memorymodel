@@ -234,8 +234,8 @@ struct vardecl {
 
 struct scope;
 struct threads;
-enum BodyNode               { BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
-using body_node = boost::variant<vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
+enum BodyNode               { BN_unique_lock_decl, BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
+using body_node = boost::variant<unique_lock_decl,    vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
 
 struct body
 {
@@ -258,21 +258,11 @@ struct scope
   bool operator==(std::string const& statement) const;
 };
 
-enum StatementOrScopeNode                 { SS_statement, SS_scope };
-using statement_or_scope_node = boost::variant<statement,    scope>;
-
-struct statement_or_scope
-{
-  statement_or_scope_node m_body;
-
-  friend std::ostream& operator<<(std::ostream& os, statement_or_scope const& statement_or_scope);
-};
-
 struct if_statement
 {
   expression m_condition;
-  statement_or_scope m_then;
-  //boost::optional<statement_or_scope> m_else;
+  body m_then;
+  //boost::optional<body> m_else;
 
   friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
 };
@@ -280,7 +270,7 @@ struct if_statement
 struct while_statement
 {
   expression m_condition;
-  statement_or_scope m_body;
+  body m_body;
 
   friend std::ostream& operator<<(std::ostream& os, while_statement const& while_statement);
 };
