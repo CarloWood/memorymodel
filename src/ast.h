@@ -262,7 +262,8 @@ struct statement
 };
 
 // TYPE MEMORY_LOCATION [= INT_];
-struct vardecl {
+struct vardecl
+{
   type m_type;
   memory_location m_memory_location;
   boost::optional<expression> m_initial_value;
@@ -284,10 +285,23 @@ struct vardecl {
   friend std::ostream& operator<<(std::ostream& os, vardecl const& vardecl);
 };
 
+enum DeclarationStatementNode {                DS_mutex_decl, DS_condition_variable_decl, DS_unique_lock_decl, DS_vardecl };
+using declaration_statement_node = boost::variant<mutex_decl,    condition_variable_decl,    unique_lock_decl,    vardecl>;
+
+struct declaration_statement
+{
+  declaration_statement_node m_declaration_statement_node;
+
+  ast::tag tag() const;
+  std::string name() const;
+
+  friend std::ostream& operator<<(std::ostream& os, declaration_statement const& declaration_statement);
+};
+
 struct scope;
 struct threads;
-enum BodyNode               { BN_mutex_decl, BN_condition_variable_decl,  BN_unique_lock_decl, BN_vardecl, BN_statement,                       BN_scope,                        BN_threads };
-using body_node = boost::variant<mutex_decl,    condition_variable_decl,     unique_lock_decl,    vardecl,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
+enum BodyNode               { BN_declaration_statement, BN_statement,                       BN_scope,                        BN_threads };
+using body_node = boost::variant<declaration_statement,    statement, boost::recursive_wrapper<scope>, boost::recursive_wrapper<threads>>;
 
 struct body
 {
@@ -383,8 +397,8 @@ struct function : tag
   friend std::ostream& operator<<(std::ostream& os, function const& function);
 };
 
-enum DefinitionNode               { DN_mutex_decl, DN_condition_variable_decl, DN_vardecl, DN_function };
-using definition_node = boost::variant<mutex_decl,    condition_variable_decl,    vardecl,    function>;
+enum DefinitionNode               { DN_declaration_statement, DN_function };
+using definition_node = boost::variant<declaration_statement,    function>;
 
 // *DEFINITION
 struct cppmem : public std::vector<definition_node>

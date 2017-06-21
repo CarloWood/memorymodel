@@ -36,6 +36,7 @@ BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_body);
 BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
 BOOST_FUSION_ADAPT_STRUCT(ast::wait_statement, m_condition_variable, m_unique_lock, m_scope);
 BOOST_FUSION_ADAPT_STRUCT(ast::return_statement, m_expression);
+BOOST_FUSION_ADAPT_STRUCT(ast::declaration_statement, m_declaration_statement_node);
 
 namespace parser {
 
@@ -176,7 +177,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       scope_begin > -body > scope_end;
 
   if_statement =
-      lit("if") >> '(' >> expression >> ')' > body >> -("else" > body);
+      lit("if") >> '(' >> expression >> ')' > body /*>> -("else" > body)*/;
 
   while_statement =
       lit("while") >> '(' >> expression >> ')' > body;
@@ -193,13 +194,13 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   // The body of a function.
   body =
-      +(mutex_decl | condition_variable_decl | unique_lock_decl | vardecl | statement | scope | threads) >> dummy(false);
+      +(declaration_statement | statement | scope | threads) >> dummy(false);
 
   threads =
       threads_begin > body >> +(threads_next > body) > threads_end >> dummy(false);
 
   cppmem =
-      *(mutex_decl | condition_variable_decl | vardecl | function) > main;
+      *(declaration_statement | function) > main;
 
   // No-skipper rules.
   identifier_begin_char = alpha | char_('_');
@@ -223,6 +224,13 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   // Allowable variable and function names.
   identifier =
       lexeme[ identifier_begin_char >> *identifier_char ];
+
+  declaration_statement =
+      ( mutex_decl
+      | condition_variable_decl
+      | unique_lock_decl
+      | vardecl
+      );
 
   // Variable declaration (global or inside a scope).
   vardecl =

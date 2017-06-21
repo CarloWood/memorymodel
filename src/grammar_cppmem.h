@@ -33,6 +33,7 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::type>                                  type;
   rule<ast::register_location>                     register_location;
   rule<ast::memory_location>                       memory_location;
+  rule<ast::declaration_statement>                 declaration_statement;
   rule<ast::vardecl>                               vardecl;
   rule<ast::mutex_decl>                            mutex_decl;
   rule<ast::condition_variable_decl>               condition_variable_decl;

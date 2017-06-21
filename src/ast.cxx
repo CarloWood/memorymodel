@@ -59,6 +59,72 @@ std::ostream& operator<<(std::ostream& os, memory_location const& memory_locatio
   return os;
 }
 
+std::string declaration_statement::name() const
+{
+  switch (m_declaration_statement_node.which())
+  {
+    case DS_mutex_decl:
+    {
+      auto const& mutex_decl(boost::get<mutex_decl>(m_declaration_statement_node));
+      return mutex_decl.m_name;
+    }
+    case DS_condition_variable_decl:
+    {
+      auto const& condition_variable_decl(boost::get<condition_variable_decl>(m_declaration_statement_node));
+      return condition_variable_decl.m_name;
+    }
+    case DS_unique_lock_decl:
+    {
+      auto const& unique_lock_decl(boost::get<unique_lock_decl>(m_declaration_statement_node));
+      return unique_lock_decl.m_name;
+    }
+    case DS_vardecl:
+    {
+      auto const& vardecl(boost::get<vardecl>(m_declaration_statement_node));
+      return vardecl.m_memory_location.m_name;
+    }
+  }
+  // Suppress compiler warning.
+  assert(false);
+  return "UNKNOWN declaration type";
+}
+
+tag declaration_statement::tag() const
+{
+  switch (m_declaration_statement_node.which())
+  {
+    case DS_mutex_decl:
+    {
+      auto const& mutex_decl(boost::get<mutex_decl>(m_declaration_statement_node));
+      return mutex_decl;
+    }
+    case DS_condition_variable_decl:
+    {
+      auto const& condition_variable_decl(boost::get<condition_variable_decl>(m_declaration_statement_node));
+      return condition_variable_decl;
+    }
+    case DS_unique_lock_decl:
+    {
+      auto const& unique_lock_decl(boost::get<unique_lock_decl>(m_declaration_statement_node));
+      return unique_lock_decl;
+    }
+    case DS_vardecl:
+    {
+      auto const& vardecl(boost::get<vardecl>(m_declaration_statement_node));
+      return vardecl.m_memory_location;
+    }
+  }
+  // Suppress compiler warning.
+  assert(false);
+  return tag();
+}
+
+std::ostream& operator<<(std::ostream& os, declaration_statement const& declaration_statement)
+{
+  os << declaration_statement.m_declaration_statement_node;
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
 {
   os << vardecl.m_type << ' ' << vardecl.m_memory_location;
@@ -275,10 +341,7 @@ std::ostream& operator<<(std::ostream& os, body const& body)
   for (auto&& node : body.m_body_nodes)
   {
     int bn = node.which();
-    if (last == BN_mutex_decl ||
-        last == BN_condition_variable_decl ||
-        last == BN_unique_lock_decl ||
-        last == BN_vardecl ||
+    if (last == BN_declaration_statement ||
         last == BN_statement)
       os << ' ';
     os << node;
@@ -308,9 +371,7 @@ std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
   for (auto&& definition : cppmem)
   {
     int dn = definition.which();
-    if (last == DN_mutex_decl ||
-        last == DN_condition_variable_decl ||
-        last == DN_vardecl ||
+    if (last == DN_declaration_statement ||
         last == DN_function)
       os << ' ';
     os << definition;

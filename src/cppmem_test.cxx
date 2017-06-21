@@ -271,8 +271,10 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 2);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_vardecl);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_vardecl);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_body->m_body_nodes.front()).m_declaration_statement_node.which() == DS_vardecl);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_body->m_body_nodes.back()).m_declaration_statement_node.which() == DS_vardecl);
   std::stringstream ss;
   ss << boost::get<scope>(value);
   std::string out = ss.str();
@@ -294,7 +296,8 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
   BOOST_REQUIRE(sc.m_body);
   BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 3);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes[0].which() == BN_vardecl);
+  BOOST_REQUIRE(sc.m_body->m_body_nodes[0].which() == BN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_body->m_body_nodes[0]).m_declaration_statement_node.which() == DS_vardecl);
   BOOST_REQUIRE(sc.m_body->m_body_nodes[1].which() == BN_statement);
   BOOST_REQUIRE(sc.m_body->m_body_nodes[2].which() == BN_statement);
   ast::statement const& s1(boost::get<statement>(sc.m_body->m_body_nodes[1]));

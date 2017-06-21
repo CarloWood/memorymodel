@@ -16,18 +16,18 @@ using iterator_type = std::string::const_iterator;
 
 class Symbols {
  private:
-  std::vector<std::pair<std::string, ast::vardecl>> m_symbols;
+  std::vector<std::pair<std::string, ast::declaration_statement>> m_symbols;
   std::stack<int> m_stack;
  public:
-  void add(ast::vardecl const& vardecl);
+  void add(ast::declaration_statement const& declaration_statement);
   void scope_start(bool is_thread);
   void scope_end();
-  ast::vardecl const& find(std::string var_name) const;
+  ast::declaration_statement const& find(std::string var_name) const;
 };
 
-void Symbols::add(ast::vardecl const& vardecl)
+void Symbols::add(ast::declaration_statement const& declaration_statement)
 {
-  m_symbols.push_back(std::make_pair(vardecl.m_memory_location.m_name, vardecl));
+  m_symbols.push_back(std::make_pair(declaration_statement.name(), declaration_statement));
 }
 
 Symbols symbols;
@@ -51,7 +51,7 @@ void Symbols::scope_end()
   m_stack.pop();
 }
 
-ast::vardecl const& Symbols::find(std::string var_name) const
+ast::declaration_statement const& Symbols::find(std::string var_name) const
 {
   auto iter = m_symbols.rbegin();
   while (iter != m_symbols.rend())
@@ -76,16 +76,23 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
       break;
     case ast::SE_tag:
     {
-      auto const& tag(boost::get<ast::tag>(node));
+      auto const& tag(boost::get<ast::tag>(node));                                 // tag that the parser thinks we are using.
       Dout(dc::notice, "[read from '" << tag << "' " << handler.location(handler.id_to_pos(tag)) << "]");
-      // Check if that variable wasn't masked by an atomic int.
-      std::string name = parser::Symbols::instance().tag_to_string(tag);
-      ast::vardecl const& vardecl{symbols.find(name)};
-      if (vardecl.m_memory_location != tag)
+      // Check if that variable wasn't masked by another variable of different type.
+      std::string name = parser::Symbols::instance().tag_to_string(tag);           // Actual C++ object of that name in current scope.
+      ast::declaration_statement const& declaration_statement{symbols.find(name)}; // Declaration of actual object.
+      if (declaration_statement.tag() != tag)                                      // Did the parser make a mistake?
       {
-        std::string position{handler.location(handler.id_to_pos(vardecl.m_memory_location))};
-        THROW_ALERT("Please use [MEMORY_LOCATION].load() for atomic_int declared at [POSITION] instead of [MEMORY_LOCATION]",
-                    AIArgs("[MEMORY_LOCATION]", vardecl.m_memory_location)("[POSITION]", position));
+        std::string position{handler.location(handler.id_to_pos(declaration_statement.tag()))};
+        if (declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl)
+        {
+          auto const& vardecl(boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node));
+          if (vardecl.m_memory_location.m_type == ast::type_atomic_int)
+            THROW_ALERT("Please use [MEMORY_LOCATION].load() for atomic_int declared at [POSITION] instead of [MEMORY_LOCATION]",
+                        AIArgs("[MEMORY_LOCATION]", vardecl.m_memory_location)("[POSITION]", position));
+        }
+        THROW_ALERT("[OBJECT] declared at [POSITION] has the wrong type for this operation,",
+                    AIArgs("[OBJECT]", declaration_statement)("[POSITION]", position));
       }
       break;
     }
@@ -180,11 +187,11 @@ void execute_body(std::string name, ast::body const& body, position_handler<iter
   {
     switch (node.which())
     {
-      case ast::BN_vardecl:
+      case ast::BN_declaration_statement:
       {
-        auto const& vardecl(boost::get<ast::vardecl>(node));
-        Dout(dc::notice, vardecl << " [" << handler.location(handler.id_to_pos(vardecl.m_memory_location)) << "]");
-        symbols.add(vardecl);
+        auto const& declaration_statement(boost::get<ast::declaration_statement>(node));
+        Dout(dc::notice, declaration_statement << " [" << handler.location(handler.id_to_pos(declaration_statement.tag())) << "]");
+        symbols.add(declaration_statement);
         break;
       }
       case ast::BN_statement:
@@ -270,11 +277,11 @@ int main(int argc, char* argv[])
 
   // Collect all global variables and their initialization, if any.
   for (auto& node : ast)
-    if (node.which() == ast::DN_vardecl)
+    if (node.which() == ast::DN_declaration_statement)
     {
-      ast::vardecl& vardecl{boost::get<ast::vardecl>(node)};
-      Dout(dc::notice, vardecl << " [" << handler.location(handler.id_to_pos(vardecl.m_memory_location)) << "]");
-      symbols.add(vardecl);
+      ast::declaration_statement& declaration_statement{boost::get<ast::declaration_statement>(node)};
+      Dout(dc::notice, declaration_statement << " [" << handler.location(handler.id_to_pos(declaration_statement.tag())) << "]");
+      symbols.add(declaration_statement);
     }
 
   // Collect all function definitions.
