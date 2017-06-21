@@ -20,51 +20,55 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   // Needs access to the rules.
   friend class grammar_unittest<Iterator>;
 
-  grammar_whitespace<Iterator>                  whitespace;
-  rule_noskip                                   scope_begin;
-  rule_noskip                                   scope_end;
-  rule_noskip                                   threads_begin;
-  rule_noskip                                   threads_next;
-  rule_noskip                                   threads_end;
+  grammar_whitespace<Iterator>                     whitespace;
+  rule_noskip                                      scope_begin;
+  rule_noskip                                      scope_end;
+  rule_noskip                                      threads_begin;
+  rule_noskip                                      threads_next;
+  rule_noskip                                      threads_end;
 
-  rule_identifier_noskip                        identifier_begin_char;
-  rule_identifier_noskip                        identifier_char;
-  rule<std::string>                             identifier;
-  rule<ast::type>                               type;
-  rule<ast::register_location>                  register_location;
-  rule<ast::memory_location>                    memory_location;
-  rule<ast::vardecl>                            vardecl;
-  rule<ast::mutex_decl>                         mutex_decl;
-  rule<ast::condition_variable_decl>            condition_variable_decl;
-  rule<ast::unique_lock_decl>                   unique_lock_decl;
+  rule_identifier_noskip                           identifier_begin_char;
+  rule_identifier_noskip                           identifier_char;
+  rule<std::string>                                identifier;
+  rule<ast::type>                                  type;
+  rule<ast::register_location>                     register_location;
+  rule<ast::memory_location>                       memory_location;
+  rule<ast::vardecl>                               vardecl;
+  rule<ast::mutex_decl>                            mutex_decl;
+  rule<ast::condition_variable_decl>               condition_variable_decl;
+  rule<ast::unique_lock_decl>                      unique_lock_decl;
 
-  qi::symbols<char, ast::operators>             operators;
-  rule<ast::simple_expression>                  simple_expression;
-  rule<ast::unary_expression>                   unary_expression;
-  rule<ast::expression>                         expression;
-  rule<ast::statement>                          statement;
-  rule<ast::register_assignment>                register_assignment;
-  rule<ast::assignment>                         assignment;
-  qi::symbols<char, std::memory_order>          memory_order;
-  rule<ast::function_call>                      function_call;
-  rule<ast::atomic_fetch_add_explicit>          atomic_fetch_add_explicit;
-  rule<ast::load_statement>                     load_statement;
-  rule<ast::store_statement>                    store_statement;
-  rule<ast::break_statement>                    break_statement;
+  qi::symbols<char, ast::operators>                operators;
+  rule<ast::simple_expression>                     simple_expression;
+  rule<ast::unary_expression>                      unary_expression;
+  rule<ast::expression>                            expression;
+  rule<ast::statement>                             statement;
+  rule<ast::register_assignment>                   register_assignment;
+  rule<ast::assignment>                            assignment;
+  qi::symbols<char, std::memory_order>             memory_order;
+  rule<ast::function_call>                         function_call;
+  rule<ast::atomic_fetch_add_explicit>             atomic_fetch_add_explicit;
+  rule<ast::atomic_fetch_sub_explicit>             atomic_fetch_sub_explicit;
+  rule<ast::atomic_compare_exchange_weak_explicit> atomic_compare_exchange_weak_explicit;
+  rule<ast::load_statement>                        load_statement;
+  rule<ast::store_statement>                       store_statement;
+  rule<ast::break_statement>                       break_statement;
+  rule<ast::return_statement>                      return_statement;
+  rule<ast::wait_statement>                        wait_statement;
 
-  rule<ast::if_statement>                       if_statement;
-  rule<ast::while_statement>                    while_statement;
-  rule<ast::body>                               body;
-  rule<ast::scope>                              scope;
-  rule<ast::function_name>                      function_name;
-  rule<ast::function>                           function;
+  rule<ast::if_statement>                          if_statement;
+  rule<ast::while_statement>                       while_statement;
+  rule<ast::body>                                  body;
+  rule<ast::scope>                                 scope;
+  rule<ast::function_name>                         function_name;
+  rule<ast::function>                              function;
 
-  rule<ast::function>                           main;
-  rule<ast::scope>                              main_scope;
-  rule<qi::unused_type>                         return_statement;
+  rule<ast::function>                              main;
+  rule<ast::scope>                                 main_scope;
+  rule<qi::unused_type>                            return_statement_main;
 
-  rule<ast::threads>                            threads;
-  rule<ast::cppmem>                             cppmem;
+  rule<ast::threads>                               threads;
+  rule<ast::cppmem>                                cppmem;
 
  public:
   grammar_cppmem(position_handler<Iterator>& position_handler);

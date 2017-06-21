@@ -220,7 +220,7 @@ BOOST_AUTO_TEST_CASE(vardecl_simple)
   ss << boost::get<vardecl>(value);
   std::string out = ss.str();
   //std::cout << "value = \"" << out << "\"." << std::endl;
-  BOOST_REQUIRE(out == "atomic_int x;");
+  BOOST_REQUIRE(out == "std::atomic_int x;");
 }
 #endif
 
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(type_comment3)
   ss << boost::get<vardecl>(value);
   std::string out = ss.str();
   //std::cout << "value = \"" << out << "\"." << std::endl;
-  BOOST_REQUIRE(out == "atomic_int x = 3;");
+  BOOST_REQUIRE(out == "std::atomic_int x = 3;");
 }
 #endif
 
@@ -339,7 +339,7 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   //std::cout << "s = \"" << out << "\"." << std::endl;
   find_and_replace(out, "\e[31m", "");
   find_and_replace(out, "\e[0m", "");
-  BOOST_REQUIRE(out == "{ atomic_int y = 4; atomic_int x; { { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
+  BOOST_REQUIRE(out == "{ std::atomic_int y = 4; std::atomic_int x; { { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
 }
 #endif
 
@@ -373,7 +373,7 @@ BOOST_AUTO_TEST_CASE(function_main)
   std::stringstream ss;
   ss << f;
   //std::cout << "s = \"" << ss.str() << "\"." << std::endl;
-  BOOST_REQUIRE(ss.str() == "int main() { }");
+  BOOST_REQUIRE(ss.str() == "int main() { return 0; }");
 }
 #endif
 
@@ -497,7 +497,7 @@ BOOST_AUTO_TEST_CASE(expressions2)
   std::stringstream ss;
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
-  BOOST_REQUIRE(ss.str() == "{ atomic_int x; int y; y = ((x.load()) == 3); }");
+  BOOST_REQUIRE(ss.str() == "{ std::atomic_int x; int y; y = ((x.load()) == 3); }");
 }
 #endif
 
@@ -513,8 +513,8 @@ BOOST_AUTO_TEST_CASE(declarations)
   ast::cppmem prog(boost::get<cppmem>(value));
   std::stringstream ss;
   ss << prog;
-  std::cout << "prog = \"" << ss.str() << "\"." << std::endl;
-  BOOST_REQUIRE(ss.str() == "mutex m1; mutex m2; condition_variable cv1; condition_variable condition_variable2; int main() { unique_lock<mutex> mutex(m2); }");
+  //std::cout << "prog = \"" << ss.str() << "\"." << std::endl;
+  BOOST_REQUIRE(ss.str() == "std::mutex m1; std::mutex m2; std::condition_variable cv1; std::condition_variable condition_variable2; int main() { std::unique_lock<std::mutex> mutex(m2); }");
 }
 #endif
 

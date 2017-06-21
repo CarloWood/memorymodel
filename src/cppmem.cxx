@@ -153,7 +153,8 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
       debug::Mark mark;
 #endif
       auto const& function(functions[function_call.m_function]);
-      execute_body(function.m_function_name.name, *function.m_scope.m_body, handler);
+      if (function.m_scope.m_body)
+        execute_body(function.m_function_name.name, *function.m_scope.m_body, handler);
       break;
     }
     case ast::SN_if_statement:

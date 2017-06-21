@@ -100,10 +100,16 @@ struct load_statement
 
 struct expression;
 struct atomic_fetch_add_explicit;
-enum operators { op_eq, op_ne, op_lt };
+struct atomic_fetch_sub_explicit;
+struct atomic_compare_exchange_weak_explicit;
+enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba };
 
-enum SimpleExpression                    { SE_int, SE_bool, SE_tag,                       SE_atomic_fetch_add_explicit,  SE_load_statement,                       SE_expression };
-using simple_expression_node = boost::variant<int,    bool,    tag, boost::recursive_wrapper<atomic_fetch_add_explicit>,    load_statement, boost::recursive_wrapper<expression>>;
+enum SimpleExpression                    { SE_int, SE_bool, SE_tag,                       SE_atomic_fetch_add_explicit,
+                          SE_atomic_fetch_sub_explicit,                        SE_atomic_compare_exchange_weak_explicit,
+    SE_load_statement,                       SE_expression };
+using simple_expression_node = boost::variant<int,    bool,    tag, boost::recursive_wrapper<atomic_fetch_add_explicit>,
+    boost::recursive_wrapper<atomic_fetch_sub_explicit>, boost::recursive_wrapper<atomic_compare_exchange_weak_explicit>,
+       load_statement, boost::recursive_wrapper<expression>>;
 
 struct simple_expression
 {
@@ -142,6 +148,26 @@ struct atomic_fetch_add_explicit
   std::memory_order m_memory_order;
 
   friend std::ostream& operator<<(std::ostream& os, atomic_fetch_add_explicit const& atomic_fetch_add_explicit);
+};
+
+struct atomic_fetch_sub_explicit
+{
+  tag m_memory_location_id;
+  expression m_expression;
+  std::memory_order m_memory_order;
+
+  friend std::ostream& operator<<(std::ostream& os, atomic_fetch_sub_explicit const& atomic_fetch_sub_explicit);
+};
+
+struct atomic_compare_exchange_weak_explicit
+{
+  tag m_memory_location_id;
+  int m_expected;
+  int m_desired;
+  std::memory_order m_succeed;
+  std::memory_order m_fail;
+
+  friend std::ostream& operator<<(std::ostream& os, atomic_compare_exchange_weak_explicit const& atomic_compare_exchange_weak_explicit);
 };
 
 struct store_statement
@@ -188,6 +214,13 @@ struct break_statement
   friend std::ostream& operator<<(std::ostream& os, break_statement const& break_statement);
 };
 
+struct return_statement
+{
+  expression m_expression;
+
+  friend std::ostream& operator<<(std::ostream& os, return_statement const& return_statement);
+};
+
 struct mutex_decl : tag
 {
   std::string m_name;
@@ -213,8 +246,13 @@ struct unique_lock_decl : tag
 
 struct if_statement;
 struct while_statement;
-enum Statement                   { SN_break_statement, SN_assignment, SN_load_statement, SN_store_statement, SN_function_call,                       SN_if_statement,                        SN_while_statement };
-using statement_node = boost::variant<break_statement,    assignment,    load_statement,    store_statement,    function_call, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
+struct wait_statement;
+enum Statement                   { SN_break_statement, SN_return_statement, SN_assignment, SN_load_statement, SN_store_statement, SN_function_call,
+    SN_atomic_fetch_add_explicit, SN_atomic_fetch_sub_explicit, SN_atomic_compare_exchange_weak_explicit,
+                          SN_wait_statement,                       SN_if_statement,                        SN_while_statement };
+using statement_node = boost::variant<break_statement,    return_statement,    assignment,    load_statement,    store_statement,    function_call,
+       atomic_fetch_add_explicit,    atomic_fetch_sub_explicit,    atomic_compare_exchange_weak_explicit,
+    boost::recursive_wrapper<wait_statement>, boost::recursive_wrapper<if_statement>, boost::recursive_wrapper<while_statement>>;
 
 struct statement
 {
@@ -276,7 +314,7 @@ struct if_statement
 {
   expression m_condition;
   body m_then;
-  //boost::optional<body> m_else;
+  boost::optional<body> m_else;
 
   friend std::ostream& operator<<(std::ostream& os, if_statement const& if_statement);
 };
@@ -298,6 +336,15 @@ struct threads
 
   // Workaround for the fact that spirit/fusion doesn't work correctly for structs containing a single STL container.
   bool m_dummy;
+};
+
+struct wait_statement
+{
+  tag m_condition_variable;
+  tag m_unique_lock;
+  scope m_scope;
+
+  friend std::ostream& operator<<(std::ostream& os, wait_statement const& wait_statement);
 };
 
 // IDENTIFIER

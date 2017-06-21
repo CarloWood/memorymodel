@@ -25,13 +25,17 @@ BOOST_FUSION_ADAPT_STRUCT(ast::chain, op, operand)
 BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_operand, m_chained)
 BOOST_FUSION_ADAPT_STRUCT(ast::function_call, m_function)
 BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_add_explicit, m_memory_location_id, m_expression, m_memory_order);
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_sub_explicit, m_memory_location_id, m_expression, m_memory_order);
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_compare_exchange_weak_explicit, m_memory_location_id, m_expected, m_desired, m_succeed, m_fail);
 BOOST_FUSION_ADAPT_STRUCT(ast::function, m_function_name, m_scope)
 BOOST_FUSION_ADAPT_STRUCT(ast::body, m_body_nodes, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::scope, m_body)
 BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
-BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then/*, m_else*/);
+BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then, m_else);
 BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_body);
 BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
+BOOST_FUSION_ADAPT_STRUCT(ast::wait_statement, m_condition_variable, m_unique_lock, m_scope);
+BOOST_FUSION_ADAPT_STRUCT(ast::return_statement, m_expression);
 
 namespace parser {
 
@@ -80,16 +84,22 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       ("==", ast::op_eq)
       ("!=", ast::op_ne)
       ("<",  ast::op_lt)
+      (">",  ast::op_gt)
+      (">=", ast::op_ge)
+      ("<=", ast::op_le)
+      ("||", ast::op_bo)
+      ("&&", ast::op_ba)
   ;
 
   atomic_fetch_add_explicit =
-      -lit("std::") >> "atomic_fetch_add_explicit" >> '(' >> '&' >> atomic_memory_locations >> ',' >> expression >> ',' >> memory_order >> ')';
+      -lit("std::") >> "atomic_fetch_add_explicit" > '(' > '&' > atomic_memory_locations > ',' > expression > ',' > memory_order > ')';
 
-  load_statement =
-      atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
+  atomic_fetch_sub_explicit =
+      -lit("std::") >> "atomic_fetch_sub_explicit" > '(' > '&' > atomic_memory_locations > ',' > expression > ',' > memory_order > ')';
 
-  store_statement =
-      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | attr(std::memory_order_seq_cst)) >> ')';
+  atomic_compare_exchange_weak_explicit =
+      -lit("std::") >> "atomic_compare_exchange_weak_explicit" > '(' >
+          '&' > atomic_memory_locations > ',' > int_ > ',' > int_ > ',' > memory_order > ',' > memory_order > ')';
 
   simple_expression =
     ( '(' > expression > ')' )
@@ -97,6 +107,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     | bool_
     | register_locations
     | atomic_fetch_add_explicit
+    | atomic_fetch_sub_explicit
+    | atomic_compare_exchange_weak_explicit
     | load_statement
     | na_memory_locations;
 
@@ -106,14 +118,23 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   expression =
       unary_expression >> *(operators > expression);
 
-  assignment =
-      na_memory_locations >> '=' > expression;
-
   register_location =
       lexeme[ 'r' >> uint_ >> !(alnum | char_('_')) ];
 
   register_assignment =
       register_location >> '=' > expression;
+
+  assignment =
+      na_memory_locations >> '=' > expression;
+
+  return_statement =
+      "return" > expression;
+
+  load_statement =
+      atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
+
+  store_statement =
+      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | attr(std::memory_order_seq_cst)) >> ')';
 
   function_call =
       function_names >> '(' >> ')';
@@ -121,8 +142,22 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   break_statement =
       "break" >> dummy(false);
 
+  wait_statement =
+      condition_variables > '.' > "wait" > '(' > unique_locks > ',' > "[&]" > scope > ')';
+
   statement =
-    ( (break_statement | register_assignment | assignment | load_statement | store_statement | function_call) > ';')
+    ( ( register_assignment
+      | assignment
+      | return_statement
+      | load_statement
+      | store_statement
+      | function_call
+      | break_statement
+      | atomic_fetch_add_explicit
+      | atomic_fetch_sub_explicit
+      | atomic_compare_exchange_weak_explicit
+      | wait_statement
+      ) > ';')
     | if_statement
     | while_statement;
 
@@ -138,13 +173,10 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       "int" > no_skip[whitespace] > string("main") > "()" > main_scope;
 
   main_scope =
-      scope_begin > -body > -return_statement > scope_end;
-
-  return_statement =
-      "return" > no_skip[whitespace] > int_ > ';';
+      scope_begin > -body > scope_end;
 
   if_statement =
-      lit("if") >> '(' >> expression >> ')' > body /*>> -("else" > body)*/;
+      lit("if") >> '(' >> expression >> ')' > body >> -("else" > body);
 
   while_statement =
       lit("while") >> '(' >> expression >> ')' > body;
@@ -225,7 +257,6 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (threads_end)
       (main)
       (main_scope)
-      (return_statement)
       (function)
       (function_name)
       (scope)
@@ -244,6 +275,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (function_call)
       (if_statement)
       (while_statement)
+      (break_statement)
+      (return_statement)
   );
 
   using handler_function = phoenix::function<position_handler<Iterator>>;

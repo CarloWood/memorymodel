@@ -23,7 +23,7 @@ std::ostream& operator<<(std::ostream& os, type const& type)
       os << "int";
       break;
     case type_atomic_int:
-      os << "atomic_int";
+      os << "std::atomic_int";
       break;
   }
   return os;
@@ -31,19 +31,19 @@ std::ostream& operator<<(std::ostream& os, type const& type)
 
 std::ostream& operator<<(std::ostream& os, mutex_decl const& mutex_decl)
 {
-  os << "mutex " << static_cast<tag const&>(mutex_decl) << ';';
+  os << "std::mutex " << static_cast<tag const&>(mutex_decl) << ';';
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, condition_variable_decl const& condition_variable_decl)
 {
-  os << "condition_variable " << static_cast<tag const&>(condition_variable_decl) << ';';
+  os << "std::condition_variable " << static_cast<tag const&>(condition_variable_decl) << ';';
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, unique_lock_decl const& unique_lock_decl)
 {
-  os << "unique_lock<mutex> " << static_cast<tag const&>(unique_lock_decl) << '(' << unique_lock_decl.m_mutex << ");";
+  os << "std::unique_lock<std::mutex> " << static_cast<tag const&>(unique_lock_decl) << '(' << unique_lock_decl.m_mutex << ");";
   return os;
 }
 
@@ -86,6 +86,16 @@ std::ostream& operator<<(std::ostream& os, operators op)
       return os << "!=";
     case op_lt:
       return os << "<";
+    case op_gt:
+      return os << ">";
+    case op_le:
+      return os << "<=";
+    case op_ge:
+      return os << ">=";
+    case op_bo:
+      return os << "||";
+    case op_ba:
+      return os << "&&";
   }
   return os << "<UNKNOWN OP>";
 }
@@ -146,9 +156,32 @@ std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
 
 std::ostream& operator<<(std::ostream& os, atomic_fetch_add_explicit const& atomic_fetch_add_explicit)
 {
-  os << "atomic_fetch_add_explicit(&" << atomic_fetch_add_explicit.m_memory_location_id << ", " << atomic_fetch_add_explicit.m_expression;
+  os << "std::atomic_fetch_add_explicit(&" << atomic_fetch_add_explicit.m_memory_location_id << ", " << atomic_fetch_add_explicit.m_expression;
   if (atomic_fetch_add_explicit.m_memory_order != std::memory_order_seq_cst)
     os << ", " << atomic_fetch_add_explicit.m_memory_order;
+  os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, atomic_fetch_sub_explicit const& atomic_fetch_sub_explicit)
+{
+  os << "std::atomic_fetch_sub_explicit(&" << atomic_fetch_sub_explicit.m_memory_location_id << ", " << atomic_fetch_sub_explicit.m_expression;
+  if (atomic_fetch_sub_explicit.m_memory_order != std::memory_order_seq_cst)
+    os << ", " << atomic_fetch_sub_explicit.m_memory_order;
+  os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, atomic_compare_exchange_weak_explicit const& atomic_compare_exchange_weak_explicit)
+{
+  os << "std::atomic_compare_exchange_weak_explicit(&" <<
+      atomic_compare_exchange_weak_explicit.m_memory_location_id << ", " <<
+      atomic_compare_exchange_weak_explicit.m_expected << ", " <<
+      atomic_compare_exchange_weak_explicit.m_desired;
+  if (atomic_compare_exchange_weak_explicit.m_succeed != std::memory_order_seq_cst)
+    os << ", " << atomic_compare_exchange_weak_explicit.m_succeed;
+  if (atomic_compare_exchange_weak_explicit.m_fail != std::memory_order_seq_cst)
+    os << ", " << atomic_compare_exchange_weak_explicit.m_fail;
   os << ')';
   return os;
 }
@@ -186,9 +219,23 @@ std::ostream& operator<<(std::ostream& os, break_statement const& /*break_statem
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, return_statement const& return_statement)
+{
+  os << "return " << return_statement.m_expression;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, wait_statement const& wait_statement)
+{
+  os << wait_statement.m_condition_variable << ".wait(" << wait_statement.m_unique_lock << ", [&]" << wait_statement.m_scope << ");";
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
 {
   os << "if (" << if_statement.m_condition << ") " << if_statement.m_then;
+  if (if_statement.m_else)
+    os << "else " << if_statement.m_else.get();
   return os;
 }
 
