@@ -20,11 +20,11 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
            | (cppmem.memory_location >> eoi)
            | (cppmem.register_location >> eoi)
            | (cppmem.vardecl >> eoi)
-           | cppmem.main
-           | cppmem.function
-           | cppmem.scope
-           | cppmem.threads
-           | cppmem.statement
+           | (cppmem.main >> eoi)
+           | (cppmem.function >> eoi)
+           | (cppmem.compound_statement >> eoi)
+           | (cppmem.threads >> eoi)
+           | (cppmem.statement >> eoi)
            | cppmem;
 
   // Debugging and error handling and reporting support.

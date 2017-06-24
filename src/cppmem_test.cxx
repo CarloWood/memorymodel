@@ -12,7 +12,7 @@
 using namespace ast;
 
 #define MIN_TEST 0
-#define MAX_TEST 23
+#define MAX_TEST 24
 
 #define type_type_int_nr                0
 #define type_type_atomic_int_nr         1
@@ -38,6 +38,7 @@ using namespace ast;
 #define expressions2_nr                21
 #define type_type_bool_nr              22
 #define declarations_nr                23
+#define if_else_nr                     24
 
 #if MAX_TEST < MIN_TEST
 #undef MAX_TEST
@@ -266,17 +267,17 @@ BOOST_AUTO_TEST_CASE(scope_vardecl)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement sc(boost::get<compound_statement>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
-  BOOST_REQUIRE(sc.m_body);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 2);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.front().which() == BN_declaration_statement &&
-                boost::get<declaration_statement>(sc.m_body->m_body_nodes.front()).m_declaration_statement_node.which() == DS_vardecl);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.back().which() == BN_declaration_statement &&
-                boost::get<declaration_statement>(sc.m_body->m_body_nodes.back()).m_declaration_statement_node.which() == DS_vardecl);
+  BOOST_REQUIRE(sc.m_statement_seq);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements.size() == 2);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements.front().m_statement_node.which() == SN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_statement_seq->m_statements.front().m_statement_node).m_declaration_statement_node.which() == DS_vardecl);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements.back().m_statement_node.which() == SN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_statement_seq->m_statements.back().m_statement_node).m_declaration_statement_node.which() == DS_vardecl);
   std::stringstream ss;
-  ss << boost::get<scope>(value);
+  ss << boost::get<compound_statement>(value);
   std::string out = ss.str();
   //std::cout << "value = \"" << out << "\"." << std::endl;
   BOOST_REQUIRE(out == "{ int y = 4; bool b = true; }");
@@ -291,19 +292,19 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement sc(boost::get<compound_statement>(value));
   //std::cout << "Result: \"" << sc << "\"." << std::endl;
-  BOOST_REQUIRE(sc.m_body);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes.size() == 3);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes[0].which() == BN_declaration_statement &&
-                boost::get<declaration_statement>(sc.m_body->m_body_nodes[0]).m_declaration_statement_node.which() == DS_vardecl);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes[1].which() == BN_statement);
-  BOOST_REQUIRE(sc.m_body->m_body_nodes[2].which() == BN_statement);
-  ast::statement const& s1(boost::get<statement>(sc.m_body->m_body_nodes[1]));
-  ast::statement const& s2(boost::get<statement>(sc.m_body->m_body_nodes[2]));
-  BOOST_REQUIRE(s1.m_statement.which() == SN_assignment);
-  BOOST_REQUIRE(s2.m_statement.which() == SN_assignment);
+  BOOST_REQUIRE(sc.m_statement_seq);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements.size() == 3);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements[0].m_statement_node.which() == SN_declaration_statement &&
+                boost::get<declaration_statement>(sc.m_statement_seq->m_statements[0].m_statement_node).m_declaration_statement_node.which() == DS_vardecl);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements[1].m_statement_node.which() == SN_expression_statement);
+  BOOST_REQUIRE(sc.m_statement_seq->m_statements[2].m_statement_node.which() == SN_expression_statement);
+  ast::expression_statement const& s1(boost::get<expression_statement>(sc.m_statement_seq->m_statements[1].m_statement_node));
+  ast::expression_statement const& s2(boost::get<expression_statement>(sc.m_statement_seq->m_statements[2].m_statement_node));
+  BOOST_REQUIRE(s1.m_expression.m_operand.m_simple_expression.m_simple_expression_node.which() == SE_assignment);
+  BOOST_REQUIRE(s2.m_expression.m_operand.m_simple_expression.m_simple_expression_node.which() == SE_register_assignment);
   std::stringstream ss;
   ss << s1;
   std::string out = ss.str();
@@ -334,15 +335,15 @@ BOOST_AUTO_TEST_CASE(scope_recursive)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope const& s = boost::get<scope>(value);
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement const& s = boost::get<compound_statement>(value);
   std::stringstream ss;
   ss << s;
   std::string out = ss.str();
   //std::cout << "s = \"" << out << "\"." << std::endl;
   find_and_replace(out, "\e[31m", "");
   find_and_replace(out, "\e[0m", "");
-  BOOST_REQUIRE(out == "{ std::atomic_int y = 4; std::atomic_int x; { { x.store(1); }r0 = y.load(std::memory_order_relaxed); } }");
+  BOOST_REQUIRE(out == "{ std::atomic_int y = 4; std::atomic_int x; { { x.store(1); } r0 = y.load(std::memory_order_relaxed); } }");
 }
 #endif
 
@@ -436,15 +437,15 @@ BOOST_AUTO_TEST_CASE(load_store)
   parse(text, value);
 
   BOOST_REQUIRE_EQUAL(NT_function, value.which());
-  ast::function const& f = boost::get<function>(value);
-  BOOST_REQUIRE(f.m_scope.m_body);
-  boost::optional<body> body = f.m_scope.m_body;
-  BOOST_REQUIRE(body->m_body_nodes.size() == 4);
-  body_node& node = body->m_body_nodes[3];
-  BOOST_REQUIRE_EQUAL(BN_threads, node.which());
-  ast::threads const& th = boost::get<threads>(node);
+  function const& function = boost::get<ast::function>(value);
+  BOOST_REQUIRE(function.m_compound_statement.m_statement_seq);
+  statement_seq const& statement_seq = *function.m_compound_statement.m_statement_seq;
+  BOOST_REQUIRE(statement_seq.m_statements.size() == 4);
+  statement const& statement = statement_seq.m_statements[3];
+  BOOST_REQUIRE_EQUAL(SN_threads, statement.m_statement_node.which());
+  threads const& threads = boost::get<ast::threads>(statement.m_statement_node);
   std::stringstream ss;
-  ss << th;
+  ss << threads;
   //std::cout << "th = \"" << ss.str() << "\"." << std::endl;
   BOOST_REQUIRE(ss.str() == "{{{ x.store(1, std::memory_order_release); "
                             "||| { r1 = x.load(std::memory_order_acquire).readsvalue(1); y.store(1, std::memory_order_release); } "
@@ -461,8 +462,8 @@ BOOST_AUTO_TEST_CASE(var_assignment)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement sc(boost::get<compound_statement>(value));
   std::stringstream ss;
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
@@ -478,8 +479,8 @@ BOOST_AUTO_TEST_CASE(expressions)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement sc(boost::get<compound_statement>(value));
   std::stringstream ss;
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
@@ -495,8 +496,8 @@ BOOST_AUTO_TEST_CASE(expressions2)
   ast::nonterminal value;
   parse(text, value);
 
-  BOOST_REQUIRE_EQUAL(NT_scope, value.which());
-  ast::scope sc(boost::get<scope>(value));
+  BOOST_REQUIRE_EQUAL(NT_compound_statement, value.which());
+  ast::compound_statement sc(boost::get<compound_statement>(value));
   std::stringstream ss;
   ss << sc;
   //std::cout << "sc = \"" << ss.str() << "\"." << std::endl;
@@ -521,6 +522,38 @@ BOOST_AUTO_TEST_CASE(declarations)
 }
 #endif
 
+#if DO_TEST(if_else)
+BOOST_AUTO_TEST_CASE(if_else)
+{
+  int const size = 3;
+
+  std::string const input[size] =
+      { "if (1) if (2) r1 = 0; else r2 = 1;",
+        "if (1) { if (2) r1 = 0; } else r2 = 1;",
+        "if (1) { if (2) r1 = 0; else r2 = 1; }"
+      };
+
+  std::string const output[size] =
+      { "if (1) { if (2) r1 = 0; else r2 = 1; }",
+        "if (1) { if (2) r1 = 0; } else r2 = 1;",
+        "if (1) { if (2) r1 = 0; else r2 = 1; }"
+      };
+
+  for (int i = 0; i < size; ++i)
+  {
+    ast::nonterminal value;
+    parse(input[i], value);
+
+    BOOST_REQUIRE_EQUAL(NT_statement, value.which());
+    ast::statement statement(boost::get<statement>(value));
+    std::stringstream ss;
+    ss << statement;
+    //std::cout << i << ": statement = \"" << ss.str() << "\"." << std::endl;
+    BOOST_REQUIRE(ss.str() == output[i]);
+  }
+}
+#endif
+
 int BOOST_TEST_CALL_DECL
 main( int argc, char* argv[] )
 {
@@ -534,14 +567,12 @@ main( int argc, char* argv[] )
 
 namespace ast {
 
-bool scope::operator==(std::string const& stmt) const
+bool compound_statement::operator==(std::string const& stmt) const
 {
-  assert(m_body);
-  assert(m_body->m_body_nodes.size() == 1);
-  assert(m_body->m_body_nodes.front().which() == BN_statement);
-  ast::statement const& s(boost::get<statement>(m_body->m_body_nodes.front()));
+  assert(m_statement_seq);
+  assert(m_statement_seq->m_statements.size() == 1);
   std::stringstream ss;
-  ss << s;
+  ss << m_statement_seq->m_statements.front();
   //std::cout << "s = \"" << out << "\"." << std::endl;
   std::string out = ss.str();
   return out == stmt;

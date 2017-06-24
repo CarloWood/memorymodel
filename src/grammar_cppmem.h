@@ -51,21 +51,26 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::atomic_fetch_add_explicit>             atomic_fetch_add_explicit;
   rule<ast::atomic_fetch_sub_explicit>             atomic_fetch_sub_explicit;
   rule<ast::atomic_compare_exchange_weak_explicit> atomic_compare_exchange_weak_explicit;
-  rule<ast::load_statement>                        load_statement;
-  rule<ast::store_statement>                       store_statement;
+  rule<ast::load_call>                        load_call;
+  rule<ast::store_call>                            store_call;
+  rule<ast::jump_statement>                        jump_statement;
   rule<ast::break_statement>                       break_statement;
   rule<ast::return_statement>                      return_statement;
-  rule<ast::wait_statement>                        wait_statement;
+  rule<ast::wait_call>                             wait_call;
+  rule<ast::notify_all_call>                       notify_all_call;
+  rule<ast::expression_statement>                  expression_statement;
 
+  rule<ast::selection_statement>                   selection_statement;
+  rule<ast::statement>                             else_statement;
   rule<ast::if_statement>                          if_statement;
+  rule<ast::iteration_statement>                   iteration_statement;
   rule<ast::while_statement>                       while_statement;
-  rule<ast::body>                                  body;
-  rule<ast::scope>                                 scope;
+  rule<ast::statement_seq>                         statement_seq;
+  rule<ast::compound_statement>                    compound_statement;
   rule<ast::function_name>                         function_name;
   rule<ast::function>                              function;
 
   rule<ast::function>                              main;
-  rule<ast::scope>                                 main_scope;
   rule<qi::unused_type>                            return_statement_main;
 
   rule<ast::threads>                               threads;

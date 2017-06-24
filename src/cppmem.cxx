@@ -32,7 +32,7 @@ void Symbols::add(ast::declaration_statement const& declaration_statement)
 
 Symbols symbols;
 
-void execute_body(std::string name, ast::body const& body, position_handler<iterator_type>& handler);
+void execute_body(std::string name, ast::statement_seq const& body, position_handler<iterator_type>& handler);
 
 void Symbols::scope_start(bool is_thread)
 {
@@ -96,10 +96,10 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
       }
       break;
     }
-    case ast::SE_load_statement:
+    case ast::SE_load_call:
     {
-      auto const& load_statement(boost::get<ast::load_statement>(node));
-      Dout(dc::notice, "[load from: " << handler.location(handler.id_to_pos(load_statement.m_memory_location_id)) << "]");
+      auto const& load_call(boost::get<ast::load_call>(node));
+      Dout(dc::notice, "[load from: " << handler.location(handler.id_to_pos(load_call.m_memory_location_id)) << "]");
       break;
     }
     case ast::SE_expression:
@@ -126,6 +126,7 @@ void execute_expression(ast::expression const& expression, position_handler<iter
 
 void execute_statement(ast::statement const& statement, position_handler<iterator_type>& handler)
 {
+#if 0
   auto const& node = statement.m_statement;
   switch (node.which())
   {
@@ -139,17 +140,17 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
       execute_expression(assignment.rhs, handler);
       break;
     }
-    case ast::SN_load_statement:
+    case ast::SN_load_call:
     {
-      auto const& load_statement(boost::get<ast::load_statement>(node));
-      Dout(dc::notice, load_statement << "; [load from: " << handler.location(handler.id_to_pos(load_statement.m_memory_location_id)) << "]");
+      auto const& load_call(boost::get<ast::load_call>(node));
+      Dout(dc::notice, load_call << "; [load from: " << handler.location(handler.id_to_pos(load_call.m_memory_location_id)) << "]");
       break;
     }
-    case ast::SN_store_statement:
+    case ast::SN_store_call:
     {
-      auto const& store_statement(boost::get<ast::store_statement>(node));
-      Dout(dc::notice, store_statement << "; [write to: " << handler.location(handler.id_to_pos(store_statement.m_memory_location_id)) << "]");
-      execute_expression(store_statement.m_val, handler);
+      auto const& store_call(boost::get<ast::store_call>(node));
+      Dout(dc::notice, store_call << "; [write to: " << handler.location(handler.id_to_pos(store_call.m_memory_location_id)) << "]");
+      execute_expression(store_call.m_val, handler);
       break;
     }
     case ast::SN_function_call:
@@ -160,8 +161,8 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
       debug::Mark mark;
 #endif
       auto const& function(functions[function_call.m_function]);
-      if (function.m_scope.m_body)
-        execute_body(function.m_function_name.name, *function.m_scope.m_body, handler);
+      if (function.m_compound_statement.m_body)
+        execute_body(function.m_function_name.name, *function.m_compound_statement.m_body, handler);
       break;
     }
     case ast::SN_if_statement:
@@ -169,10 +170,12 @@ void execute_statement(ast::statement const& statement, position_handler<iterato
     case ast:: SN_while_statement:
       break;
   }
+#endif
 }
 
-void execute_body(std::string name, ast::body const& body, position_handler<iterator_type>& handler)
+void execute_body(std::string name, ast::statement_seq const& body, position_handler<iterator_type>& handler)
 {
+#if 0
 #ifdef CWDEBUG
   if (name != "scope" && name != "thread")
   {
@@ -207,11 +210,11 @@ void execute_body(std::string name, ast::body const& body, position_handler<iter
         }
         break;
       }
-      case ast::BN_scope:
+      case ast::BN_compound_statement:
       {
-        auto const& b(boost::get<ast::scope>(node).m_body);
-        if (b)
-          execute_body("scope", *b, handler);
+        auto const& body(boost::get<ast::compound_statement>(node).m_body);
+        if (body)
+          execute_body("compound_statement", *body, handler);
         break;
       }
       case ast::BN_threads:
@@ -224,6 +227,7 @@ void execute_body(std::string name, ast::body const& body, position_handler<iter
     }
   }
   symbols.scope_end();
+#endif
 }
 
 int main(int argc, char* argv[])
@@ -299,7 +303,8 @@ int main(int argc, char* argv[])
   try
   {
     // Execute main()
-    execute_body("main", *main_function->m_scope.m_body, handler);
+    if (main_function->m_compound_statement.m_statement_seq)
+      execute_body("main", *main_function->m_compound_statement.m_statement_seq, handler);
   }
   catch (AIAlert::Error const& error)
   {

@@ -136,8 +136,9 @@ std::ostream& operator<<(std::ostream& os, vardecl const& vardecl)
 
 std::ostream& operator<<(std::ostream& os, statement const& statement)
 {
-  os << statement.m_statement;
-  if (statement.m_statement.which() <= SN_function_call)
+  os << statement.m_statement_node;
+  int w = statement.m_statement_node.which();
+  if (w == SN_store_call || w == SN_function_call || w == SN_wait_call)
     os << ';';
   return os;
 }
@@ -193,6 +194,12 @@ std::ostream& operator<<(std::ostream& os, expression const& expression)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, expression_statement const& expression_statement)
+{
+  os << expression_statement.m_expression << ';';
+  return os;
+}
+
 #define CASE_WRITE(x) do { case x: return os << #x; } while(0)
 
 std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order)
@@ -209,14 +216,14 @@ std::ostream& operator<<(std::ostream& os, std::memory_order const& memory_order
   return os << "<unknown memory order>";
 }
 
-std::ostream& operator<<(std::ostream& os, load_statement const& load_statement)
+std::ostream& operator<<(std::ostream& os, load_call const& load_call)
 {
-  os << load_statement.m_memory_location_id << ".load(";
-  if (load_statement.m_memory_order != std::memory_order_seq_cst)
-    os << load_statement.m_memory_order;
+  os << load_call.m_memory_location_id << ".load(";
+  if (load_call.m_memory_order != std::memory_order_seq_cst)
+    os << load_call.m_memory_order;
   os << ")";
-  if (load_statement.m_readsvalue)
-    os << ".readsvalue(" << load_statement.m_readsvalue.get() << ')';
+  if (load_call.m_readsvalue)
+    os << ".readsvalue(" << load_call.m_readsvalue.get() << ')';
   return os;
 }
 
@@ -252,11 +259,11 @@ std::ostream& operator<<(std::ostream& os, atomic_compare_exchange_weak_explicit
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, store_statement const& store_statement)
+std::ostream& operator<<(std::ostream& os, store_call const& store_call)
 {
-  os << store_statement.m_memory_location_id << ".store(" << store_statement.m_val;
-  if (store_statement.m_memory_order != std::memory_order_seq_cst)
-    os << ", " << store_statement.m_memory_order;
+  os << store_call.m_memory_location_id << ".store(" << store_call.m_val;
+  if (store_call.m_memory_order != std::memory_order_seq_cst)
+    os << ", " << store_call.m_memory_order;
   os << ')';
   return os;
 }
@@ -281,33 +288,61 @@ std::ostream& operator<<(std::ostream& os, function_call const& function_call)
 
 std::ostream& operator<<(std::ostream& os, break_statement const& /*break_statement*/)
 {
-  os << "break";
+  os << "break;";
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, return_statement const& return_statement)
 {
-  os << "return " << return_statement.m_expression;
+  os << "return " << return_statement.m_expression << ';';
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, wait_statement const& wait_statement)
+std::ostream& operator<<(std::ostream& os, jump_statement const& jump_statement)
 {
-  os << wait_statement.m_condition_variable << ".wait(" << wait_statement.m_unique_lock << ", [&]" << wait_statement.m_scope << ");";
+  os << jump_statement.m_jump_statement_node;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, wait_call const& wait_call)
+{
+  os << wait_call.m_condition_variable << ".wait(" << wait_call.m_unique_lock << ", [&]" << wait_call.m_compound_statement << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, notify_all_call const& notify_all_call)
+{
+  os << notify_all_call.m_condition_variable << ".notify_all()";
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, if_statement const& if_statement)
 {
-  os << "if (" << if_statement.m_condition << ") " << if_statement.m_then;
+  os << "if (" << if_statement.m_condition << ") ";
+  bool ambiguous = if_statement.m_then.m_statement_node.which() == SN_selection_statement; // selection_statement is currently always an if_statement.
+  if (ambiguous) os << "{ ";
+  os << if_statement.m_then;
+  if (ambiguous) os << " }";
   if (if_statement.m_else)
-    os << "else " << if_statement.m_else.get();
+    os << " else " << if_statement.m_else.get();
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, selection_statement const& selection_statement)
+{
+  os << selection_statement.m_if_statement;
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, while_statement const& while_statement)
 {
-  os << "while (" << while_statement.m_condition << ") " << while_statement.m_body;
+  os << "while (" << while_statement.m_condition << ") " << while_statement.m_statement;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, iteration_statement const& iteration_statement)
+{
+  os << iteration_statement.m_while_statement;
   return os;
 }
 
@@ -323,29 +358,27 @@ std::ostream& operator<<(std::ostream& os, function const& function)
     os << "int ";
   else
     os << "void ";
-  os << function.m_function_name << "() " << function.m_scope;
+  os << function.m_function_name << "() " << function.m_compound_statement;
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, scope const& scope)
+std::ostream& operator<<(std::ostream& os, compound_statement const& compound_statement)
 {
   os << "{ ";
-  if (scope.m_body)
-    os << scope.m_body.get() << ' ';
+  if (compound_statement.m_statement_seq)
+    os << compound_statement.m_statement_seq.get() << ' ';
   return os << '}';
 }
 
-std::ostream& operator<<(std::ostream& os, body const& body)
+std::ostream& operator<<(std::ostream& os, statement_seq const& statement_seq)
 {
-  int last = -1;
-  for (auto&& node : body.m_body_nodes)
+  bool first = true;
+  for (auto&& statement : statement_seq.m_statements)
   {
-    int bn = node.which();
-    if (last == BN_declaration_statement ||
-        last == BN_statement)
+    if (!first)
       os << ' ';
-    os << node;
-    last = bn;
+    os << statement;
+    first = false;
   }
   return os;
 }
