@@ -5,6 +5,7 @@
 #include <boost/range/iterator_range.hpp>
 #include <iostream>
 #include <memory>
+#include <sstream>
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
@@ -112,6 +113,11 @@ struct position_handler
     std::stringstream ss;
     ss << m_filename << ':' << line << ':' << col;
     return ss.str();
+  }
+
+  std::string location(ast::tag const tag) const
+  {
+    return location(id_to_pos(tag));
   }
 
   int pos_to_id(Iterator pos) const

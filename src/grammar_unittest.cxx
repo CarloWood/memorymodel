@@ -47,4 +47,4 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
 } // namespace parser
 
 // Instantiate grammar template.
-template struct parser::grammar_unittest<std::string::const_iterator>;
+template class parser::grammar_unittest<std::string::const_iterator>;

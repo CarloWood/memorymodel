@@ -30,6 +30,8 @@ struct type
 {
   Type m_type;
 
+  bool is_atomic() const { return m_type == type_atomic_int; }
+
   type() { }
   type(Type t) : m_type(t) { }
 
@@ -155,19 +157,18 @@ struct expression
   friend std::ostream& operator<<(std::ostream& os, expression const& expression);
 };
 
+enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba };
+struct chain
+{
+  operators op;
+  expression operand;
+};
+
 struct expression_statement
 {
   expression m_expression;
 
   friend std::ostream& operator<<(std::ostream& os, expression_statement const& expression_statement);
-};
-
-enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba };
-
-struct chain
-{
-  operators op;
-  expression operand;
 };
 
 struct atomic_fetch_add_explicit
@@ -373,7 +374,7 @@ struct statement
 
 struct statement_seq
 {
-  using container_type = std::vector<statement>;
+  typedef std::vector<statement> container_type;
   container_type m_statements;
 
   friend std::ostream& operator<<(std::ostream& os, statement_seq const& statement_seq);
@@ -425,7 +426,7 @@ struct iteration_statement
 
 struct threads
 {
-  using container_type = std::vector<statement_seq>;
+  typedef std::vector<statement_seq> container_type;
   container_type m_threads;
 
   friend std::ostream& operator<<(std::ostream& os, threads const& threads);
@@ -476,7 +477,7 @@ struct function : tag
   function_name m_function_name;
   compound_statement m_compound_statement;
 
-  function() { }
+  function() : tag(-1) { }
   function(function_name function_name) : m_function_name(function_name) { }
 #ifdef BOOST_FUSION_HAS_VARIADIC_VECTOR
   function(boost::fusion::vector<ast::function_name, ast::compound_statement> const& attr) :

@@ -365,6 +365,11 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   );
 
   on_success(
+      main
+    , handler_function(handler)(_val, _1)
+  );
+
+  on_success(
       scope_begin
     , handler_function(handler)(1, _1)
   );
@@ -393,4 +398,4 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 } // namespace parser
 
 // Instantiate grammar template.
-template struct parser::grammar_cppmem<std::string::const_iterator>;
+template class parser::grammar_cppmem<std::string::const_iterator>;

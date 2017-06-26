@@ -41,4 +41,4 @@ grammar_whitespace<Iterator>::grammar_whitespace() :
 } // namespace parser
 
 // Instantiate grammar template.
-template struct parser::grammar_whitespace<std::string::const_iterator>;
+template class parser::grammar_whitespace<std::string::const_iterator>;
