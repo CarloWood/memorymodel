@@ -8,6 +8,7 @@
 #include <memory>
 #include <iosfwd>
 #include <string>
+#include <stack>
 
 class Thread;
 struct Context;
@@ -20,20 +21,25 @@ class Thread : public AIRefCount
   using id_type = int;
 
  private:
-  id_type m_id;         // Unique identifier of a thread.
+  id_type m_id;                 // Unique identifier of a thread.
+  ThreadPtr m_parent_thread;    // Only valid when m_id > 0.
 
  protected:
-  Thread(id_type id) : m_id(id) { }
+  Thread() : m_id(0) { }
+  Thread(id_type id, ThreadPtr const& parent_thread) : m_id(id), m_parent_thread(parent_thread) { assert(m_id > 0); }
 
  public:
-  static ThreadPtr create_new_thread(id_type& next_id) { return new Thread(next_id++); }
+  static ThreadPtr create_main_thread() { return new Thread; }
+  static ThreadPtr create_new_thread(id_type& next_id, ThreadPtr const& current_thread) { return new Thread(next_id++, current_thread); }
   bool is_main_thread() const { return m_id == 0; }
+  ThreadPtr const& parent_thread() const { assert(m_id > 0); return m_parent_thread; }
 
   friend bool operator==(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id == thr2->m_id; }
   friend bool operator!=(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id != thr2->m_id; }
   friend bool operator<(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id < thr2->m_id; }
 
   friend std::ostream& operator<<(std::ostream& os, Thread const& thread);
+  friend std::ostream& operator<<(std::ostream& os, ThreadPtr const& thread) { return os << *thread; }
 };
 
 enum mutex_type
@@ -156,14 +162,15 @@ class Graph
  private:
   using nodes_type = std::set<Node>;    // Use a set because we'll have a lot of iterators pointing to Node's.
   nodes_type m_nodes;                   // All nodes, ordered by Node::m_id.
-  Thread::id_type m_next_thread_id;     // The id to use for the next thread; 0 is the main thread.
+  Thread::id_type m_next_thread_id;     // The id to use for the next thread.
   ThreadPtr m_current_thread;           // The current thread.
   Node::id_type m_next_node_id;         // The id to use for the next node.
+  std::stack<bool> m_threads;           // Whether or not current scope is a thread.
 
  public:
   Graph() :
-    m_next_thread_id(0),
-    m_current_thread{Thread::create_new_thread(m_next_thread_id)},
+    m_next_thread_id(1),
+    m_current_thread{Thread::create_main_thread()},
     m_next_node_id(0) { }
 
   void print_nodes() const;
@@ -184,4 +191,8 @@ class Graph
   void lockdecl(ast::tag mutex, Context& context);
   void lock(ast::tag mutex, Context& context);
   void unlock(ast::tag mutex, Context& context);
+
+  // Entering and leaving scopes.
+  void scope_start(bool is_thread);
+  void scope_end();
 };

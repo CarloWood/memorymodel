@@ -155,7 +155,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (mutexes > lit('.')) >> "unlock" > '(' > ')' > dummy(false);
 
   expression_statement =
-      expression > ';';
+      (expression > ';') | ';';
 
   unary_expression =
       matches['!'] >> simple_expression;

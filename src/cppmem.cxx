@@ -74,7 +74,7 @@ class Symbols {
   std::stack<int> m_stack;
  public:
   void add(ast::declaration_statement const& declaration_statement);
-  void scope_start(bool is_thread);
+  void scope_start(bool is_thread, Context& context);
   void scope_end(Context& context);
   int stack_depth() const { return m_stack.size(); }
   ast::declaration_statement const& find(std::string var_name) const;
@@ -111,10 +111,9 @@ void Locks::left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& c
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context);
 
-void Symbols::scope_start(bool is_thread)
+void Symbols::scope_start(bool is_thread, Context& context)
 {
-  if (is_thread)
-    Dout(dc::notice, "New thread:");
+  context.m_graph.scope_start(is_thread);
   Dout(dc::notice, "{");
   Debug(libcw_do.inc_indent(2));
   m_stack.push(m_symbols.size());
@@ -124,6 +123,7 @@ void Symbols::scope_end(Context& context)
 {
   Debug(libcw_do.dec_indent(2));
   Dout(dc::notice, "}");
+  context.m_graph.scope_end();
   m_symbols.resize(m_stack.top());
   m_stack.pop();
   locks.reset(m_stack.size(), context);
@@ -281,9 +281,7 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
 
 void execute_expression(ast::expression const& expression, Context& context)
 {
-#ifdef CWDEBUG
-  debug::Mark marker("\e[42m⇩\e[0m");
-#endif
+  DebugMarkDown;
   ast::unary_expression const& unary_expression{expression.m_operand};
   execute_simple_expression(unary_expression.m_simple_expression, context);
   for (auto& chain : expression.m_chained)
@@ -300,8 +298,11 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_expression_statement:
     {
       auto const& expression_statement{boost::get<ast::expression_statement>(node)};
-      execute_expression(expression_statement.m_expression, context);
-      Dout(dc::notice, expression_statement);
+      if (expression_statement.m_expression)
+      {
+        execute_expression(expression_statement.m_expression.get(), context);
+        Dout(dc::notice, expression_statement);
+      }
       break;
     }
     case ast::SN_store_call:
@@ -429,7 +430,7 @@ void execute_body(std::string name, ast::statement_seq const& body, Context& con
       Dout(dc::notice, "void " << name << "()");
   }
 #endif
-  symbols.scope_start(name == "thread");
+  symbols.scope_start(name == "thread", context);
   for (auto const& statement : body.m_statements)
   {
     try

@@ -166,7 +166,7 @@ struct chain
 
 struct expression_statement
 {
-  expression m_expression;
+  boost::optional<expression> m_expression;
 
   friend std::ostream& operator<<(std::ostream& os, expression_statement const& expression_statement);
 };

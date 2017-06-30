@@ -149,3 +149,26 @@ void Graph::unlock(ast::tag mutex, Context& context)
   m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock1));
   m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock2));
 }
+
+void Graph::scope_start(bool is_thread)
+{
+  m_threads.push(is_thread);
+  if (is_thread)
+  {
+    m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
+    DebugMarkDown;
+    Dout(dc::notice, "Creating " << m_current_thread << '.');
+  }
+}
+
+void Graph::scope_end()
+{
+  bool is_thread = m_threads.top();
+  m_threads.pop();
+  if (is_thread)
+  {
+    DebugMarkUp;
+    Dout(dc::notice, "Joined thread " << m_current_thread << '.');
+    m_current_thread = m_current_thread->parent_thread();
+  }
+}

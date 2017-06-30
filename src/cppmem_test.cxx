@@ -303,8 +303,8 @@ BOOST_AUTO_TEST_CASE(scope_assignment)
   BOOST_REQUIRE(sc.m_statement_seq->m_statements[2].m_statement_node.which() == SN_expression_statement);
   ast::expression_statement const& s1(boost::get<expression_statement>(sc.m_statement_seq->m_statements[1].m_statement_node));
   ast::expression_statement const& s2(boost::get<expression_statement>(sc.m_statement_seq->m_statements[2].m_statement_node));
-  BOOST_REQUIRE(s1.m_expression.m_operand.m_simple_expression.m_simple_expression_node.which() == SE_assignment);
-  BOOST_REQUIRE(s2.m_expression.m_operand.m_simple_expression.m_simple_expression_node.which() == SE_register_assignment);
+  BOOST_REQUIRE(s1.m_expression->m_operand.m_simple_expression.m_simple_expression_node.which() == SE_assignment);
+  BOOST_REQUIRE(s2.m_expression->m_operand.m_simple_expression.m_simple_expression_node.which() == SE_register_assignment);
   std::stringstream ss;
   ss << s1;
   std::string out = ss.str();

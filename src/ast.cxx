@@ -204,8 +204,9 @@ std::ostream& operator<<(std::ostream& os, expression const& expression)
 
 std::ostream& operator<<(std::ostream& os, expression_statement const& expression_statement)
 {
-  os << expression_statement.m_expression << ';';
-  return os;
+  if (expression_statement.m_expression)
+    os << expression_statement.m_expression.get();
+  return os << ';';
 }
 
 #define CASE_WRITE(x) do { case x: return os << #x; } while(0)
