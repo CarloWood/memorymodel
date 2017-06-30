@@ -36,6 +36,8 @@ BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_statement);
 BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
 BOOST_FUSION_ADAPT_STRUCT(ast::wait_call, m_condition_variable, m_unique_lock, m_compound_statement);
 BOOST_FUSION_ADAPT_STRUCT(ast::notify_all_call, m_condition_variable, m_dummy);
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_lock_call, m_mutex, m_dummy);
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_unlock_call, m_mutex, m_dummy);
 BOOST_FUSION_ADAPT_STRUCT(ast::return_statement, m_expression);
 BOOST_FUSION_ADAPT_STRUCT(ast::declaration_statement, m_declaration_statement_node);
 BOOST_FUSION_ADAPT_STRUCT(ast::jump_statement, m_jump_statement_node);
@@ -95,6 +97,10 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       ("<=", ast::op_le)
       ("||", ast::op_bo)
       ("&&", ast::op_ba)
+      ("+", ast::op_add)
+      ("-", ast::op_sub)
+      ("*", ast::op_mul)
+      ("/", ast::op_div)
   ;
 
   atomic_fetch_add_explicit =
@@ -142,6 +148,12 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   notify_all_call =
       (condition_variables > lit('.')) >> "notify_all" > '(' > ')' > dummy(false);
 
+  mutex_lock_call =
+      (mutexes > lit('.')) >> "lock" > '(' > ')' > dummy(false);
+
+  mutex_unlock_call =
+      (mutexes > lit('.')) >> "unlock" > '(' > ')' > dummy(false);
+
   expression_statement =
       expression > ';';
 
@@ -170,6 +182,8 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     | (function_call > ';')
     | (wait_call > ';')
     | (notify_all_call > ';')
+    | (mutex_lock_call > ';')
+    | (mutex_unlock_call > ';')
     | threads
     | compound_statement
     | selection_statement

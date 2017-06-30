@@ -18,7 +18,11 @@ libcppmem_a_SOURCES = \
 		 ast.cxx \
 		 ast.h \
 		 cppmem_parser.cxx \
-		 cppmem_parser.h
+		 cppmem_parser.h \
+		 Graph.cxx \
+		 Graph.h \
+		 debug.cxx \
+		 debug.h
 
 cppmem_test_SOURCES = cppmem_test.cxx
 

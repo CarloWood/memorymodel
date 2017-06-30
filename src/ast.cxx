@@ -163,6 +163,14 @@ std::ostream& operator<<(std::ostream& os, operators op)
       return os << "||";
     case op_ba:
       return os << "&&";
+    case op_add:
+      return os << "+";
+    case op_sub:
+      return os << "-";
+    case op_mul:
+      return os << "*";
+    case op_div:
+      return os << "/";
   }
   return os << "<UNKNOWN OP>";
 }
@@ -306,13 +314,25 @@ std::ostream& operator<<(std::ostream& os, jump_statement const& jump_statement)
 
 std::ostream& operator<<(std::ostream& os, wait_call const& wait_call)
 {
-  os << wait_call.m_condition_variable << ".wait(" << wait_call.m_unique_lock << ", [&]" << wait_call.m_compound_statement << ')';
+  os << wait_call.m_condition_variable << ".wait(" << wait_call.m_unique_lock << ", [&]" << wait_call.m_compound_statement << ");";
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, notify_all_call const& notify_all_call)
 {
-  os << notify_all_call.m_condition_variable << ".notify_all()";
+  os << notify_all_call.m_condition_variable << ".notify_all();";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, mutex_lock_call const& mutex_lock_call)
+{
+  os << mutex_lock_call.m_mutex << ".lock();";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, mutex_unlock_call const& mutex_unlock_call)
+{
+  os << mutex_unlock_call.m_mutex << ".unlock();";
   return os;
 }
 

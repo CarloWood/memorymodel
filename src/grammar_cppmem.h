@@ -58,6 +58,8 @@ class grammar_cppmem : public qi::grammar<Iterator, ast::cppmem(), skipper<Itera
   rule<ast::return_statement>                      return_statement;
   rule<ast::wait_call>                             wait_call;
   rule<ast::notify_all_call>                       notify_all_call;
+  rule<ast::mutex_lock_call>                       mutex_lock_call;
+  rule<ast::mutex_unlock_call>                     mutex_unlock_call;
   rule<ast::expression_statement>                  expression_statement;
 
   rule<ast::selection_statement>                   selection_statement;

@@ -157,7 +157,7 @@ struct expression
   friend std::ostream& operator<<(std::ostream& os, expression const& expression);
 };
 
-enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba };
+enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba, op_add, op_sub, op_mul, op_div };
 struct chain
 {
   operators op;
@@ -238,6 +238,33 @@ struct function_call
 
   // Workaround for the fact that automatic attribute propagation rules have some trouble with Fusion sequences that consist of a single element.
   // See https://stackoverflow.com/questions/44730979/boost-spirit-compile-error-for-trivial-grammar
+  bool m_dummy;
+};
+
+struct notify_all_call
+{
+  tag m_condition_variable;
+
+  friend std::ostream& operator<<(std::ostream& os, notify_all_call const& notify_all_call);
+
+  bool m_dummy;
+};
+
+struct mutex_lock_call
+{
+  tag m_mutex;
+
+  friend std::ostream& operator<<(std::ostream& os, mutex_lock_call const& mutex_lock_call);
+
+  bool m_dummy;
+};
+
+struct mutex_unlock_call
+{
+  tag m_mutex;
+
+  friend std::ostream& operator<<(std::ostream& os, mutex_unlock_call const& mutex_unlock_call);
+
   bool m_dummy;
 };
 
@@ -327,7 +354,6 @@ struct declaration_statement
 //-----------------------------------------------------------------------------
 
 struct wait_call;
-struct notify_all_call;
 struct threads;
 struct compound_statement;
 struct selection_statement;
@@ -337,8 +363,10 @@ enum Statement {
     SN_expression_statement,
     SN_store_call,
     SN_function_call,
-    SN_wait_call,
+    SN_mutex_lock_call,
+    SN_mutex_unlock_call,
     SN_notify_all_call,
+    SN_wait_call,
     SN_threads,
     SN_compound_statement,
     SN_selection_statement,
@@ -351,8 +379,10 @@ using statement_node = boost::variant<
     expression_statement,
     store_call,
     function_call,
+    mutex_lock_call,
+    mutex_unlock_call,
+    notify_all_call,
     boost::recursive_wrapper<wait_call>,
-    boost::recursive_wrapper<notify_all_call>,
     boost::recursive_wrapper<threads>,
     boost::recursive_wrapper<compound_statement>,
     boost::recursive_wrapper<selection_statement>,
@@ -442,15 +472,6 @@ struct wait_call
   compound_statement m_compound_statement;
 
   friend std::ostream& operator<<(std::ostream& os, wait_call const& wait_call);
-};
-
-struct notify_all_call
-{
-  tag m_condition_variable;
-
-  friend std::ostream& operator<<(std::ostream& os, notify_all_call const& notify_all_call);
-
-  bool m_dummy;
 };
 
 // IDENTIFIER
