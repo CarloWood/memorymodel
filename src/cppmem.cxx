@@ -107,6 +107,12 @@ void ScopeDetector<AST>::reset(size_t stack_depth, Context& context)
 void Locks::left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& context)
 {
   context.m_graph.unlock(unique_lock_decl.m_mutex, context);
+  // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
+  // Each value computation and side effect of a full expression, that is
+  // [...] the destructor call generated at the end of the lifetime of a non-temporary object
+  // [...] is sequenced before each value computation and side effect of the next full expression.
+  Dout(dc::sb_barrier, "Destructing \"" << unique_lock_decl << "\" at end of scope.");
+  context.m_graph.sequence_barrier();
 }
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context);
@@ -124,6 +130,9 @@ void Symbols::scope_end(Context& context)
   Debug(libcw_do.dec_indent(2));
   Dout(dc::notice, "}");
   context.m_graph.scope_end();
+  // End of scope really has to be the end of any 'full expression'.
+  Dout(dc::sb_barrier, "End of scope.");
+  context.m_graph.sequence_barrier();
   m_symbols.resize(m_stack.top());
   m_stack.pop();
   locks.reset(m_stack.size(), context);
@@ -154,6 +163,12 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       execute_expression(*vardecl.m_initial_value, context);
       Dout(dc::notice, declaration_statement);
       DebugMarkUp;
+      // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
+      // Each value computation and side effect of a full expression, that is
+      // [...] an entire initializer [...] is sequenced before each value computation
+      // and side effect of the next full expression.
+      Dout(dc::sb_barrier, "End of full-expression (initializer \"" << *vardecl.m_initial_value << "\")");
+      context.m_graph.sequence_barrier();
       context.m_graph.write(declaration_statement.tag(), context);
     }
     else
@@ -185,12 +200,22 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
     context.m_graph.uninitialized(declaration_statement.tag(), context);
   }
   symbols.add(declaration_statement);
+  // The semi-colon of a declaration should be the end of a 'full expression'.
+  Dout(dc::sb_barrier, "End of full-expression (declaration \"" << declaration_statement << "\")");
+  context.m_graph.sequence_barrier();
 }
 
 void execute_condition(ast::expression const& condition, Context& context)
 {
   execute_expression(condition, context);
   Dout(dc::continued, condition);
+  DebugMarkUp;
+  // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
+  // Each value computation and side effect of a full expression, that is
+  // [...] an expression that is not part of another full-expression (such as [...]
+  // controlling expression of a for/while loop, conditional expression of if/switch [...]
+  Dout(dc::sb_barrier, "End of full-expression (controlling expression \"" << condition << "\")");
+  context.m_graph.sequence_barrier();
 }
 
 void execute_simple_expression(ast::simple_expression const& simple_expression, Context& context)
@@ -286,7 +311,20 @@ void execute_expression(ast::expression const& expression, Context& context)
   execute_simple_expression(unary_expression.m_simple_expression, context);
   for (auto& chain : expression.m_chained)
   {
+    if (chain.op == ast::op_ba || chain.op == ast::op_bo)
+    {
+      Dout(dc::sb_barrier, "Finished left-hand side of operator && or ||.");
+      context.m_graph.sequence_barrier();
+    }
     execute_expression(chain.operand, context);
+  }
+  // http://en.cppreference.com/w/cpp/language/eval_order#Rules #2
+  // The value computations (but not the side-effects) of the operands to any operator are
+  // sequenced before the value computation of the result of the operator (but not its side-effects).
+  {
+    Dout(dc::sb_barrier, "At the end of execute_expression(\"" << expression << "\", ...)");
+    DebugMarkDown;
+    context.m_graph.sequence_value_computation_barrier();
   }
 }
 
@@ -404,7 +442,16 @@ void execute_statement(ast::statement const& statement, Context& context)
         case ast::JS_return_statement:
         {
           auto const& return_statement{boost::get<ast::return_statement>(jump_statement.m_jump_statement_node)};
-          Dout(dc::notice, "TODO: " << return_statement);
+          Dout(dc::notice, return_statement);
+          DebugMarkUp;
+          execute_expression(return_statement.m_expression, context);
+          // Would still need to pass this somewhere, but currently we don't support functions that return a value anyway.
+          // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
+          // Each value computation and side effect of a full expression, that is
+          // [...] an expression that is not part of another full-expression (such as [...]
+          // the expression in a return  statement [...]
+          Dout(dc::sb_barrier, "End of full-expression (return statement expression \"" << return_statement.m_expression << "\")");
+          context.m_graph.sequence_barrier();
           break;
         }
       }
@@ -417,6 +464,9 @@ void execute_statement(ast::statement const& statement, Context& context)
       break;
     }
   }
+  // The end of a statement is the end of a 'full expression'.
+  Dout(dc::sb_barrier, "End of full-expression (expression statement \"" << statement.m_statement_node << "\")");
+  context.m_graph.sequence_barrier();
 }
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context)
