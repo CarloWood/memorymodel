@@ -7,6 +7,7 @@
 #include <atomic>
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/include/at_c.hpp>
+#include <boost/fusion/tuple/tuple.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
@@ -100,68 +101,253 @@ struct load_call
   friend std::ostream& operator<<(std::ostream& os, load_call const& load_call);
 };
 
-struct register_assignment;
-struct assignment;
-struct atomic_fetch_add_explicit;
-struct atomic_fetch_sub_explicit;
-struct atomic_compare_exchange_weak_explicit;
-struct expression;
-
-enum SimpleExpression {
-    SE_int,
-    SE_bool,
-    SE_tag,
-    SE_load_call,
-    SE_register_assignment,
-    SE_assignment,
-    SE_atomic_fetch_add_explicit,
-    SE_atomic_fetch_sub_explicit,
-    SE_atomic_compare_exchange_weak_explicit,
-    SE_expression
+enum PrimaryExpressionNode {
+  PE_int,
+  PE_bool,
+  PE_tag,
+  PE_expression
 };
 
-using simple_expression_node = boost::variant<
+struct expression;
+using primary_expression_node = boost::variant<
     int,
     bool,
     tag,
-    load_call,
-    boost::recursive_wrapper<register_assignment>,
-    boost::recursive_wrapper<assignment>,
-    boost::recursive_wrapper<atomic_fetch_add_explicit>,
-    boost::recursive_wrapper<atomic_fetch_sub_explicit>,
-    boost::recursive_wrapper<atomic_compare_exchange_weak_explicit>,
     boost::recursive_wrapper<expression>
 >;
 
-struct simple_expression
+struct primary_expression
 {
-  simple_expression_node m_simple_expression_node;
+  primary_expression_node m_primary_expression_node;
 
-  friend std::ostream& operator<<(std::ostream& os, simple_expression const& simple_expression);
+  friend std::ostream& operator<<(std::ostream& os, primary_expression const& primary_expression);
+
+  bool m_dummy;
+};
+
+enum assignment_operators { ao_eq, ao_mul, ao_div, ao_mod, ao_add, ao_sub, ao_shr, ao_shl, ao_and, ao_xor, ao_or };
+enum equality_operators { eo_eq, eo_ne };
+enum relational_operators { ro_lt, ro_gt, ro_ge, ro_le };
+enum shift_operators { so_shl, so_shr };
+enum additive_operators { ado_add, ado_sub };
+enum multiplicative_operators { mo_mul, mo_div };
+enum unary_operators { uo_inc, uo_dec, uo_dereference, uo_reference, uo_plus, uo_minus, uo_not, uo_invert };
+enum postfix_operators { po_inc, po_dec };
+
+struct atomic_fetch_add_explicit;
+struct atomic_fetch_sub_explicit;
+struct atomic_compare_exchange_weak_explicit;
+struct load_call;
+
+enum PostfixExpressionNode {
+  PE_primary_expression,
+  PE_atomic_fetch_add_explicit,
+  PE_atomic_fetch_sub_explicit,
+  PE_atomic_compare_exchange_weak_explicit,
+  PE_load_call
+};
+
+using postfix_expression_node = boost::variant<
+    primary_expression,
+    boost::recursive_wrapper<atomic_fetch_add_explicit>,
+    boost::recursive_wrapper<atomic_fetch_sub_explicit>,
+    boost::recursive_wrapper<atomic_compare_exchange_weak_explicit>,
+    boost::recursive_wrapper<load_call>
+>;
+
+struct postfix_expression
+{
+  postfix_expression_node m_postfix_expression_node;
+  std::vector<postfix_operators> m_postfix_operators;
+
+  friend std::ostream& operator<<(std::ostream& os, postfix_expression const& postfix_expression);
 };
 
 struct unary_expression
 {
-  bool m_negated = false;
-  simple_expression m_simple_expression;
+  std::vector<unary_operators> m_unary_operators;       // Actually, prefix_operators (I put the pre- increment and decrement into the unary_operators).
+  postfix_expression m_postfix_expression;
 
   friend std::ostream& operator<<(std::ostream& os, unary_expression const& unary_expression);
 };
 
-struct chain;
-struct expression
+#if 0
+struct cast_expression
 {
-  unary_expression m_operand;
-  std::vector<chain> m_chained;
+  using prev_precedence_type = unary_expression;
 
-  friend std::ostream& operator<<(std::ostream& os, expression const& expression);
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, cast_expression const& cast_expression);
 };
 
-enum operators { op_eq, op_ne, op_lt, op_gt, op_le, op_ge, op_bo, op_ba, op_add, op_sub, op_mul, op_div };
-struct chain
+struct pm_expression
 {
-  operators op;
-  expression operand;
+  using prev_precedence_type = cast_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, pm_expression const& pm_expression);
+};
+#endif
+
+struct multiplicative_expression
+{
+  using prev_precedence_type = /*pm_expression*/ unary_expression; // Not supporting member function pointers.
+  using tail_type = boost::fusion::tuple<multiplicative_operators, prev_precedence_type>;
+
+  prev_precedence_type m_other_expression;
+  std::vector<tail_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, multiplicative_expression const& multiplicative_expression);
+};
+
+struct additive_expression
+{
+  using prev_precedence_type = multiplicative_expression;
+  using tail_type = boost::fusion::tuple<additive_operators, prev_precedence_type>;
+
+  prev_precedence_type m_other_expression;
+  std::vector<tail_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, additive_expression const& additive_expression);
+};
+
+struct shift_expression
+{
+  using prev_precedence_type = additive_expression;
+  using tail_type = boost::fusion::tuple<shift_operators, prev_precedence_type>;
+
+  prev_precedence_type m_other_expression;
+  std::vector<tail_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, shift_expression const& shift_expression);
+};
+
+struct relational_expression
+{
+  using prev_precedence_type = shift_expression;
+  using tail_type = boost::fusion::tuple<relational_operators, prev_precedence_type>;
+
+  prev_precedence_type m_other_expression;
+  std::vector<tail_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, relational_expression const& relational_expression);
+};
+
+struct equality_expression
+{
+  using prev_precedence_type = relational_expression;
+  using tail_type = boost::fusion::tuple<equality_operators, prev_precedence_type>;
+
+  prev_precedence_type m_other_expression;
+  std::vector<tail_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, equality_expression const& equality_expression);
+};
+
+struct and_expression
+{
+  using prev_precedence_type = equality_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, and_expression const& and_expression);
+};
+
+struct exclusive_or_expression
+{
+  using prev_precedence_type = and_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, exclusive_or_expression const& exclusive_or_expression);
+};
+
+struct inclusive_or_expression
+{
+  using prev_precedence_type = exclusive_or_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, inclusive_or_expression const& inclusive_or_expression);
+};
+
+struct logical_and_expression
+{
+  using prev_precedence_type = inclusive_or_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, logical_and_expression const& logical_and_expression);
+};
+
+struct logical_or_expression
+{
+  using prev_precedence_type = logical_and_expression;
+
+  prev_precedence_type m_other_expression;
+  std::vector<prev_precedence_type> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, logical_or_expression const& logical_or_expression);
+};
+
+//*****************************************************************************
+// assignment_expression definition
+
+struct conditional_expression;
+struct register_assignment;
+struct assignment;
+
+enum AssignmentExpressionNode {
+  AE_conditional_expression,
+  AE_register_assignment,
+  AE_assignment
+};
+
+using assignment_expression_node = boost::variant<
+    boost::recursive_wrapper<conditional_expression>,   // The other two can't be the first element.
+    boost::recursive_wrapper<register_assignment>,
+    boost::recursive_wrapper<assignment>
+>;
+
+struct assignment_expression
+{
+  assignment_expression_node m_assignment_expression_node;
+
+  friend std::ostream& operator<<(std::ostream& os, assignment_expression const& assignment_expression);
+
+  bool m_dummy;
+};
+
+struct assignment
+{
+  tag lhs;
+  assignment_expression rhs;
+
+  assignment() = default;
+
+  // Convert a register_assignment to an assignment.
+  assignment(register_assignment const& ra);
+
+  friend std::ostream& operator<<(std::ostream& os, assignment const& assignment);
+};
+
+//*****************************************************************************
+// expression defintion
+
+struct expression
+{
+  assignment_expression m_assignment_expression;
+  std::vector<assignment_expression> m_chained;
+
+  friend std::ostream& operator<<(std::ostream& os, expression const& expression);
 };
 
 struct expression_statement
@@ -171,10 +357,16 @@ struct expression_statement
   friend std::ostream& operator<<(std::ostream& os, expression_statement const& expression_statement);
 };
 
+struct conditional_expression
+{
+  logical_or_expression m_logical_or_expression;
+  boost::optional<boost::fusion::tuple<expression, assignment_expression>> m_conditional_expression_tail;
+};
+
 struct atomic_fetch_add_explicit
 {
   tag m_memory_location_id;
-  expression m_expression;
+  assignment_expression m_expression;
   std::memory_order m_memory_order;
 
   friend std::ostream& operator<<(std::ostream& os, atomic_fetch_add_explicit const& atomic_fetch_add_explicit);
@@ -183,7 +375,7 @@ struct atomic_fetch_add_explicit
 struct atomic_fetch_sub_explicit
 {
   tag m_memory_location_id;
-  expression m_expression;
+  assignment_expression m_expression;
   std::memory_order m_memory_order;
 
   friend std::ostream& operator<<(std::ostream& os, atomic_fetch_sub_explicit const& atomic_fetch_sub_explicit);
@@ -204,7 +396,7 @@ struct store_call
 {
   tag m_memory_location_id;
   std::memory_order m_memory_order;
-  expression m_val;
+  assignment_expression m_val;
 
   friend std::ostream& operator<<(std::ostream& os, store_call const& store_call);
 };
@@ -212,22 +404,9 @@ struct store_call
 struct register_assignment
 {
   register_location lhs;
-  expression rhs;
+  assignment_expression rhs;
 
   friend std::ostream& operator<<(std::ostream& os, register_assignment const& register_assignment);
-};
-
-struct assignment
-{
-  tag lhs;
-  expression rhs;
-
-  assignment() = default;
-
-  // Convert a register_assignment to an assignment.
-  assignment(register_assignment const& ra);
-
-  friend std::ostream& operator<<(std::ostream& os, assignment const& assignment);
 };
 
 struct function_call
@@ -359,30 +538,30 @@ struct compound_statement;
 struct selection_statement;
 struct iteration_statement;
 
-enum Statement {
-    SN_expression_statement,
-    SN_store_call,
-    SN_function_call,
-    SN_mutex_lock_call,
-    SN_mutex_unlock_call,
-    SN_notify_all_call,
-    SN_wait_call,
-    SN_threads,
-    SN_compound_statement,
-    SN_selection_statement,
-    SN_iteration_statement,
-    SN_jump_statement,
-    SN_declaration_statement
+enum StatementNode {
+  SN_expression_statement,
+  SN_store_call,
+  SN_function_call,
+  SN_wait_call,
+  SN_notify_all_call,
+  SN_mutex_lock_call,
+  SN_mutex_unlock_call,
+  SN_threads,
+  SN_compound_statement,
+  SN_selection_statement,
+  SN_iteration_statement,
+  SN_jump_statement,
+  SN_declaration_statement
 };
 
 using statement_node = boost::variant<
     expression_statement,
     store_call,
     function_call,
+    boost::recursive_wrapper<wait_call>,
+    notify_all_call,
     mutex_lock_call,
     mutex_unlock_call,
-    notify_all_call,
-    boost::recursive_wrapper<wait_call>,
     boost::recursive_wrapper<threads>,
     boost::recursive_wrapper<compound_statement>,
     boost::recursive_wrapper<selection_statement>,
@@ -519,7 +698,7 @@ struct cppmem : public std::vector<definition_node>
   friend std::ostream& operator<<(std::ostream& os, cppmem const& cppmem);
 };
 
-enum Nonterminals             { NT_type, NT_register_location, NT_memory_location, NT_vardecl, NT_statement, NT_compound_statement, NT_function_name, NT_function, NT_cppmem, NT_threads };
+enum NonterminalsNode         { NT_type, NT_register_location, NT_memory_location, NT_vardecl, NT_statement, NT_compound_statement, NT_function_name, NT_function, NT_cppmem, NT_threads };
 using nonterminal = boost::variant<type,    register_location,    memory_location,    vardecl,    statement,    compound_statement,    function_name,    function,    cppmem,    threads>;
 
 } // namespace ast

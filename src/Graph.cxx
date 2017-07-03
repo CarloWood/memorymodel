@@ -140,6 +140,7 @@ void Graph::lock(ast::tag mutex, Context& context)
 {
   DoutTag(dc::notice, "[lock of", mutex);
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock1)));
+  sequence_barrier();
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock2)));
 }
 
@@ -147,6 +148,7 @@ void Graph::unlock(ast::tag mutex, Context& context)
 {
   DoutTag(dc::notice, "[unlock of", mutex);
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock1)));
+  sequence_barrier();
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock2)));
 }
 
@@ -196,10 +198,10 @@ char const* edge_str(edge_type type)
 {
   switch (type)
   {
-    AI_CASE_RETURN(edge_sb);
-    AI_CASE_RETURN(edge_asw);
-    AI_CASE_RETURN(edge_dd);
-    AI_CASE_RETURN(edge_cd);
+    case edge_sb: return "Sequenced-Before";
+    case edge_asw: return "Additional-Synchronises-With";
+    case edge_dd: return "Data-Dependency";
+    case edge_cd: return "Control-Dependency";
     AI_CASE_RETURN(edge_rf);
     AI_CASE_RETURN(edge_tot);
     AI_CASE_RETURN(edge_mo);

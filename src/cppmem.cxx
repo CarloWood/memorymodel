@@ -151,53 +151,59 @@ ast::declaration_statement const& Symbols::find(std::string var_name) const
   return iter->second;
 }
 
+void execute_expression(ast::assignment_expression const& expression, Context& context);
 void execute_expression(ast::expression const& expression, Context& context);
 
 void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
 {
-  if (declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl)
+  switch (declaration_statement.m_declaration_statement_node.which())
   {
-    auto const& vardecl{boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node)};
-    if (vardecl.m_initial_value)
+    case ast::DS_mutex_decl:
     {
-      execute_expression(*vardecl.m_initial_value, context);
+      auto const& mutex_decl{boost::get<ast::mutex_decl>(declaration_statement.m_declaration_statement_node)};
       Dout(dc::notice, declaration_statement);
       DebugMarkUp;
-      // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
-      // Each value computation and side effect of a full expression, that is
-      // [...] an entire initializer [...] is sequenced before each value computation
-      // and side effect of the next full expression.
-      Dout(dc::sb_barrier, "End of full-expression (initializer \"" << *vardecl.m_initial_value << "\")");
-      context.m_graph.sequence_barrier();
-      context.m_graph.write(declaration_statement.tag(), context);
+      context.m_graph.lockdecl(mutex_decl, context);
+      break;
     }
-    else
+    case ast::DS_condition_variable_decl:
     {
-      Dout(dc::notice, declaration_statement);
-      DebugMarkUp;
-      context.m_graph.uninitialized(declaration_statement.tag(), context);
+      DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
+      break;
     }
-  }
-  else if (declaration_statement.m_declaration_statement_node.which() == ast::DS_unique_lock_decl)
-  {
-    auto const& unique_lock_decl{boost::get<ast::unique_lock_decl>(declaration_statement.m_declaration_statement_node)};
-    DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
-    DebugMarkUp;
-    context.m_graph.lock(unique_lock_decl.m_mutex, context);
-    locks.add(unique_lock_decl);
-  }
-  else if (declaration_statement.m_declaration_statement_node.which() == ast::DS_mutex_decl)
-  {
-    auto const& mutex_decl{boost::get<ast::mutex_decl>(declaration_statement.m_declaration_statement_node)};
-    DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
-    DebugMarkUp;
-    context.m_graph.lockdecl(mutex_decl, context);
-  }
-  else
-  {
-    DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
-    DebugMarkUp;
-    context.m_graph.uninitialized(declaration_statement.tag(), context);
+    case ast::DS_unique_lock_decl:
+    {
+      auto const& unique_lock_decl{boost::get<ast::unique_lock_decl>(declaration_statement.m_declaration_statement_node)};
+      DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
+      DebugMarkUp;
+      context.m_graph.lock(unique_lock_decl.m_mutex, context);
+      locks.add(unique_lock_decl);
+      break;
+    }
+    case ast::DS_vardecl:
+    {
+      auto const& vardecl{boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node)};
+      if (vardecl.m_initial_value)
+      {
+        execute_expression(*vardecl.m_initial_value, context);
+        Dout(dc::notice, declaration_statement);
+        DebugMarkUp;
+        // http://en.cppreference.com/w/cpp/language/eval_order#Rules #1
+        // Each value computation and side effect of a full expression, that is
+        // [...] an entire initializer [...] is sequenced before each value computation
+        // and side effect of the next full expression.
+        Dout(dc::sb_barrier, "End of full-expression (initializer \"" << *vardecl.m_initial_value << "\")");
+        context.m_graph.sequence_barrier();
+        context.m_graph.write(declaration_statement.tag(), context);
+      }
+      else
+      {
+        Dout(dc::notice, declaration_statement);
+        DebugMarkUp;
+        context.m_graph.uninitialized(declaration_statement.tag(), context);
+      }
+      break;
+    }
   }
   symbols.add(declaration_statement);
   // The semi-colon of a declaration should be the end of a 'full expression'.
@@ -218,18 +224,18 @@ void execute_condition(ast::expression const& condition, Context& context)
   context.m_graph.sequence_barrier();
 }
 
-void execute_simple_expression(ast::simple_expression const& simple_expression, Context& context)
+void execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
 {
-  auto const& node = simple_expression.m_simple_expression_node;
+  auto const& node = primary_expression.m_primary_expression_node;
   switch (node.which())
   {
-    case ast::SE_int:
+    case ast::PE_int:
       //auto const& literal(boost::get<int>(node));
       break;
-    case ast::SE_bool:
+    case ast::PE_bool:
       //auto const& literal(boost::get<bool>(node));
       break;
-    case ast::SE_tag:
+    case ast::PE_tag:
     {
       auto const& tag(boost::get<ast::tag>(node));                                 // tag that the parser thinks we are using.
       // Check if that variable wasn't masked by another variable of different type.
@@ -254,26 +260,90 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
       context.m_graph.read(tag, context);
       break;
     }
-    case ast::SE_load_call:
+    case ast::PE_expression:
     {
-      auto const& load_call{boost::get<ast::load_call>(node)};
-      context.m_graph.read(load_call.m_memory_location_id, load_call.m_memory_order, context);
+      ast::expression const& expression{boost::get<ast::expression>(node)};
+      execute_expression(expression, context);
       break;
     }
-    case ast::SE_register_assignment:
+  }
+}
+
+template<typename T>
+void execute_operator_list_expression(T const& expr, Context& context)
+{
+  // T is one of:
+  // <logical_or_expression>
+  // <logical_and_expression>
+  // <inclusive_or_expression>
+  // <exclusive_or_expression>
+  // <and_expression>
+  // <equality_expression>
+  // <relational_expression>
+  // <shift_expression>
+  // <additive_expression>
+  // <multiplicative_expression>
+
+  execute_operator_list_expression(expr.m_other_expression, context);
+  for (auto const& chain : expr.m_chained)
+  {
+    if (std::is_same<T, ast::logical_or_expression>::value ||
+        std::is_same<T, ast::logical_and_expression>::value)
     {
-      auto const& register_assignment{boost::get<ast::register_assignment>(node)};
-      execute_expression(register_assignment.rhs, context);
+      // http://en.cppreference.com/w/cpp/language/eval_order#Rules #6
+      // Every value computation and side effect of the first (left) argument of the built-in
+      // logical AND operator && and the built-in logical OR operator || is sequenced before
+      // every value computation and side effect of the second (right) argument.
+      Dout(dc::sb_barrier, "Boolean expression (operator || or &&)");
+      context.m_graph.sequence_barrier();
+    }
+    execute_operator_list_expression(chain, context);
+  }
+}
+
+// Specialization for boost::fusion::tuple<operators, prev_precedence_type>
+template<typename OPERATORS, typename PREV_PRECEDENCE_TYPE>
+void execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple, Context& context)
+{
+  // Just unpack the second argument.
+  execute_operator_list_expression(boost::fusion::get<1>(tuple), context);
+}
+
+// Specialization for unary_expression.
+template<>
+void execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
+{
+  auto const& node = expr.m_postfix_expression.m_postfix_expression_node;
+  if (node.which() != ast::PE_primary_expression && !expr.m_postfix_expression.m_postfix_operators.empty())
+  {
+    THROW_ALERT("Can't use a postfix expression after `[EXPRESSION]`", AIArgs("[EXPRESSION]", node));
+  }
+  switch (node.which())
+  {
+    case ast::PE_primary_expression:
+    {
+      auto const& primary_expression{boost::get<ast::primary_expression>(node)};
+      execute_primary_expression(primary_expression, context);
+      auto const& node{primary_expression.m_primary_expression_node};
+      if (node.which() == ast::PE_tag)
+      {
+        ast::tag const& tag{boost::get<ast::tag>(node)};
+        for (auto const& postfix_operator : expr.m_postfix_expression.m_postfix_operators)
+        {
+          // http://en.cppreference.com/w/cpp/language/eval_order#Rules #4
+          // The value computation of the built-in post-increment and post-decrement operators is sequenced before its side-effect.
+          Dout(dc::sb_barrier, "Value computation of post-increment and post-decrement operators is sequenced before its side-effect.");
+          context.m_graph.sequence_value_computation_barrier();
+          context.m_graph.write(tag, context);
+        }
+      }
+      else if (!expr.m_postfix_expression.m_postfix_operators.empty())
+      {
+        THROW_ALERT("Can't use a postfix expression after `[EXPRESSION]`", AIArgs("[EXPRESSION]", node));
+      }
       break;
     }
-    case ast::SE_assignment:
-    {
-      auto const& assignment{boost::get<ast::assignment>(node)};
-      execute_expression(assignment.rhs, context);
-      context.m_graph.write(assignment.lhs, context);
-      break;
-    }
-    case ast::SE_atomic_fetch_add_explicit:
+    case ast::PE_atomic_fetch_add_explicit:
     {
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
       execute_expression(atomic_fetch_add_explicit.m_expression, context);
@@ -281,7 +351,7 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
       context.m_graph.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
       break;
     }
-    case ast::SE_atomic_fetch_sub_explicit:
+    case ast::PE_atomic_fetch_sub_explicit:
     {
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
       execute_expression(atomic_fetch_sub_explicit.m_expression, context);
@@ -289,42 +359,80 @@ void execute_simple_expression(ast::simple_expression const& simple_expression, 
       context.m_graph.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
       break;
     }
-    case ast::SE_atomic_compare_exchange_weak_explicit:
+    case ast::PE_atomic_compare_exchange_weak_explicit:
     {
       auto const& atomic_compare_exchange_weak_explicit{boost::get<ast::atomic_compare_exchange_weak_explicit>(node)};
       DoutTag(dc::notice, "TODO: [load/(store) of", atomic_compare_exchange_weak_explicit.m_memory_location_id);
       break;
     }
-    case ast::SE_expression:
+    case ast::PE_load_call:
     {
-      auto const& expression{boost::get<ast::expression>(node)};
-      execute_expression(expression, context);
+      auto const& load_call{boost::get<ast::load_call>(node)};
+      context.m_graph.read(load_call.m_memory_location_id, load_call.m_memory_order, context);
       break;
     }
   }
 }
 
-void execute_expression(ast::expression const& expression, Context& context)
+void execute_expression(ast::assignment_expression const& expression, Context& context)
 {
+  DoutEntering(dc::notice, "execute_expression(`" << expression << "`.");
   DebugMarkDown;
-  ast::unary_expression const& unary_expression{expression.m_operand};
-  execute_simple_expression(unary_expression.m_simple_expression, context);
-  for (auto& chain : expression.m_chained)
+  auto const& node = expression.m_assignment_expression_node;
+  switch (node.which())
   {
-    if (chain.op == ast::op_ba || chain.op == ast::op_bo)
+    case ast::AE_conditional_expression:
     {
-      Dout(dc::sb_barrier, "Finished left-hand side of operator && or ||.");
+      auto const& conditional_expression{boost::get<ast::conditional_expression>(node)};
+      execute_operator_list_expression(conditional_expression.m_logical_or_expression, context);
+      // http://en.cppreference.com/w/cpp/language/eval_order#Rules #7
+      // Every value computation and side effect associated with the first expression in the conditional
+      // operator ?: is sequenced before every value computation and side effect associated with the
+      // second or third expression.
+      Dout(dc::sb_barrier, "Conditional-expression condition evaluated.");
       context.m_graph.sequence_barrier();
+      if (conditional_expression.m_conditional_expression_tail)
+      {
+        ast::expression const& expression{boost::fusion::get<0>(conditional_expression.m_conditional_expression_tail.get())};
+        ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
+        execute_expression(expression, context);
+        execute_expression(assignment_expression, context);
+      }
+      break;
     }
-    execute_expression(chain.operand, context);
+    case ast::AE_register_assignment:
+    {
+      auto const& register_assignment{boost::get<ast::register_assignment>(node)};
+      execute_expression(register_assignment.rhs, context);
+      break;
+    }
+    case ast::AE_assignment:
+    {
+      auto const& assignment{boost::get<ast::assignment>(node)};
+      execute_expression(assignment.rhs, context);
+      context.m_graph.write(assignment.lhs, context);
+      break;
+    }
   }
   // http://en.cppreference.com/w/cpp/language/eval_order#Rules #2
   // The value computations (but not the side-effects) of the operands to any operator are
   // sequenced before the value computation of the result of the operator (but not its side-effects).
+  Dout(dc::sb_barrier, "At the end of execute_expression(\"" << expression << "\", ...)");
+  context.m_graph.sequence_value_computation_barrier();
+}
+
+void execute_expression(ast::expression const& expression, Context& context)
+{
+  execute_expression(expression.m_assignment_expression, context);
+  for (auto const& assignment_expression : expression.m_chained)
   {
-    Dout(dc::sb_barrier, "At the end of execute_expression(\"" << expression << "\", ...)");
-    DebugMarkDown;
-    context.m_graph.sequence_value_computation_barrier();
+    // http://en.cppreference.com/w/cpp/language/eval_order#Rules #9
+    // Every value computation and side effect of the first (left) argument of the built-in
+    // comma operator , is sequenced before every value computation and side effect of the
+    // second (right) argument.
+    Dout(dc::sb_barrier, "Next comma operator argument.");
+    context.m_graph.sequence_barrier();
+    execute_expression(assignment_expression, context);
   }
 }
 
@@ -410,7 +518,8 @@ void execute_statement(ast::statement const& statement, Context& context)
     {
       auto const& selection_statement{boost::get<ast::selection_statement>(node)};
       Dout(dc::notice|continued_cf, "if (");
-      execute_condition(selection_statement.m_if_statement.m_condition, context);
+      try { execute_condition(selection_statement.m_if_statement.m_condition, context); }
+      catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
       execute_statement(selection_statement.m_if_statement.m_then, context);
       if (selection_statement.m_if_statement.m_else)
@@ -421,7 +530,8 @@ void execute_statement(ast::statement const& statement, Context& context)
     {
       auto const& iteration_statement{boost::get<ast::iteration_statement>(node)};
       Dout(dc::notice|continued_cf, "while (");
-      execute_condition(iteration_statement.m_while_statement.m_condition, context);
+      try { execute_condition(iteration_statement.m_while_statement.m_condition, context); }
+      catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
       loops.enter(iteration_statement);
       execute_statement(iteration_statement.m_while_statement.m_statement, context);
@@ -585,6 +695,7 @@ int main(int argc, char* argv[])
       std::cerr << translate::getString(line.getXmlDesc(), line.args());
     }
     std::cerr << '.' << std::endl;
+    return 1;
   }
 
   graph.print_nodes();

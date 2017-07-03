@@ -8,42 +8,59 @@
 #include <boost/spirit/include/phoenix_fusion.hpp>
 #include <boost/spirit/include/phoenix_stl.hpp>
 #include <boost/spirit/include/phoenix_object.hpp>
+#ifdef BOOST_SPIRIT_QI_DEBUG
+#include <boost/tuple/tuple_io.hpp>
+#endif
 
 BOOST_FUSION_ADAPT_STRUCT(ast::memory_location, m_name)
 BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)
-BOOST_FUSION_ADAPT_STRUCT(ast::mutex_decl, m_name);
-BOOST_FUSION_ADAPT_STRUCT(ast::condition_variable_decl, m_name);
-BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex);
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_decl, m_name)
+BOOST_FUSION_ADAPT_STRUCT(ast::condition_variable_decl, m_name)
+BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex)
 BOOST_FUSION_ADAPT_STRUCT(ast::statement, m_statement_node, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::load_call, m_memory_location_id, m_memory_order, m_readsvalue)
 BOOST_FUSION_ADAPT_STRUCT(ast::store_call, m_memory_location_id, m_val, m_memory_order)
 BOOST_FUSION_ADAPT_STRUCT(ast::register_assignment, lhs, rhs)
 BOOST_FUSION_ADAPT_STRUCT(ast::assignment, lhs, rhs)
-BOOST_FUSION_ADAPT_STRUCT(ast::simple_expression, m_simple_expression_node)
-BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_negated, m_simple_expression)
-BOOST_FUSION_ADAPT_STRUCT(ast::chain, op, operand)
-BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_operand, m_chained)
+
+BOOST_FUSION_ADAPT_STRUCT(ast::postfix_expression, m_postfix_expression_node, m_postfix_operators)
+BOOST_FUSION_ADAPT_STRUCT(ast::unary_expression, m_unary_operators, m_postfix_expression)
+BOOST_FUSION_ADAPT_STRUCT(ast::multiplicative_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::additive_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::shift_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::relational_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::equality_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::and_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::exclusive_or_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::inclusive_or_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::logical_and_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::logical_or_expression, m_other_expression, m_chained)
+BOOST_FUSION_ADAPT_STRUCT(ast::conditional_expression, m_logical_or_expression, m_conditional_expression_tail)
+BOOST_FUSION_ADAPT_STRUCT(ast::assignment_expression, m_assignment_expression_node, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::primary_expression, m_primary_expression_node, m_dummy)
+
+BOOST_FUSION_ADAPT_STRUCT(ast::expression, m_assignment_expression, m_chained)
 BOOST_FUSION_ADAPT_STRUCT(ast::function_call, m_function, m_dummy)
-BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_add_explicit, m_memory_location_id, m_expression, m_memory_order);
-BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_sub_explicit, m_memory_location_id, m_expression, m_memory_order);
-BOOST_FUSION_ADAPT_STRUCT(ast::atomic_compare_exchange_weak_explicit, m_memory_location_id, m_expected, m_desired, m_succeed, m_fail);
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_add_explicit, m_memory_location_id, m_expression, m_memory_order)
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_fetch_sub_explicit, m_memory_location_id, m_expression, m_memory_order)
+BOOST_FUSION_ADAPT_STRUCT(ast::atomic_compare_exchange_weak_explicit, m_memory_location_id, m_expected, m_desired, m_succeed, m_fail)
 BOOST_FUSION_ADAPT_STRUCT(ast::function, m_function_name, m_compound_statement)
 BOOST_FUSION_ADAPT_STRUCT(ast::statement_seq, m_statements, m_dummy)
 BOOST_FUSION_ADAPT_STRUCT(ast::compound_statement, m_statement_seq)
 BOOST_FUSION_ADAPT_STRUCT(ast::threads, m_threads, m_dummy)
-BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then, m_else);
-BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_statement);
-BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy);
-BOOST_FUSION_ADAPT_STRUCT(ast::wait_call, m_condition_variable, m_unique_lock, m_compound_statement);
-BOOST_FUSION_ADAPT_STRUCT(ast::notify_all_call, m_condition_variable, m_dummy);
-BOOST_FUSION_ADAPT_STRUCT(ast::mutex_lock_call, m_mutex, m_dummy);
-BOOST_FUSION_ADAPT_STRUCT(ast::mutex_unlock_call, m_mutex, m_dummy);
-BOOST_FUSION_ADAPT_STRUCT(ast::return_statement, m_expression);
-BOOST_FUSION_ADAPT_STRUCT(ast::declaration_statement, m_declaration_statement_node);
-BOOST_FUSION_ADAPT_STRUCT(ast::jump_statement, m_jump_statement_node);
-BOOST_FUSION_ADAPT_STRUCT(ast::iteration_statement, m_while_statement);
-BOOST_FUSION_ADAPT_STRUCT(ast::selection_statement, m_if_statement);
-BOOST_FUSION_ADAPT_STRUCT(ast::expression_statement, m_expression);
+BOOST_FUSION_ADAPT_STRUCT(ast::if_statement, m_condition, m_then, m_else)
+BOOST_FUSION_ADAPT_STRUCT(ast::while_statement, m_condition, m_statement)
+BOOST_FUSION_ADAPT_STRUCT(ast::break_statement, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::wait_call, m_condition_variable, m_unique_lock, m_compound_statement)
+BOOST_FUSION_ADAPT_STRUCT(ast::notify_all_call, m_condition_variable, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_lock_call, m_mutex, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::mutex_unlock_call, m_mutex, m_dummy)
+BOOST_FUSION_ADAPT_STRUCT(ast::return_statement, m_expression)
+BOOST_FUSION_ADAPT_STRUCT(ast::declaration_statement, m_declaration_statement_node)
+BOOST_FUSION_ADAPT_STRUCT(ast::jump_statement, m_jump_statement_node)
+BOOST_FUSION_ADAPT_STRUCT(ast::iteration_statement, m_while_statement)
+BOOST_FUSION_ADAPT_STRUCT(ast::selection_statement, m_if_statement)
+BOOST_FUSION_ADAPT_STRUCT(ast::expression_statement, m_expression)
 
 namespace parser {
 
@@ -88,26 +105,54 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       ("mo_seq_cst", std::memory_order_seq_cst)
   ;
 
-  operators.add
-      ("==", ast::op_eq)
-      ("!=", ast::op_ne)
-      ("<",  ast::op_lt)
-      (">",  ast::op_gt)
-      (">=", ast::op_ge)
-      ("<=", ast::op_le)
-      ("||", ast::op_bo)
-      ("&&", ast::op_ba)
-      ("+", ast::op_add)
-      ("-", ast::op_sub)
-      ("*", ast::op_mul)
-      ("/", ast::op_div)
+  equality_operator.add
+      ("==", ast::eo_eq)
+      ("!=", ast::eo_ne)
+  ;
+
+  relational_operator.add
+      ("<",  ast::ro_lt)
+      (">",  ast::ro_gt)
+      (">=", ast::ro_ge)
+      ("<=", ast::ro_le)
+  ;
+
+  shift_operator.add
+      ("<<", ast::so_shl)
+      (">>", ast::so_shr)
+  ;
+
+  additive_operator.add
+      ("+", ast::ado_add)
+      ("-", ast::ado_sub)
+  ;
+
+  multiplicative_operator.add
+      ("*", ast::mo_mul)
+      ("/", ast::mo_div)
+  ;
+
+  unary_operator.add
+      ("++", ast::uo_inc)       // Not really a unary operator ;)
+      ("--", ast::uo_dec)       // Same.
+      ("*", ast::uo_dereference)
+      ("&", ast::uo_reference)
+      ("+", ast::uo_plus)
+      ("-", ast::uo_minus)
+      ("!", ast::uo_not)
+      ("~", ast::uo_invert)
+  ;
+
+  postfix_operator.add
+      ("++", ast::po_inc)
+      ("--", ast::po_dec)
   ;
 
   atomic_fetch_add_explicit =
-      -lit("std::") >> "atomic_fetch_add_explicit" > '(' > '&' > atomic_memory_locations > ',' > expression > ',' > memory_order > ')';
+      -lit("std::") >> "atomic_fetch_add_explicit" > '(' > '&' > atomic_memory_locations > ',' > assignment_expression > ',' > memory_order > ')';
 
   atomic_fetch_sub_explicit =
-      -lit("std::") >> "atomic_fetch_sub_explicit" > '(' > '&' > atomic_memory_locations > ',' > expression > ',' > memory_order > ')';
+      -lit("std::") >> "atomic_fetch_sub_explicit" > '(' > '&' > atomic_memory_locations > ',' > assignment_expression > ',' > memory_order > ')';
 
   atomic_compare_exchange_weak_explicit =
       -lit("std::") >> "atomic_compare_exchange_weak_explicit" > '(' >
@@ -117,16 +162,16 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       lexeme[ 'r' >> uint_ >> !(alnum | char_('_')) ];
 
   register_assignment =
-      register_location >> lexeme['=' >> !char_('=')] > expression;
+      register_location >> lexeme['=' >> !char_('=')] > assignment_expression;   // Not supporting braced-init-list.
 
   assignment =
-      na_memory_locations >> lexeme['=' >> !char_('=')] > expression;
+      na_memory_locations >> lexeme['=' >> !char_('=')] > assignment_expression; // Not supporting braced-init-list.
 
   load_call =
       atomic_memory_locations >> '.' >> "load" >> '(' >> (memory_order | attr(std::memory_order_seq_cst)) >> ')' >> -(".readsvalue(" >> int_ >> ')');
 
   store_call =
-      atomic_memory_locations >> '.' >> "store" >> '(' >> expression >> ((',' >> memory_order) | attr(std::memory_order_seq_cst)) >> ')';
+      atomic_memory_locations >> '.' >> "store" >> '(' >> assignment_expression >> ((',' >> memory_order) | attr(std::memory_order_seq_cst)) >> ')';
 
   function_call =
       function_names >> '(' >> ')' >> dummy(false);
@@ -157,24 +202,76 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   expression_statement =
       (expression > ';') | ';';
 
+  postfix_expression =
+    ( primary_expression
+    | atomic_fetch_add_explicit                 // Not supporting a long list of stuff,
+    | atomic_fetch_sub_explicit                 // see http://www.nongnu.org/hcb/#postfix-expression.
+    | atomic_compare_exchange_weak_explicit     // These are the function calls we have.
+    | load_call                                 //
+    ) >> *postfix_operator;
+
   unary_expression =
-      matches['!'] >> simple_expression;
+      *unary_operator >> postfix_expression;    // Short cut from 'postfix-expression | cast-expression', since we're not supporting casts.
+
+#if 0
+  cast_expression =
+    unary_expression; // Not supporting casting.
+
+  pm_expression =
+    cast_expression;  // Not supporting member function pointers.
+#endif
+
+  multiplicative_expression =
+      /*pm_expression*/ unary_expression >> *(multiplicative_operator > /*pm_expression*/ unary_expression);
+
+  additive_expression =
+      multiplicative_expression >> *(additive_operator > multiplicative_expression);
+
+  shift_expression =
+      additive_expression >> *(shift_operator > additive_expression);
+
+  relational_expression =
+      shift_expression >> *(relational_operator > shift_expression);
+
+  equality_expression =
+      relational_expression >> *(equality_operator > relational_expression);
+
+  and_expression =
+      equality_expression >> *(lexeme[ '&' >> !lit('&') ] > equality_expression);
+
+  exclusive_or_expression =
+      and_expression >> *('^' > and_expression);
+
+  inclusive_or_expression =
+      exclusive_or_expression >> *(lexeme[ '|' >> !lit('|') ] > exclusive_or_expression);
+
+  logical_and_expression =
+      inclusive_or_expression >> *("&&" > inclusive_or_expression);
+
+  logical_or_expression =
+      logical_and_expression >> *("||" > logical_and_expression);
+
+  conditional_expression =
+      logical_or_expression >> -('?' > expression > ':' > assignment_expression);
+
+  assignment_expression =
+    ( register_assignment       // Try assignments first (they start with a primary_expression that also matches a conditional_expression).
+    | assignment
+    | conditional_expression
+    // | logical_or_expression >> assignment_operator > initializer_clause
+    // We do not support assigning to overloaded binary operators, only to registers and variables:
+    ) >> dummy(false);
 
   expression =
-      unary_expression >> *(operators > expression);
+      assignment_expression >> *(',' > assignment_expression);
 
-  simple_expression =
-    ( '(' > expression > ')' )
+  primary_expression =
+    ( ('(' > expression > ')')
     | int_
     | bool_
-    | register_assignment
     | register_locations
-    | assignment
-    | atomic_fetch_add_explicit
-    | atomic_fetch_sub_explicit
-    | atomic_compare_exchange_weak_explicit
-    | load_call
-    | na_memory_locations;
+    | na_memory_locations
+    ) >> dummy(false);
 
   statement =
     ( expression_statement
@@ -306,8 +403,22 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
       (threads)
       (cppmem)
       (statement)
-      (simple_expression)
-      (unary_expression)
+      (conditional_expression)
+      (postfix_expression)
+      //(cast_expression)
+      //(pm_expression)
+      (multiplicative_expression)
+      (additive_expression)
+      (shift_expression)
+      (relational_expression)
+      (equality_expression)
+      (and_expression)
+      (exclusive_or_expression)
+      (inclusive_or_expression)
+      (logical_and_expression)
+      (logical_or_expression)
+      (assignment_expression)
+      (primary_expression)
       (expression)
       (register_assignment)
       (assignment)

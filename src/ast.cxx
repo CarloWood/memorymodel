@@ -4,6 +4,8 @@
 #include <iostream>
 #include <boost/variant/get.hpp>
 
+bool constexpr add_parentheses_around_operator_expressions = false;
+
 namespace ast {
 
 std::ostream& operator<<(std::ostream& os, tag const& tag)
@@ -143,62 +145,349 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, operators op)
+std::string assignment_operator_str(assignment_operators op)
 {
   switch (op)
   {
-    case op_eq:
-      return os << "==";
-    case op_ne:
-      return os << "!=";
-    case op_lt:
-      return os << "<";
-    case op_gt:
-      return os << ">";
-    case op_le:
-      return os << "<=";
-    case op_ge:
-      return os << ">=";
-    case op_bo:
-      return os << "||";
-    case op_ba:
-      return os << "&&";
-    case op_add:
-      return os << "+";
-    case op_sub:
-      return os << "-";
-    case op_mul:
-      return os << "*";
-    case op_div:
-      return os << "/";
+    case ao_eq: return "=";
+    case ao_mul: return "*=";
+    case ao_div: return "/=";
+    case ao_mod: return "%=";
+    case ao_add: return "+=";
+    case ao_sub: return "-=";
+    case ao_shr: return ">>=";
+    case ao_shl: return "<<=";
+    case ao_and: return "&=";
+    case ao_xor: return "^=";
+    case ao_or: return "|=";
   }
-  return os << "<UNKNOWN OP>";
+  return "UNKNOWN assignment_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, simple_expression const& simple_expression)
+std::ostream& operator<<(std::ostream& os, assignment_operators op)
 {
-  if (simple_expression.m_simple_expression_node.which() == SE_expression)
-    return os << '(' << simple_expression.m_simple_expression_node << ')';
-  if (simple_expression.m_simple_expression_node.which() == SE_bool)
+  return os << assignment_operator_str(op);
+}
+
+std::string equality_operator_str(equality_operators op)
+{
+  switch (op)
   {
-    bool val = boost::get<bool>(simple_expression.m_simple_expression_node);
+    case eo_eq: return "==";
+    case eo_ne: return "!=";
+  }
+  return "UNKNOWN equality_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, equality_operators op)
+{
+  return os << equality_operator_str(op);
+}
+
+std::string relational_operator_str(relational_operators op)
+{
+  switch (op)
+  {
+    case ro_lt: return "<";
+    case ro_gt: return ">";
+    case ro_ge: return ">=";
+    case ro_le: return "<=";
+  }
+  return "UNKNOWN relational_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, relational_operators op)
+{
+  return os << relational_operator_str(op);
+}
+
+std::string shift_operator_str(shift_operators op)
+{
+  switch (op)
+  {
+    case so_shl: return "<<";
+    case so_shr: return ">>";
+  }
+  return "UNKNOWN shift_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, shift_operators op)
+{
+  return os << shift_operator_str(op);
+}
+
+std::string additive_operator_str(additive_operators op)
+{
+  switch (op)
+  {
+    case ado_add: return "+";
+    case ado_sub: return "-";
+  }
+  return "UNKNOWN additive_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, additive_operators op)
+{
+  return os << additive_operator_str(op);
+}
+
+std::string multiplicative_operator_str(multiplicative_operators op)
+{
+  switch (op)
+  {
+    case mo_mul: return "*";
+    case mo_div: return "/";
+  }
+  return "UNKNOWN multiplicative_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, multiplicative_operators op)
+{
+  return os << multiplicative_operator_str(op);
+}
+
+std::string unary_operator_str(unary_operators op)
+{
+  switch (op)
+  {
+    case uo_inc: return "++";
+    case uo_dec: return "--";
+    case uo_dereference: return "*";
+    case uo_reference: return "&";
+    case uo_plus: return "+";
+    case uo_minus: return "-";
+    case uo_not: return "!";
+    case uo_invert: return "~";
+  }
+  return "UNKNOWN unary_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, unary_operators op)
+{
+  return os << unary_operator_str(op);
+}
+
+std::string postfix_operator_str(postfix_operators op)
+{
+  switch (op)
+  {
+    case po_inc: return "++";
+    case po_dec: return "--";
+  }
+  return "UNKNOWN postfix_operator";
+}
+
+std::ostream& operator<<(std::ostream& os, postfix_operators op)
+{
+  return os << postfix_operator_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, postfix_expression const& postfix_expression)
+{
+  os << postfix_expression.m_postfix_expression_node;
+  bool first = true;
+  for (auto& postfix_operator : postfix_expression.m_postfix_operators)
+  {
+    if (first)
+      first = false;
+    else
+      os << ' ';
+    os << postfix_operator;
+  }
+  return os;
+}
+
+#if 0
+std::ostream& operator<<(std::ostream& os, cast_expression const& cast_expression)
+{
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, pm_expression const& pm_expression)
+{
+  return os;
+}
+#endif
+
+std::ostream& operator<<(std::ostream& os, multiplicative_expression const& multiplicative_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !multiplicative_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << multiplicative_expression.m_other_expression;
+  for (auto& other_expression : multiplicative_expression.m_chained)
+    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, additive_expression const& additive_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !additive_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << additive_expression.m_other_expression;
+  for (auto& other_expression : additive_expression.m_chained)
+    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, shift_expression const& shift_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !shift_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << shift_expression.m_other_expression;
+  for (auto& other_expression : shift_expression.m_chained)
+    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, relational_expression const& relational_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !relational_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << relational_expression.m_other_expression;
+  for (auto& other_expression : relational_expression.m_chained)
+    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, equality_expression const& equality_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !equality_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << equality_expression.m_other_expression;
+  for (auto& other_expression : equality_expression.m_chained)
+    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, and_expression const& and_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !and_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << and_expression.m_other_expression;
+  for (auto& other_expression : and_expression.m_chained)
+    os << " & " << other_expression;
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, exclusive_or_expression const& exclusive_or_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !exclusive_or_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << exclusive_or_expression.m_other_expression;
+  for (auto& other_expression : exclusive_or_expression.m_chained)
+    os << " ^ " << other_expression;
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, inclusive_or_expression const& inclusive_or_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !inclusive_or_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << inclusive_or_expression.m_other_expression;
+  for (auto& other_expression : inclusive_or_expression.m_chained)
+    os << " | " << other_expression;
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, logical_and_expression const& logical_and_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !logical_and_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << logical_and_expression.m_other_expression;
+  for (auto& other_expression : logical_and_expression.m_chained)
+    os << " && " << other_expression;
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, logical_or_expression const& logical_or_expression)
+{
+  bool const apao = add_parentheses_around_operator_expressions && !logical_or_expression.m_chained.empty();
+  if (apao)
+    os << '(';
+  os << logical_or_expression.m_other_expression;
+  for (auto& other_expression : logical_or_expression.m_chained)
+    os << " || " << other_expression;
+  if (apao)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, conditional_expression const& conditional_expression)
+{
+  if (add_parentheses_around_operator_expressions)
+    os << '(';
+  os << conditional_expression.m_logical_or_expression;
+  if (conditional_expression.m_conditional_expression_tail)
+    os << " ? " << boost::fusion::get<0>(conditional_expression.m_conditional_expression_tail.get()) <<
+          " : " << boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get());
+  if (add_parentheses_around_operator_expressions)
+    os << ')';
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, assignment_expression const& assignment_expression)
+{
+  return os << assignment_expression.m_assignment_expression_node;
+}
+
+std::ostream& operator<<(std::ostream& os, primary_expression const& primary_expression)
+{
+  if (primary_expression.m_primary_expression_node.which() == PE_expression)
+    return os << '(' << primary_expression.m_primary_expression_node << ')';
+  if (primary_expression.m_primary_expression_node.which() == PE_bool)
+  {
+    bool val = boost::get<bool>(primary_expression.m_primary_expression_node);
     return os << (val ? "true" : "false");
   }
-  return os << simple_expression.m_simple_expression_node;
+  return os << primary_expression.m_primary_expression_node;
 }
 
 std::ostream& operator<<(std::ostream& os, unary_expression const& unary_expression)
 {
-  if (unary_expression.m_negated)
-    os << '!';
-  return os << unary_expression.m_simple_expression;
+  bool first = true;
+  for (auto& unary_operator : unary_expression.m_unary_operators)
+  {
+    if (first)
+      first = false;
+    else
+      os << ' ';
+    os << unary_operator;
+  }
+  return os << unary_expression.m_postfix_expression;
 }
 
 std::ostream& operator<<(std::ostream& os, expression const& expression)
 {
-  os << expression.m_operand;
-  for (auto& chain : expression.m_chained)
-    os << ' ' << chain.op << ' ' << chain.operand;
+  os << expression.m_assignment_expression;
+  for (auto& assignment_expression : expression.m_chained)
+    os << ", " << assignment_expression;
   return os;
 }
 
