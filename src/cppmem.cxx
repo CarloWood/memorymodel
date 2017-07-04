@@ -238,6 +238,8 @@ void execute_primary_expression(ast::primary_expression const& primary_expressio
     case ast::PE_tag:
     {
       auto const& tag(boost::get<ast::tag>(node));                                 // tag that the parser thinks we are using.
+      if (parser::Symbols::instance().is_register(tag))                            // Don't add nodes for reading from a register.
+        break;
       // Check if that variable wasn't masked by another variable of different type.
       std::string name = parser::Symbols::instance().tag_to_string(tag);           // Actual C++ object of that name in current scope.
       ast::declaration_statement const& declaration_statement{symbols.find(name)}; // Declaration of actual object.
@@ -324,10 +326,20 @@ void execute_operator_list_expression(ast::unary_expression const& expr, Context
     {
       auto const& primary_expression{boost::get<ast::primary_expression>(node)};
       execute_primary_expression(primary_expression, context);
+      bool has_prefix_operator = false;
+      for (auto const& unary_operator : expr.m_unary_operators)
+      {
+        if (unary_operator == ast::uo_inc || unary_operator == ast::uo_dec)
+        {
+          has_prefix_operator = true;
+          break;
+        }
+      }
       auto const& node{primary_expression.m_primary_expression_node};
       if (node.which() == ast::PE_tag)
       {
         ast::tag const& tag{boost::get<ast::tag>(node)};
+        // Postfix operators.
         for (auto const& postfix_operator : expr.m_postfix_expression.m_postfix_operators)
         {
           // http://en.cppreference.com/w/cpp/language/eval_order#Rules #4
@@ -336,10 +348,23 @@ void execute_operator_list_expression(ast::unary_expression const& expr, Context
           context.m_graph.sequence_value_computation_barrier();
           context.m_graph.write(tag, context);
         }
+        if (has_prefix_operator)
+        {
+          // Prefix operators.
+          for (auto const& unary_operator : expr.m_unary_operators)
+          {
+            if (unary_operator == ast::uo_inc || unary_operator == ast::uo_dec)
+              context.m_graph.write(tag, context);
+          }
+        }
       }
       else if (!expr.m_postfix_expression.m_postfix_operators.empty())
       {
-        THROW_ALERT("Can't use a postfix expression after `[EXPRESSION]`", AIArgs("[EXPRESSION]", node));
+        THROW_ALERT("Can't use a postfix operator after `[EXPRESSION]`", AIArgs("[EXPRESSION]", node));
+      }
+      else if (has_prefix_operator)
+      {
+        THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", node));
       }
       break;
     }
@@ -581,15 +606,23 @@ void execute_statement(ast::statement const& statement, Context& context)
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context)
 {
-#ifdef CWDEBUG
   if (name != "compound_statement" && name != "thread")
   {
     if (name == "main")
       Dout(dc::notice, "int " << name << "()");
     else
+    {
       Dout(dc::notice, "void " << name << "()");
+      // We don't have arguments yet, but once we have them this is needed:
+      // http://en.cppreference.com/w/cpp/language/eval_order#Rules #3
+      // When calling a function (whether or not the function is inline, and whether or not explicit
+      // function call syntax is used), every value computation and side effect associated with any
+      // argument expression, or with the postfix expression designating the called function, is
+      // sequenced before execution of every expression or statement in the body of the called function.
+      Dout(dc::sb_barrier, "Beginning of the body of a function.");
+      context.m_graph.sequence_barrier();
+    }
   }
-#endif
   symbols.scope_start(name == "thread", context);
   for (auto const& statement : body.m_statements)
   {

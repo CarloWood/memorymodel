@@ -229,7 +229,7 @@ std::ostream& operator<<(std::ostream& os, edge_type type)
 
 void Graph::add_edges(last_nodes_type const& last_nodes, last_nodes_type const& current_nodes, edge_type type)
 {
-  DoutEntering(dc::sb_barrier, "Graph::add_edges(..., " << type << "); [size of last_nodes = " << last_nodes.size() << ", size of current_nodes " << current_nodes.size());
+  DoutEntering(dc::sb_barrier, "Graph::add_edges(..., " << type << "); [size of last_nodes = " << last_nodes.size() << ", size of current_nodes " << current_nodes.size() << "]");
   for (auto const& last_node : last_nodes)
     for (auto const& current_node : current_nodes)
     {
