@@ -104,7 +104,7 @@ struct load_call
 enum PrimaryExpressionNode {
   PE_int,
   PE_bool,
-  PE_tag,
+  PE_tag,               // Variables (type int, bool or atomic_int).
   PE_expression
 };
 
@@ -133,6 +133,15 @@ enum additive_operators { ado_add, ado_sub };
 enum multiplicative_operators { mo_mul, mo_div };
 enum unary_operators { uo_inc, uo_dec, uo_dereference, uo_reference, uo_plus, uo_minus, uo_not, uo_invert };
 enum postfix_operators { po_inc, po_dec };
+
+std::ostream& operator<<(std::ostream& os, assignment_operators op);
+std::ostream& operator<<(std::ostream& os, equality_operators op);
+std::ostream& operator<<(std::ostream& os, relational_operators op);
+std::ostream& operator<<(std::ostream& os, shift_operators op);
+std::ostream& operator<<(std::ostream& os, additive_operators op);
+std::ostream& operator<<(std::ostream& os, multiplicative_operators op);
+std::ostream& operator<<(std::ostream& os, unary_operators op);
+std::ostream& operator<<(std::ostream& os, postfix_operators op);
 
 struct atomic_fetch_add_explicit;
 struct atomic_fetch_sub_explicit;
@@ -251,9 +260,10 @@ struct equality_expression
 struct and_expression
 {
   using prev_precedence_type = equality_expression;
+  using tail_type = prev_precedence_type;
 
   prev_precedence_type m_other_expression;
-  std::vector<prev_precedence_type> m_chained;
+  std::vector<tail_type> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, and_expression const& and_expression);
 };
@@ -261,9 +271,10 @@ struct and_expression
 struct exclusive_or_expression
 {
   using prev_precedence_type = and_expression;
+  using tail_type = prev_precedence_type;
 
   prev_precedence_type m_other_expression;
-  std::vector<prev_precedence_type> m_chained;
+  std::vector<tail_type> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, exclusive_or_expression const& exclusive_or_expression);
 };
@@ -271,9 +282,10 @@ struct exclusive_or_expression
 struct inclusive_or_expression
 {
   using prev_precedence_type = exclusive_or_expression;
+  using tail_type = prev_precedence_type;
 
   prev_precedence_type m_other_expression;
-  std::vector<prev_precedence_type> m_chained;
+  std::vector<tail_type> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, inclusive_or_expression const& inclusive_or_expression);
 };
@@ -281,9 +293,10 @@ struct inclusive_or_expression
 struct logical_and_expression
 {
   using prev_precedence_type = inclusive_or_expression;
+  using tail_type = prev_precedence_type;
 
   prev_precedence_type m_other_expression;
-  std::vector<prev_precedence_type> m_chained;
+  std::vector<tail_type> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, logical_and_expression const& logical_and_expression);
 };
@@ -291,9 +304,10 @@ struct logical_and_expression
 struct logical_or_expression
 {
   using prev_precedence_type = logical_and_expression;
+  using tail_type = prev_precedence_type;
 
   prev_precedence_type m_other_expression;
-  std::vector<prev_precedence_type> m_chained;
+  std::vector<tail_type> m_chained;
 
   friend std::ostream& operator<<(std::ostream& os, logical_or_expression const& logical_or_expression);
 };

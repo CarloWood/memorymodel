@@ -89,7 +89,7 @@ class Node
   Value m_value;                        // The value read or written.
   bool m_atomic;                        // Set if this is an atomic access.
   std::memory_order m_memory_order;     // Memory order, only valid if m_atomic is true;
- 
+
  public:
   Node(id_type& next_node_id,
        ThreadPtr const& thread,
@@ -102,8 +102,8 @@ class Node
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id, 
-       ThreadPtr const& thread, 
+  Node(id_type& next_node_id,
+       ThreadPtr const& thread,
        ast::tag const& variable) :
     m_id(next_node_id++),
     m_thread(thread),
@@ -112,9 +112,9 @@ class Node
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id, 
-       ThreadPtr const& thread, 
-       ast::tag const& variable, 
+  Node(id_type& next_node_id,
+       ThreadPtr const& thread,
+       ast::tag const& variable,
        Value const& value) :
     m_id(next_node_id++),
     m_thread(thread),
@@ -124,9 +124,9 @@ class Node
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id, 
-       ThreadPtr const& thread, 
-       ast::tag const& variable, 
+  Node(id_type& next_node_id,
+       ThreadPtr const& thread,
+       ast::tag const& variable,
        std::memory_order memory_order) :
     m_id(next_node_id++),
     m_thread(thread),
@@ -135,9 +135,9 @@ class Node
     m_atomic(true),
     m_memory_order(memory_order) { }
 
-  Node(id_type& next_node_id, 
-       ThreadPtr const& thread, 
-       ast::tag const& variable, 
+  Node(id_type& next_node_id,
+       ThreadPtr const& thread,
+       ast::tag const& variable,
        Value const& value,
        std::memory_order memory_order) :
     m_id(next_node_id++),
@@ -213,12 +213,9 @@ class Graph
 {
  public:
   using nodes_type = Edge::nodes_type;
-  using last_nodes_type = std::vector<nodes_type::iterator>;
 
  private:
   nodes_type m_nodes;                                    // All nodes, ordered by Node::m_id.
-  last_nodes_type m_current_nodes;                       // Current unsequenced Nodes that are being added.
-  last_nodes_type m_last_nodes;                          // Last group of unsequenced Nodes that were added.
   Thread::id_type m_next_thread_id;                      // The id to use for the next thread.
   ThreadPtr m_current_thread;                            // The current thread.
   Node::id_type m_next_node_id;                          // The id to use for the next node.
@@ -226,7 +223,6 @@ class Graph
   Edge::id_type m_next_edge_id;                          // The id to use for the next edge.
   using edges_type = std::set<Edge>;                     // Use a set because we'll have a lot of iterators pointing to Edges.
   edges_type m_edges;                                    // All edges, ordered by Edge::m_id.
-  std::stack<last_nodes_type> m_parent_thread_nodes;     // The last unsequenced nodes of the parent thread.
   bool m_beginning_of_thread;                            // Set to true when a new thread was just started.
 
  public:
@@ -262,11 +258,6 @@ class Graph
 
   // A new node was added.
   void new_node(nodes_type::iterator const& node);
-
-  // Sequenced-Before 'barriers'.
-  void add_edges(last_nodes_type const& last_nodes, last_nodes_type const& current_nodes, edge_type type);
-  void sequence_barrier();
-  void sequence_value_computation_barrier();
 };
 
 #ifdef CWDEBUG

@@ -17,6 +17,8 @@ libcppmem_a_SOURCES = \
 		 Symbols.h \
 		 ast.cxx \
 		 ast.h \
+		 ValueComputation.cxx \
+		 ValueComputation.h \
 		 cppmem_parser.cxx \
 		 cppmem_parser.h \
 		 Graph.cxx \

@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "ast.h"
 #include "Symbols.h"
+#include "utils/macros.h"
 #include <iostream>
 #include <boost/variant/get.hpp>
 
@@ -145,7 +146,7 @@ std::ostream& operator<<(std::ostream& os, statement const& statement)
   return os;
 }
 
-std::string assignment_operator_str(assignment_operators op)
+char const* code(assignment_operators op)
 {
   switch (op)
   {
@@ -164,12 +165,7 @@ std::string assignment_operator_str(assignment_operators op)
   return "UNKNOWN assignment_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, assignment_operators op)
-{
-  return os << assignment_operator_str(op);
-}
-
-std::string equality_operator_str(equality_operators op)
+char const* code(equality_operators op)
 {
   switch (op)
   {
@@ -179,12 +175,7 @@ std::string equality_operator_str(equality_operators op)
   return "UNKNOWN equality_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, equality_operators op)
-{
-  return os << equality_operator_str(op);
-}
-
-std::string relational_operator_str(relational_operators op)
+char const* code(relational_operators op)
 {
   switch (op)
   {
@@ -196,12 +187,7 @@ std::string relational_operator_str(relational_operators op)
   return "UNKNOWN relational_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, relational_operators op)
-{
-  return os << relational_operator_str(op);
-}
-
-std::string shift_operator_str(shift_operators op)
+char const* code(shift_operators op)
 {
   switch (op)
   {
@@ -211,12 +197,7 @@ std::string shift_operator_str(shift_operators op)
   return "UNKNOWN shift_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, shift_operators op)
-{
-  return os << shift_operator_str(op);
-}
-
-std::string additive_operator_str(additive_operators op)
+char const* code(additive_operators op)
 {
   switch (op)
   {
@@ -226,12 +207,7 @@ std::string additive_operator_str(additive_operators op)
   return "UNKNOWN additive_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, additive_operators op)
-{
-  return os << additive_operator_str(op);
-}
-
-std::string multiplicative_operator_str(multiplicative_operators op)
+char const* code(multiplicative_operators op)
 {
   switch (op)
   {
@@ -241,12 +217,7 @@ std::string multiplicative_operator_str(multiplicative_operators op)
   return "UNKNOWN multiplicative_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, multiplicative_operators op)
-{
-  return os << multiplicative_operator_str(op);
-}
-
-std::string unary_operator_str(unary_operators op)
+char const* code(unary_operators op)
 {
   switch (op)
   {
@@ -262,12 +233,7 @@ std::string unary_operator_str(unary_operators op)
   return "UNKNOWN unary_operator";
 }
 
-std::ostream& operator<<(std::ostream& os, unary_operators op)
-{
-  return os << unary_operator_str(op);
-}
-
-std::string postfix_operator_str(postfix_operators op)
+char const* code(postfix_operators op)
 {
   switch (op)
   {
@@ -275,11 +241,6 @@ std::string postfix_operator_str(postfix_operators op)
     case po_dec: return "--";
   }
   return "UNKNOWN postfix_operator";
-}
-
-std::ostream& operator<<(std::ostream& os, postfix_operators op)
-{
-  return os << postfix_operator_str(op);
 }
 
 std::ostream& operator<<(std::ostream& os, postfix_expression const& postfix_expression)
@@ -292,7 +253,7 @@ std::ostream& operator<<(std::ostream& os, postfix_expression const& postfix_exp
       first = false;
     else
       os << ' ';
-    os << postfix_operator;
+    os << code(postfix_operator);
   }
   return os;
 }
@@ -316,7 +277,7 @@ std::ostream& operator<<(std::ostream& os, multiplicative_expression const& mult
     os << '(';
   os << multiplicative_expression.m_other_expression;
   for (auto& other_expression : multiplicative_expression.m_chained)
-    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+    os << ' ' << code(boost::fusion::get<0>(other_expression)) << ' ' << boost::fusion::get<1>(other_expression);
   if (apao)
     os << ')';
   return os;
@@ -329,7 +290,7 @@ std::ostream& operator<<(std::ostream& os, additive_expression const& additive_e
     os << '(';
   os << additive_expression.m_other_expression;
   for (auto& other_expression : additive_expression.m_chained)
-    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+    os << ' ' << code(boost::fusion::get<0>(other_expression)) << ' ' << boost::fusion::get<1>(other_expression);
   if (apao)
     os << ')';
   return os;
@@ -342,7 +303,7 @@ std::ostream& operator<<(std::ostream& os, shift_expression const& shift_express
     os << '(';
   os << shift_expression.m_other_expression;
   for (auto& other_expression : shift_expression.m_chained)
-    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+    os << ' ' << code(boost::fusion::get<0>(other_expression)) << ' ' << boost::fusion::get<1>(other_expression);
   if (apao)
     os << ')';
   return os;
@@ -355,7 +316,7 @@ std::ostream& operator<<(std::ostream& os, relational_expression const& relation
     os << '(';
   os << relational_expression.m_other_expression;
   for (auto& other_expression : relational_expression.m_chained)
-    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+    os << ' ' << code(boost::fusion::get<0>(other_expression)) << ' ' << boost::fusion::get<1>(other_expression);
   if (apao)
     os << ')';
   return os;
@@ -368,7 +329,7 @@ std::ostream& operator<<(std::ostream& os, equality_expression const& equality_e
     os << '(';
   os << equality_expression.m_other_expression;
   for (auto& other_expression : equality_expression.m_chained)
-    os << ' ' << boost::fusion::get<0>(other_expression) << ' ' << boost::fusion::get<1>(other_expression);
+    os << ' ' << code(boost::fusion::get<0>(other_expression)) << ' ' << boost::fusion::get<1>(other_expression);
   if (apao)
     os << ')';
   return os;
@@ -478,7 +439,7 @@ std::ostream& operator<<(std::ostream& os, unary_expression const& unary_express
       first = false;
     else
       os << ' ';
-    os << unary_operator;
+    os << code(unary_operator);
   }
   return os << unary_expression.m_postfix_expression;
 }
@@ -726,5 +687,143 @@ std::ostream& operator<<(std::ostream& os, cppmem const& cppmem)
 assignment::assignment(register_assignment const& ra) : lhs(parser::Symbols::instance().set_register_id(ra.lhs)), rhs(ra.rhs)
 {
 }
+
+char const* assignment_operators_str(assignment_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(ao_eq);
+    AI_CASE_RETURN(ao_mul);
+    AI_CASE_RETURN(ao_div);
+    AI_CASE_RETURN(ao_mod);
+    AI_CASE_RETURN(ao_add);
+    AI_CASE_RETURN(ao_sub);
+    AI_CASE_RETURN(ao_shr);
+    AI_CASE_RETURN(ao_shl);
+    AI_CASE_RETURN(ao_and);
+    AI_CASE_RETURN(ao_xor);
+    AI_CASE_RETURN(ao_or);
+  }
+  return "UNKNOWN assignment_operators";
+}
+
+char const* equality_operators_str(equality_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(eo_eq);
+    AI_CASE_RETURN(eo_ne);
+  }
+  return "UNKNOWN equality_operators";
+}
+
+char const* relational_operators_str(relational_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(ro_lt);
+    AI_CASE_RETURN(ro_gt);
+    AI_CASE_RETURN(ro_ge);
+    AI_CASE_RETURN(ro_le);
+  }
+  return "UNKNOWN relational_operators";
+}
+
+char const* shift_operators_str(shift_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(so_shl);
+    AI_CASE_RETURN(so_shr);
+  }
+  return "UNKNOWN shift_operators";
+}
+
+char const* additive_operators_str(additive_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(ado_add);
+    AI_CASE_RETURN(ado_sub);
+  }
+  return "UNKNOWN additive_operators";
+}
+
+char const* multiplicative_operators_str(multiplicative_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(mo_mul);
+    AI_CASE_RETURN(mo_div);
+  }
+  return "UNKNOWN multiplicative_operators";
+}
+
+char const* unary_operators_str(unary_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(uo_inc);
+    AI_CASE_RETURN(uo_dec);
+    AI_CASE_RETURN(uo_dereference);
+    AI_CASE_RETURN(uo_reference);
+    AI_CASE_RETURN(uo_plus);
+    AI_CASE_RETURN(uo_minus);
+    AI_CASE_RETURN(uo_not);
+    AI_CASE_RETURN(uo_invert );
+  }
+  return "UNKNOWN unary_operators";
+}
+
+char const* postfix_operators_str(postfix_operators op)
+{
+  switch (op)
+  {
+    AI_CASE_RETURN(po_inc);
+    AI_CASE_RETURN(po_dec);
+  }
+  return "UNKNOWN postfix_operators";
+}
+
+std::ostream& operator<<(std::ostream& os, assignment_operators op)
+{
+  return os << assignment_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, equality_operators op)
+{
+  return os << equality_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, relational_operators op)
+{
+  return os << relational_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, shift_operators op)
+{
+  return os << shift_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, additive_operators op)
+{
+  return os << additive_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, multiplicative_operators op)
+{
+  return os << multiplicative_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, unary_operators op)
+{
+  return os << unary_operators_str(op);
+}
+
+std::ostream& operator<<(std::ostream& os, postfix_operators op)
+{
+  return os << postfix_operators_str(op);
+}
+
 
 } // namespace ast

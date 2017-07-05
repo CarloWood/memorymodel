@@ -140,7 +140,6 @@ void Graph::lock(ast::tag mutex, Context& context)
 {
   DoutTag(dc::notice, "[lock of", mutex);
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock1)));
-  sequence_barrier();
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock2)));
 }
 
@@ -148,15 +147,13 @@ void Graph::unlock(ast::tag mutex, Context& context)
 {
   DoutTag(dc::notice, "[unlock of", mutex);
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock1)));
-  sequence_barrier();
   new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock2)));
 }
 
 void Graph::new_node(nodes_type::iterator const& node)
 {
   DebugMarkUp;
-  m_current_nodes.push_back(node);
-  Dout(dc::notice, "Created node " << *node << '.'); // << "; size of m_current_nodes now " << m_current_nodes.size());
+  Dout(dc::notice, "Created node " << *node << '.');
 }
 
 void Graph::scope_start(bool is_thread)
@@ -169,12 +166,6 @@ void Graph::scope_start(bool is_thread)
     m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
     DebugMarkDown;
     Dout(dc::notice, "Created " << m_current_thread << '.');
-    // If this is ever not empty than those should be added instead!
-    assert(m_current_nodes.empty());
-    m_parent_thread_nodes.push(m_last_nodes);
-    Dout(dc::sb_barrier, "Added m_last_nodes (size " << m_last_nodes.size() << ") to m_parent_thread_nodes. m_beginning_of_thread set true.");
-    m_last_nodes.clear();
-    Dout(dc::sb_barrier, "m_last_nodes cleared because entered new thread.");
   }
 }
 
@@ -188,9 +179,6 @@ void Graph::scope_end()
     DebugMarkUp;
     Dout(dc::notice, "Joined thread " << m_current_thread << '.');
     m_current_thread = m_current_thread->parent_thread();
-    m_last_nodes = m_parent_thread_nodes.top();
-    m_parent_thread_nodes.pop();
-    Dout(dc::sb_barrier, "Popped m_last_nodes (size " << m_last_nodes.size() << ") from m_parent_thread_nodes.");
   }
 }
 
@@ -225,77 +213,6 @@ char const* edge_str(edge_type type)
 std::ostream& operator<<(std::ostream& os, edge_type type)
 {
   return os << edge_str(type);
-}
-
-void Graph::add_edges(last_nodes_type const& last_nodes, last_nodes_type const& current_nodes, edge_type type)
-{
-  DoutEntering(dc::sb_barrier, "Graph::add_edges(..., " << type << "); [size of last_nodes = " << last_nodes.size() << ", size of current_nodes " << current_nodes.size() << "]");
-  for (auto const& last_node : last_nodes)
-    for (auto const& current_node : current_nodes)
-    {
-      m_edges.insert(edges_type::value_type(m_next_edge_id, last_node, current_node, type));
-      Dout(dc::edge, "Added new " << type << " edge between " << *last_node << " and " << *current_node);
-    }
-}
-
-void Graph::sequence_value_computation_barrier()
-{
-  DebugMarkDownRight;
-  DoutEntering(dc::sb_barrier, "Graph::sequence_value_computation_barrier()");
-  if (m_beginning_of_thread && !m_current_nodes.empty())
-  {
-    m_beginning_of_thread = false;
-    last_nodes_type last_parent_nodes;
-    int count = 0;
-    bool found = false;
-    {
-#ifdef CWDEBUG
-      size_t const parent_thread_nodes_size = m_parent_thread_nodes.size();
-      Dout(dc::sb_barrier, "Trying to find last thread-parent nodes (size of m_parent_thread_nodes is " << parent_thread_nodes_size << ")...");
-      debug::Mark marker;
-#endif
-      while (true)
-      {
-        if (m_parent_thread_nodes.empty())
-        {
-          Dout(dc::sb_barrier, "Nothing (left) on stack; no parent nodes found!");
-          break;  // Nothing found.
-        }
-        last_parent_nodes = m_parent_thread_nodes.top();
-        if (!last_parent_nodes.empty())
-        {
-          found = true;
-          break;
-        }
-        Dout(dc::sb_barrier, "Popping empty vector from stack...");
-        m_parent_thread_nodes.pop();
-        ++count;
-      }
-      while (count--)
-      {
-        Dout(dc::sb_barrier, "Re-adding empty vector to stack...");
-        m_parent_thread_nodes.push(last_nodes_type());
-      }
-      ASSERT(m_parent_thread_nodes.size() == parent_thread_nodes_size);
-    }
-    if (found)
-    {
-      add_edges(last_parent_nodes, m_current_nodes, edge_asw);
-    }
-  }
-  if (!m_current_nodes.empty())
-  {
-    if (!m_last_nodes.empty())
-      add_edges(m_last_nodes, m_current_nodes, edge_sb);
-    m_last_nodes = m_current_nodes;
-    m_current_nodes.clear();
-    Dout(dc::sb_barrier, "m_last_nodes set to m_current_nodes (cleared); size: " << m_last_nodes.size());
-  }
-}
-
-void Graph::sequence_barrier()
-{
-  sequence_value_computation_barrier();
 }
 
 #ifdef CWDEBUG
