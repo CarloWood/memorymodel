@@ -73,13 +73,13 @@ Loops loops;
 class Symbols {
  public:
   using symbols_type = std::vector<std::pair<std::string, ast::declaration_statement>>;
-  using initializations_type = std::map<ast::tag, ValueComputation, TagCompare>;
+  using initializations_type = std::map<ast::tag, std::unique_ptr<ValueComputation>, TagCompare>;
  private:
   symbols_type m_symbols;
   initializations_type m_initializations;
   std::stack<int> m_stack;
  public:
-  void add(ast::declaration_statement const& declaration_statement, ValueComputation const& initialization = ValueComputation(ValueComputation::not_used));
+  void add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization = ValueComputation(ValueComputation::not_used));
   void scope_start(bool is_thread, Context& context);
   void scope_end(Context& context);
   int stack_depth() const { return m_stack.size(); }
@@ -88,10 +88,10 @@ class Symbols {
 
 Symbols symbols;
 
-void Symbols::add(ast::declaration_statement const& declaration_statement, ValueComputation const& initialization)
+void Symbols::add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization)
 {
   m_symbols.push_back(std::make_pair(declaration_statement.name(), declaration_statement));
-  m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), initialization));
+  m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), ValueComputation::make_unique(std::move(initialization))));
 }
 
 template<typename AST>
@@ -187,7 +187,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
         context.m_graph.write(declaration_statement.tag(), context);
-        symbols.add(declaration_statement, value);
+        symbols.add(declaration_statement, std::move(value));
       }
       else
       {
@@ -269,24 +269,24 @@ ValueComputation execute_primary_expression(ast::primary_expression const& prima
 }
 
 template<typename T>
-Operator get_operator(typename T::tail_type const& chain);
+binary_operators get_operator(typename T::tail_type const& chain);
 
 // Specializations.
-template<> Operator get_operator<ast::logical_or_expression>(ast::logical_or_expression::tail_type const&) { return logical_or; }
-template<> Operator get_operator<ast::logical_and_expression>(ast::logical_and_expression::tail_type const&) { return logical_and; }
-template<> Operator get_operator<ast::inclusive_or_expression>(ast::inclusive_or_expression::tail_type const&) { return bitwise_inclusive_or; }
-template<> Operator get_operator<ast::exclusive_or_expression>(ast::exclusive_or_expression::tail_type const&) { return bitwise_exclusive_or; }
-template<> Operator get_operator<ast::and_expression>(ast::and_expression::tail_type const&) { return bitwise_and; }
-template<> Operator get_operator<ast::equality_expression>(ast::equality_expression::tail_type const& tail)
-    { return static_cast<Operator>(equality_eo_eq + boost::fusion::get<0>(tail)); }
-template<> Operator get_operator<ast::relational_expression>(ast::relational_expression::tail_type const& tail)
-    { return static_cast<Operator>(relational_ro_lt + boost::fusion::get<0>(tail)); }
-template<> Operator get_operator<ast::shift_expression>(ast::shift_expression::tail_type const& tail)
-    { return static_cast<Operator>(shift_so_shl + boost::fusion::get<0>(tail)); }
-template<> Operator get_operator<ast::additive_expression>(ast::additive_expression::tail_type const& tail)
-    { return static_cast<Operator>(additive_ado_add + boost::fusion::get<0>(tail)); }
-template<> Operator get_operator<ast::multiplicative_expression>(ast::multiplicative_expression::tail_type const& tail)
-    { return static_cast<Operator>(multiplicative_mo_mul + boost::fusion::get<0>(tail)); }
+template<> binary_operators get_operator<ast::logical_or_expression>(ast::logical_or_expression::tail_type const&) { return logical_or; }
+template<> binary_operators get_operator<ast::logical_and_expression>(ast::logical_and_expression::tail_type const&) { return logical_and; }
+template<> binary_operators get_operator<ast::inclusive_or_expression>(ast::inclusive_or_expression::tail_type const&) { return bitwise_inclusive_or; }
+template<> binary_operators get_operator<ast::exclusive_or_expression>(ast::exclusive_or_expression::tail_type const&) { return bitwise_exclusive_or; }
+template<> binary_operators get_operator<ast::and_expression>(ast::and_expression::tail_type const&) { return bitwise_and; }
+template<> binary_operators get_operator<ast::equality_expression>(ast::equality_expression::tail_type const& tail)
+    { return static_cast<binary_operators>(equality_eo_eq + boost::fusion::get<0>(tail)); }
+template<> binary_operators get_operator<ast::relational_expression>(ast::relational_expression::tail_type const& tail)
+    { return static_cast<binary_operators>(relational_ro_lt + boost::fusion::get<0>(tail)); }
+template<> binary_operators get_operator<ast::shift_expression>(ast::shift_expression::tail_type const& tail)
+    { return static_cast<binary_operators>(shift_so_shl + boost::fusion::get<0>(tail)); }
+template<> binary_operators get_operator<ast::additive_expression>(ast::additive_expression::tail_type const& tail)
+    { return static_cast<binary_operators>(additive_ado_add + boost::fusion::get<0>(tail)); }
+template<> binary_operators get_operator<ast::multiplicative_expression>(ast::multiplicative_expression::tail_type const& tail)
+    { return static_cast<binary_operators>(multiplicative_mo_mul + boost::fusion::get<0>(tail)); }
 
 template<typename T>
 ValueComputation execute_operator_list_expression(T const& expr, Context& context)
@@ -478,6 +478,7 @@ ValueComputation execute_expression(ast::assignment_expression const& expression
     {
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
+      Dout(dc::valuecomp, "Assignment value computation results in {" << result << "}; assigned to `" << assignment.lhs << "`.");
       context.m_graph.write(assignment.lhs, context);
       break;
     }

@@ -134,6 +134,15 @@ enum multiplicative_operators { mo_mul, mo_div };
 enum unary_operators { uo_inc, uo_dec, uo_dereference, uo_reference, uo_plus, uo_minus, uo_not, uo_invert };
 enum postfix_operators { po_inc, po_dec };
 
+char const* code(assignment_operators op);
+char const* code(equality_operators op);
+char const* code(relational_operators op);
+char const* code(shift_operators op);
+char const* code(additive_operators op);
+char const* code(multiplicative_operators op);
+char const* code(unary_operators op);
+char const* code(postfix_operators op);
+;
 std::ostream& operator<<(std::ostream& os, assignment_operators op);
 std::ostream& operator<<(std::ostream& os, equality_operators op);
 std::ostream& operator<<(std::ostream& os, relational_operators op);
