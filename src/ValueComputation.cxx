@@ -201,7 +201,7 @@ void ValueComputation::strip_rhs()
 
 void ValueComputation::OP(binary_operators op, ValueComputation&& rhs)
 {
-  DoutEntering(dc::valuecomp, "ValueComputation::OP(" << op << ", {" << rhs << "}) [this = " << *this << "].");
+  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::OP(" << op << ", {" << rhs << "}) [this = " << *this << "] ==> ");
   // Should never try to use an unused or uninitialized ValueComputation in a binary operator.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
@@ -273,7 +273,7 @@ void ValueComputation::OP(binary_operators op, ValueComputation&& rhs)
     // Simplify sums.
     if (op == additive_ado_add || op == additive_ado_sub)
     {
-      Dout(dc::simplify|continued_cf, "Simplifying {" << *this << "} to ");
+      Dout(dc::simplify, "Simplifying {" << *this << "}");
 
       // Trying to subtract a negated value computation?
       if (op == additive_ado_sub && m_rhs->is_negated())
@@ -343,25 +343,25 @@ void ValueComputation::OP(binary_operators op, ValueComputation&& rhs)
         strip_rhs();
         Dout(dc::simplify, "8. " << *this);
       }
-
-      Dout(dc::finish, '{' << *this << '}');
     }
   }
+  Dout(dc::finish, '{' << *this << '}');
 }
 
 void ValueComputation::postfix_operator(ast::postfix_operators op)
 {
-  DoutEntering(dc::valuecomp, "ValueComputation::postfix_operator(" << op << ") [this = " << *this << "].");
+  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::postfix_operator(" << op << ") [this = " << *this << "] ==> ");
   // Should never try to apply a postfix operator to an unused or uninitialized ValueComputation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying postfix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
   OP(op == ast::po_inc ? additive_ado_add : additive_ado_sub, 1);
+  Dout(dc::finish, '{' << *this << '}');
 }
 
 void ValueComputation::prefix_operator(ast::unary_operators op)
 {
-  DoutEntering(dc::valuecomp, "ValueComputation::prefix_operator(" << op << ") [this = " << *this << "].");
+  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::prefix_operator(" << op << ") [this = " << *this << "] ==> ");
   // Should never try to apply a prefix operator to an unused or uninitialized ValueComputation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
@@ -369,6 +369,7 @@ void ValueComputation::prefix_operator(ast::unary_operators op)
   // Call unary_operator for these values.
   ASSERT(op == ast::uo_inc || op == ast::uo_dec);
   OP(op == ast::uo_inc ? additive_ado_add : additive_ado_sub, 1);
+  Dout(dc::finish, '{' << *this << '}');
 }
 
 ValueComputation::ValueComputation(ValueComputation&& value_computation) :
@@ -409,7 +410,7 @@ std::unique_ptr<ValueComputation> ValueComputation::make_unique(ValueComputation
 
 void ValueComputation::unary_operator(ast::unary_operators op)
 {
-  DoutEntering(dc::valuecomp, "ValueComputation::unary_operator(" << op << ") [this = " << *this << "].");
+  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::unary_operator(" << op << ") [this = " << *this << "] ==> ");
   // Should never try to apply a unary operator to an unused or uninitialized ValueComputation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
@@ -421,16 +422,16 @@ void ValueComputation::unary_operator(ast::unary_operators op)
     switch (op)
     {
       case ast::uo_plus:
-        return;
+        break;
       case ast::uo_minus:
         m_simple.m_literal = -m_simple.m_literal;
-        return;
+        break;
       case ast::uo_not:
         m_simple.m_literal = !m_simple.m_literal;
-        return;
+        break;
       case ast::uo_invert:
         m_simple.m_literal = ~m_simple.m_literal;
-        return;
+        break;
       default:
         THROW_ALERT("Cannot apply unary operator `[OPERATOR]` to literal value ([LITERAL])", AIArgs("[OPERATOR]", code(op))("[LITERAL]", m_simple.m_literal));
     }
@@ -443,11 +444,12 @@ void ValueComputation::unary_operator(ast::unary_operators op)
     m_operator.unary = op;
     m_state = unary;
   }
+  Dout(dc::finish, '{' << *this << '}');
 }
 
 void ValueComputation::conditional_operator(ValueComputation&& true_value, ValueComputation&& false_value)
 {
-  DoutEntering(dc::valuecomp, "ValueComputation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "].");
+  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
     if (m_simple.m_literal)
@@ -462,6 +464,7 @@ void ValueComputation::conditional_operator(ValueComputation&& true_value, Value
     m_rhs = make_unique(std::move(false_value));
     m_condition = make_unique(std::move(*this));
   }
+  Dout(dc::finish, '{' << *this << '}');
 }
 
 #ifdef CWDEBUG
