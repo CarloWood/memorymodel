@@ -452,6 +452,7 @@ void ValueComputation::conditional_operator(ValueComputation&& true_value, Value
   DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
+    Dout(dc::simplify, "Simplifying because condition is a literal...");
     if (m_simple.m_literal)
       *this = std::move(true_value);
     else
