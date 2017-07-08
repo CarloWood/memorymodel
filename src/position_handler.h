@@ -1,7 +1,7 @@
 #pragma once
 
 #include "debug.h"
-#include "Symbols.h"
+#include "Symbols_parser.h"
 #include <boost/range/iterator_range.hpp>
 #include <iostream>
 #include <memory>

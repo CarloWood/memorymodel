@@ -1,7 +1,7 @@
 #include "sys.h"
 #include "grammar_cppmem.h"
 #include "position_handler.h"
-#include "SymbolsImpl.h"
+#include "SymbolsImpl_parser.h"
 #include <boost/spirit/include/phoenix_function.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>

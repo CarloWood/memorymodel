@@ -1,6 +1,9 @@
 #pragma once
 
 #include "position_handler.h"
+#include "Symbols.h"
+#include "Locks.h"
+#include "Loops.h"
 #include <string>
 
 using iterator_type = std::string::const_iterator;
@@ -9,6 +12,9 @@ class Graph;
 
 struct Context {
   position_handler<iterator_type>& m_position_handler;
+  Symbols m_symbols;
+  Locks m_locks;
+  Loops m_loops;
   Graph& m_graph;
 
   Context(position_handler<iterator_type>& ph, Graph& g) : m_position_handler(ph), m_graph(g) { }

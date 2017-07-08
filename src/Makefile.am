@@ -14,8 +14,16 @@ libcppmem_a_SOURCES = \
 		 cppmem_parser.h \
 		 Context.cxx \
 		 Context.h \
+		 ScopeDetector.h \
+		 ScopeDetector.cxx \
+		 Symbols_parser.cxx \
+		 Symbols_parser.h \
 		 Symbols.cxx \
 		 Symbols.h \
+		 Loops.cxx \
+		 Loops.h \
+		 Locks.h \
+		 Locks.cxx \
 		 Graph.cxx \
 		 Graph.h \
 		 ast.cxx \

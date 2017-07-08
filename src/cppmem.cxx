@@ -5,150 +5,21 @@
 #include "Graph.h"
 #include "Context.h"
 #include "ValueComputation.h"
+#include "TagCompare.h"
+#include "ScopeDetector.h"
+#include "Locks.h"
+#include "Loops.h"
+#include "Symbols.h"
 #include "cppmem_parser.h"
 #include "utils/AIAlert.h"
 #include <libcwd/type_info.h>
 #include <boost/variant/get.hpp>
 #include <iostream>
-#include <string>
 #include <fstream>
-#include <stack>
-
-struct TagCompare {
-  bool operator()(ast::tag const& t1, ast::tag const& t2) const
-  {
-    assert(t1.id != -1 && t2.id != -1);
-    return t1.id < t2.id;
-  }
-};
 
 std::map<ast::tag, ast::function, TagCompare> functions;
 
-template<typename AST>
-class ScopeDetector {
- private:
-  using m_asts_type = std::vector<std::pair<size_t, AST>>;
-  m_asts_type m_asts;
- public:
-  void add(AST const& unique_lock_decl);
-  void reset(size_t stack_depth, Context& context);
-  virtual void left_scope(AST const& ast, Context& context) = 0;
-};
-
-class Locks : public ScopeDetector<ast::unique_lock_decl> {
-  void left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& context) override;
-};
-
-Locks locks;
-
-class Loops {
- private:
-  std::stack<ast::iteration_statement> m_stack;
- public:
-  void enter(ast::iteration_statement const& iteration_statement);
-  void leave(ast::iteration_statement const& iteration_statement);
-  void add_break(ast::break_statement const& break_statement);
-};
-
-void Loops::enter(ast::iteration_statement const& iteration_statement)
-{
-  m_stack.push(iteration_statement);
-}
-
-void Loops::leave(ast::iteration_statement const& iteration_statement)
-{
-  DebugMarkUp;
-  // This is where a break jumps to.
-  Dout(dc::notice, "TODO: left scope of: " << iteration_statement);
-  m_stack.pop();
-}
-
-void Loops::add_break(ast::break_statement const& break_statement)
-{
-  Dout(dc::notice, "TODO: break;");
-}
-
-Loops loops;
-
-class Symbols {
- public:
-  using symbols_type = std::vector<std::pair<std::string, ast::declaration_statement>>;
-  using initializations_type = std::map<ast::tag, std::unique_ptr<ValueComputation>, TagCompare>;
- private:
-  symbols_type m_symbols;
-  initializations_type m_initializations;
-  std::stack<int> m_stack;
- public:
-  void add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization = ValueComputation(ValueComputation::not_used));
-  void scope_start(bool is_thread, Context& context);
-  void scope_end(Context& context);
-  int stack_depth() const { return m_stack.size(); }
-  ast::declaration_statement const& find(std::string var_name) const;
-};
-
-Symbols symbols;
-
-void Symbols::add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization)
-{
-  m_symbols.push_back(std::make_pair(declaration_statement.name(), declaration_statement));
-  m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), ValueComputation::make_unique(std::move(initialization))));
-}
-
-template<typename AST>
-void ScopeDetector<AST>::add(AST const& ast)
-{
-  m_asts.push_back(typename m_asts_type::value_type(symbols.stack_depth(), ast));
-}
-
-template<typename AST>
-void ScopeDetector<AST>::reset(size_t stack_depth, Context& context)
-{
-  while (!m_asts.empty() && m_asts.back().first > stack_depth)
-  {
-    DebugMarkUp;
-    left_scope(m_asts.back().second, context);
-    m_asts.erase(m_asts.end());
-  }
-}
-
-void Locks::left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& context)
-{
-  context.unlock(unique_lock_decl.m_mutex);
-}
-
 void execute_body(std::string name, ast::statement_seq const& body, Context& context);
-
-void Symbols::scope_start(bool is_thread, Context& context)
-{
-  context.m_graph.scope_start(is_thread);
-  Dout(dc::notice, "{");
-  Debug(libcw_do.inc_indent(2));
-  m_stack.push(m_symbols.size());
-}
-
-void Symbols::scope_end(Context& context)
-{
-  Debug(libcw_do.dec_indent(2));
-  Dout(dc::notice, "}");
-  context.m_graph.scope_end();
-  m_symbols.resize(m_stack.top());
-  m_stack.pop();
-  locks.reset(m_stack.size(), context);
-}
-
-ast::declaration_statement const& Symbols::find(std::string var_name) const
-{
-  auto iter = m_symbols.rbegin();
-  while (iter != m_symbols.rend())
-  {
-    if (iter->first == var_name)
-      break;
-    ++iter;
-  }
-  assert(iter != m_symbols.rend());
-  return iter->second;
-}
-
 ValueComputation execute_expression(ast::assignment_expression const& expression, Context& context);
 ValueComputation execute_expression(ast::expression const& expression, Context& context);
 
@@ -175,7 +46,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
       DebugMarkUp;
       context.lock(unique_lock_decl.m_mutex);
-      locks.add(unique_lock_decl);
+      context.m_locks.add(unique_lock_decl, context);
       break;
     }
     case ast::DS_vardecl:
@@ -187,19 +58,19 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
         context.write(declaration_statement.tag());
-        symbols.add(declaration_statement, std::move(value));
+        context.m_symbols.add(declaration_statement, std::move(value));
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
         context.uninitialized(declaration_statement.tag());
-        symbols.add(declaration_statement, ValueComputation());
+        context.m_symbols.add(declaration_statement, ValueComputation());
       }
       return;
     }
   }
-  symbols.add(declaration_statement);
+  context.m_symbols.add(declaration_statement);
 }
 
 ValueComputation execute_condition(ast::expression const& condition, Context& context)
@@ -238,7 +109,7 @@ ValueComputation execute_primary_expression(ast::primary_expression const& prima
         break;
       // Check if that variable wasn't masked by another variable of different type.
       std::string name = parser::Symbols::instance().tag_to_string(tag);           // Actual C++ object of that name in current scope.
-      ast::declaration_statement const& declaration_statement{symbols.find(name)}; // Declaration of actual object.
+      ast::declaration_statement const& declaration_statement{context.m_symbols.find(name)}; // Declaration of actual object.
       if (declaration_statement.tag() != tag)                                      // Did the parser make a mistake?
       {
         std::string position{context.m_position_handler.location(declaration_statement.tag())};
@@ -591,9 +462,9 @@ void execute_statement(ast::statement const& statement, Context& context)
       try { execute_condition(iteration_statement.m_while_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
-      loops.enter(iteration_statement);
+      context.m_loops.enter(iteration_statement);
       execute_statement(iteration_statement.m_while_statement.m_statement, context);
-      loops.leave(iteration_statement);
+      context.m_loops.leave(iteration_statement);
       break;
     }
     case ast::SN_jump_statement:
@@ -604,7 +475,7 @@ void execute_statement(ast::statement const& statement, Context& context)
         case ast::JS_break_statement:
         {
           auto const& break_statement{boost::get<ast::break_statement>(jump_statement.m_jump_statement_node)};
-          loops.add_break(break_statement);
+          context.m_loops.add_break(break_statement);
           break;
         }
         case ast::JS_return_statement:
@@ -638,7 +509,7 @@ void execute_body(std::string name, ast::statement_seq const& body, Context& con
       Dout(dc::notice, "void " << name << "()");
     }
   }
-  symbols.scope_start(name == "thread", context);
+  context.m_symbols.scope_start(name == "thread", context);
   for (auto const& statement : body.m_statements)
   {
     try
@@ -650,7 +521,7 @@ void execute_body(std::string name, ast::statement_seq const& body, Context& con
       THROW_ALERT(alert, " in `[STATEMENT]`", AIArgs("[STATEMENT]", statement));
     }
   }
-  symbols.scope_end(context);
+  context.m_symbols.scope_end(context);
 }
 
 int main(int argc, char* argv[])

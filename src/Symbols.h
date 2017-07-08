@@ -1,34 +1,31 @@
 #pragma once
 
 #include "ast.h"
-#include "utils/Singleton.h"
+#include "TagCompare.h"
+#include "ValueComputation.h"
+#include <vector>
+#include <utility>
+#include <string>
+#include <map>
+#include <stack>
+#include <memory>
 
-namespace parser {
+struct Context;
 
-class SymbolsImpl;
+class Symbols {
+ public:
+  using symbols_type = std::vector<std::pair<std::string, ast::declaration_statement>>;
+  using initializations_type = std::map<ast::tag, std::unique_ptr<ValueComputation>, TagCompare>;
 
-class Symbols : public Singleton<Symbols> {
-  friend_Instance;
  private:
-  Symbols();
-  ~Symbols();
-  Symbols(Symbols const&) = delete;
+  symbols_type m_symbols;
+  initializations_type m_initializations;
+  std::stack<int> m_stack;
 
  public:
-  SymbolsImpl* const m_impl;
-
- public:
-  void function(ast::function const& name);
-  void vardecl(ast::memory_location const& memory_location);
-  void mutex_decl(ast::mutex_decl const& mutex_decl);
-  void condition_variable_decl(ast::condition_variable_decl const& condition_variable_decl);
-  void unique_lock_decl(ast::unique_lock_decl const& unique_lock_decl);
-  void regdecl(ast::register_location const& register_location);
-  ast::tag set_register_id(ast::register_location const& register_location);
-  bool is_register(ast::tag id);
-  void scope(int begin);
-  std::string tag_to_string(ast::tag id);
-  void reset();
+  void add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization = ValueComputation(ValueComputation::not_used));
+  void scope_start(bool is_thread, Context& context);
+  void scope_end(Context& context);
+  int stack_depth() const { return m_stack.size(); }
+  ast::declaration_statement const& find(std::string var_name) const;
 };
-
-} // namespace parser

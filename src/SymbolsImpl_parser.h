@@ -2,7 +2,7 @@
 
 #include "ast.h"
 #include "utils/Singleton.h"
-#include "Symbols.h"
+#include "Symbols_parser.h"
 #include <stack>
 #include <map>
 #include "boost/spirit/include/qi_symbols.hpp"
