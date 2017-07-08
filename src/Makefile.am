@@ -4,25 +4,27 @@ noinst_LIBRARIES = libcppmem.a
 bin_PROGRAMS = cppmem_test cppmem
 
 libcppmem_a_SOURCES = \
-		 grammar_general.h \
 		 grammar_whitespace.cxx \
 		 grammar_whitespace.h \
 		 grammar_cppmem.cxx \
 		 grammar_cppmem.h \
 		 grammar_unittest.cxx \
 		 grammar_unittest.h \
-		 position_handler.cxx \
-		 position_handler.h \
+		 cppmem_parser.cxx \
+		 cppmem_parser.h \
+		 Context.cxx \
+		 Context.h \
 		 Symbols.cxx \
 		 Symbols.h \
+		 Graph.cxx \
+		 Graph.h \
 		 ast.cxx \
 		 ast.h \
 		 ValueComputation.cxx \
 		 ValueComputation.h \
-		 cppmem_parser.cxx \
-		 cppmem_parser.h \
-		 Graph.cxx \
-		 Graph.h \
+		 position_handler.cxx \
+		 position_handler.h \
+		 grammar_general.h \
 		 debug.cxx \
 		 debug.h
 

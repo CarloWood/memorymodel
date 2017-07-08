@@ -113,7 +113,7 @@ void ScopeDetector<AST>::reset(size_t stack_depth, Context& context)
 
 void Locks::left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& context)
 {
-  context.m_graph.unlock(unique_lock_decl.m_mutex, context);
+  context.unlock(unique_lock_decl.m_mutex);
 }
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context);
@@ -161,7 +161,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& mutex_decl{boost::get<ast::mutex_decl>(declaration_statement.m_declaration_statement_node)};
       Dout(dc::notice, declaration_statement);
       DebugMarkUp;
-      context.m_graph.lockdecl(mutex_decl, context);
+      context.lockdecl(mutex_decl);
       break;
     }
     case ast::DS_condition_variable_decl:
@@ -174,7 +174,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& unique_lock_decl{boost::get<ast::unique_lock_decl>(declaration_statement.m_declaration_statement_node)};
       DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
       DebugMarkUp;
-      context.m_graph.lock(unique_lock_decl.m_mutex, context);
+      context.lock(unique_lock_decl.m_mutex);
       locks.add(unique_lock_decl);
       break;
     }
@@ -186,14 +186,14 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         ValueComputation value = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.m_graph.write(declaration_statement.tag(), context);
+        context.write(declaration_statement.tag());
         symbols.add(declaration_statement, std::move(value));
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.m_graph.uninitialized(declaration_statement.tag(), context);
+        context.uninitialized(declaration_statement.tag());
         symbols.add(declaration_statement, ValueComputation());
       }
       return;
@@ -255,7 +255,7 @@ ValueComputation execute_primary_expression(ast::primary_expression const& prima
       // This must be a non-atomic int or bool, or we wouldn't be reading from it.
       assert(declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl &&
           !boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node).m_type.is_atomic());
-      context.m_graph.read(tag, context);
+      context.read(tag);
       break;
     }
     case ast::PE_expression:
@@ -359,7 +359,7 @@ ValueComputation execute_postfix_expression(ast::postfix_expression const& expr,
     for (auto const& postfix_operator : expr.m_postfix_operators)
     {
       result.postfix_operator(postfix_operator);
-      context.m_graph.write(tag, context);
+      context.write(tag);
     }
   }
 
@@ -399,7 +399,7 @@ ValueComputation execute_operator_list_expression(ast::unary_expression const& e
             THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", primary_expression_node));
           ast::tag const& tag{boost::get<ast::tag>(primary_expression_node)};
           result.prefix_operator(unary_operator);
-          context.m_graph.write(tag, context);
+          context.write(tag);
         }
         else
           result.unary_operator(unary_operator);
@@ -411,8 +411,8 @@ ValueComputation execute_operator_list_expression(ast::unary_expression const& e
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
       // FIXME TODO
       //result = execute_expression(atomic_fetch_add_explicit.m_expression, context);
-      context.m_graph.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
-      context.m_graph.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
+      context.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
+      context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
@@ -420,8 +420,8 @@ ValueComputation execute_operator_list_expression(ast::unary_expression const& e
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
       // FIXME TODO
       //result = execute_expression(atomic_fetch_sub_explicit.m_expression, context);
-      context.m_graph.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
-      context.m_graph.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
+      context.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
+      context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
@@ -435,7 +435,7 @@ ValueComputation execute_operator_list_expression(ast::unary_expression const& e
     case ast::PE_load_call:
     {
       auto const& load_call{boost::get<ast::load_call>(node)};
-      context.m_graph.read(load_call.m_memory_location_id, load_call.m_memory_order, context);
+      context.read(load_call.m_memory_location_id, load_call.m_memory_order);
       result = load_call.m_memory_location_id;
       break;
     }
@@ -479,7 +479,7 @@ ValueComputation execute_expression(ast::assignment_expression const& expression
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
       Dout(dc::valuecomp, "Assignment value computation results in {" << result << "}; assigned to `" << assignment.lhs << "`.");
-      context.m_graph.write(assignment.lhs, context);
+      context.write(assignment.lhs);
       break;
     }
   }
@@ -515,7 +515,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       execute_expression(store_call.m_val, context);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      context.m_graph.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
+      context.write(store_call.m_memory_location_id, store_call.m_memory_order);
       break;
     }
     case ast::SN_function_call:
@@ -547,7 +547,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& mutex_lock_call{boost::get<ast::mutex_lock_call>(node)};
       Dout(dc::notice, mutex_lock_call);
       DebugMarkUp;
-      context.m_graph.lock(mutex_lock_call.m_mutex, context);
+      context.lock(mutex_lock_call.m_mutex);
       break;
     }
     case ast::SN_mutex_unlock_call:
@@ -555,7 +555,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& mutex_unlock_call{boost::get<ast::mutex_unlock_call>(node)};
       Dout(dc::notice, mutex_unlock_call);
       DebugMarkUp;
-      context.m_graph.unlock(mutex_unlock_call.m_mutex, context);
+      context.unlock(mutex_unlock_call.m_mutex);
       break;
     }
     case ast::SN_threads:
