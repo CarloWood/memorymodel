@@ -459,10 +459,10 @@ void ValueComputation::conditional_operator(ValueComputation&& true_value, Value
   }
   else
   {
+    m_condition = make_unique(std::move(*this));
     m_state = condition;
     m_lhs = make_unique(std::move(true_value));
     m_rhs = make_unique(std::move(false_value));
-    m_condition = make_unique(std::move(*this));
   }
   Dout(dc::finish, '{' << *this << '}');
 }
