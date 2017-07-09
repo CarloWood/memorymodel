@@ -99,63 +99,6 @@ void Graph::print_nodes() const
   }
 }
 
-void Graph::uninitialized(ast::tag decl, Context& context)
-{
-  DoutTag(dc::notice, "[uninitialized declaration of", decl);
-}
-
-void Graph::read(ast::tag variable, Context& context)
-{
-  DoutTag(dc::notice, "[NA read from", variable);
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, variable)));
-}
-
-void Graph::write(ast::tag variable, Context& context)
-{
-  DoutTag(dc::notice, "[NA write to", variable);
-  Value v;
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, variable, v)));
-}
-
-void Graph::read(ast::tag variable, std::memory_order mo, Context& context)
-{
-  DoutTag(dc::notice, "[" << mo << " read from", variable);
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, variable, mo)));
-}
-
-void Graph::write(ast::tag variable, std::memory_order mo, Context& context)
-{
-  DoutTag(dc::notice, "[" << mo << " write to", variable);
-  Value v;
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, variable, v, mo)));
-}
-
-void Graph::lockdecl(ast::tag mutex, Context& context)
-{
-  DoutTag(dc::notice, "[declaration of", mutex);
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_decl)));
-}
-
-void Graph::lock(ast::tag mutex, Context& context)
-{
-  DoutTag(dc::notice, "[lock of", mutex);
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock1)));
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_lock2)));
-}
-
-void Graph::unlock(ast::tag mutex, Context& context)
-{
-  DoutTag(dc::notice, "[unlock of", mutex);
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock1)));
-  new_node(m_nodes.insert(m_nodes.end(), Node(m_next_node_id, m_current_thread, mutex, mutex_unlock2)));
-}
-
-void Graph::new_node(nodes_type::iterator const& node)
-{
-  DebugMarkUp;
-  Dout(dc::notice, "Created node " << *node << '.');
-}
-
 void Graph::scope_start(bool is_thread)
 {
   DoutEntering(dc::sb_barrier, "Graph::scope_start('is_thread' = " << is_thread << ")");

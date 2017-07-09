@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "debug.h"
-#include "ValueComputation.h"
+#include "Evaluation.h"
 #include "utils/macros.h"
 #include "utils/AIAlert.h"
 #include <iostream>
@@ -77,29 +77,29 @@ std::ostream& operator<<(std::ostream& os, binary_operators op)
   return os << operator_str(op);
 }
 
-std::ostream& operator<<(std::ostream& os, ValueComputation const& value_computation)
+std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
 {
   switch (value_computation.m_state)
   {
-    case ValueComputation::unused:
-      os << "<\e[31mUNUSED ValueComputation\e[0m>";
+    case Evaluation::unused:
+      os << "<\e[31mUNUSED Evaluation\e[0m>";
       break;
-    case ValueComputation::uninitialized:
-      os << "<UNINITIALIZED ValueComputation>";
+    case Evaluation::uninitialized:
+      os << "<UNINITIALIZED Evaluation>";
       break;
-    case ValueComputation::literal:
+    case Evaluation::literal:
       os << value_computation.m_simple.m_literal;
       break;
-    case ValueComputation::variable:
+    case Evaluation::variable:
       os << value_computation.m_simple.m_variable;
       break;
-    case ValueComputation::unary:
+    case Evaluation::unary:
       os << code(value_computation.m_operator.unary) << '(' << *value_computation.m_lhs << ')';
       break;
-    case ValueComputation::binary:
+    case Evaluation::binary:
       os << '(' << *value_computation.m_lhs << ") " << code(value_computation.m_operator.binary) << " (" << *value_computation.m_rhs << ')';
       break;
-    case ValueComputation::condition:
+    case Evaluation::condition:
       os << '(' << *value_computation.m_condition << ") ? (" << *value_computation.m_lhs << ") : (" << *value_computation.m_rhs << ')';
       break;
   }
@@ -107,9 +107,9 @@ std::ostream& operator<<(std::ostream& os, ValueComputation const& value_computa
 }
 
 //static
-void ValueComputation::negate(std::unique_ptr<ValueComputation>& ptr)
+void Evaluation::negate(std::unique_ptr<Evaluation>& ptr)
 {
-  DoutEntering(dc::simplify, "ValueComputation::negate(" << *ptr << ").");
+  DoutEntering(dc::simplify, "Evaluation::negate(" << *ptr << ").");
   if (ptr->m_state == literal)
   {
     ptr->m_simple.m_literal = -ptr->m_simple.m_literal;
@@ -123,7 +123,7 @@ void ValueComputation::negate(std::unique_ptr<ValueComputation>& ptr)
   }
   else
   {
-    ValueComputation negated;
+    Evaluation negated;
     negated.m_state = unary;
     negated.m_operator.unary = ast::uo_minus;
     negated.m_lhs = std::move(ptr);
@@ -132,7 +132,7 @@ void ValueComputation::negate(std::unique_ptr<ValueComputation>& ptr)
   }
 }
 
-void ValueComputation::swap_sum()
+void Evaluation::swap_sum()
 {
   // Do not call this function unless the following holds:
   ASSERT(is_sum() && m_lhs->m_state == literal && m_rhs->m_state != literal);
@@ -164,7 +164,7 @@ void ValueComputation::swap_sum()
          m_lhs->m_rhs->is_negated()))
     {
       Dout(dc::simplify, "Before negating both sides: " << *this);
-      // Can't call unary_operator because that assumes a ValueComputation on the stack :/
+      // Can't call unary_operator because that assumes a Evaluation on the stack :/
       negate(m_lhs->m_lhs);     //->unary_operator(ast::uo_minus);
       if (m_lhs->m_rhs->is_negated())
         negate(m_lhs->m_rhs);   // ->unary_operator(ast::uo_minus);
@@ -178,17 +178,17 @@ void ValueComputation::swap_sum()
     }
     else
     {
-      ValueComputation* unary_value_computation = new ValueComputation;
+      Evaluation* unary_value_computation = new Evaluation;
       unary_value_computation->m_allocated = true;
       unary_value_computation->m_lhs = std::move(m_lhs);
-      m_lhs = std::move(std::unique_ptr<ValueComputation>(unary_value_computation));
+      m_lhs = std::move(std::unique_ptr<Evaluation>(unary_value_computation));
       m_lhs->m_state = unary;
       m_lhs->m_operator.unary = ast::uo_minus;
     }
   }
 }
 
-void ValueComputation::strip_rhs()
+void Evaluation::strip_rhs()
 {
   m_rhs.reset();
   m_state = m_lhs->m_state;
@@ -199,10 +199,10 @@ void ValueComputation::strip_rhs()
   m_lhs = std::move(m_lhs->m_lhs);
 }
 
-void ValueComputation::OP(binary_operators op, ValueComputation&& rhs)
+void Evaluation::OP(binary_operators op, Evaluation&& rhs)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::OP(" << op << ", {" << rhs << "}) [this = " << *this << "] ==> ");
-  // Should never try to use an unused or uninitialized ValueComputation in a binary operator.
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::OP(" << op << ", {" << rhs << "}) [this = " << *this << "] ==> ");
+  // Should never try to use an unused or uninitialized Evaluation in a binary operator.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying binary operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
@@ -348,10 +348,10 @@ void ValueComputation::OP(binary_operators op, ValueComputation&& rhs)
   Dout(dc::finish, '{' << *this << '}');
 }
 
-void ValueComputation::postfix_operator(ast::postfix_operators op)
+void Evaluation::postfix_operator(ast::postfix_operators op)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::postfix_operator(" << op << ") [this = " << *this << "] ==> ");
-  // Should never try to apply a postfix operator to an unused or uninitialized ValueComputation.
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::postfix_operator(" << op << ") [this = " << *this << "] ==> ");
+  // Should never try to apply a postfix operator to an unused or uninitialized Evaluation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying postfix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
@@ -359,10 +359,10 @@ void ValueComputation::postfix_operator(ast::postfix_operators op)
   Dout(dc::finish, '{' << *this << '}');
 }
 
-void ValueComputation::prefix_operator(ast::unary_operators op)
+void Evaluation::prefix_operator(ast::unary_operators op)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::prefix_operator(" << op << ") [this = " << *this << "] ==> ");
-  // Should never try to apply a prefix operator to an unused or uninitialized ValueComputation.
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::prefix_operator(" << op << ") [this = " << *this << "] ==> ");
+  // Should never try to apply a prefix operator to an unused or uninitialized Evaluation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying prefix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
@@ -372,7 +372,7 @@ void ValueComputation::prefix_operator(ast::unary_operators op)
   Dout(dc::finish, '{' << *this << '}');
 }
 
-ValueComputation::ValueComputation(ValueComputation&& value_computation) :
+Evaluation::Evaluation(Evaluation&& value_computation) :
     m_state(value_computation.m_state),
     m_allocated(value_computation.m_allocated),
     m_simple(value_computation.m_simple),
@@ -386,7 +386,7 @@ ValueComputation::ValueComputation(ValueComputation&& value_computation) :
   value_computation.m_state = unused;
 }
 
-void ValueComputation::operator=(ValueComputation&& value_computation)
+void Evaluation::operator=(Evaluation&& value_computation)
 {
   m_state = value_computation.m_state;
   m_allocated = value_computation.m_allocated;
@@ -400,18 +400,18 @@ void ValueComputation::operator=(ValueComputation&& value_computation)
 }
 
 //static
-std::unique_ptr<ValueComputation> ValueComputation::make_unique(ValueComputation&& value_computation)
+std::unique_ptr<Evaluation> Evaluation::make_unique(Evaluation&& value_computation)
 {
   assert(!value_computation.m_allocated);
-  ValueComputation* new_value_computation = new ValueComputation(std::move(value_computation));
+  Evaluation* new_value_computation = new Evaluation(std::move(value_computation));
   new_value_computation->m_allocated = true;
-  return std::unique_ptr<ValueComputation>(new_value_computation);
+  return std::unique_ptr<Evaluation>(new_value_computation);
 }
 
-void ValueComputation::unary_operator(ast::unary_operators op)
+void Evaluation::unary_operator(ast::unary_operators op)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::unary_operator(" << op << ") [this = " << *this << "] ==> ");
-  // Should never try to apply a unary operator to an unused or uninitialized ValueComputation.
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::unary_operator(" << op << ") [this = " << *this << "] ==> ");
+  // Should never try to apply a unary operator to an unused or uninitialized Evaluation.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying unary operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
@@ -447,9 +447,9 @@ void ValueComputation::unary_operator(ast::unary_operators op)
   Dout(dc::finish, '{' << *this << '}');
 }
 
-void ValueComputation::conditional_operator(ValueComputation&& true_value, ValueComputation&& false_value)
+void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& false_value)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "ValueComputation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "] ==> ");
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
     Dout(dc::simplify, "Simplifying because condition is a literal...");

@@ -4,7 +4,7 @@
 #include "position_handler.h"
 #include "Graph.h"
 #include "Context.h"
-#include "ValueComputation.h"
+#include "Evaluation.h"
 #include "TagCompare.h"
 #include "ScopeDetector.h"
 #include "Locks.h"
@@ -20,8 +20,8 @@
 std::map<ast::tag, ast::function, TagCompare> functions;
 
 void execute_body(std::string name, ast::statement_seq const& body, Context& context);
-ValueComputation execute_expression(ast::assignment_expression const& expression, Context& context);
-ValueComputation execute_expression(ast::expression const& expression, Context& context);
+Evaluation execute_expression(ast::assignment_expression const& expression, Context& context);
+Evaluation execute_expression(ast::expression const& expression, Context& context);
 
 void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
 {
@@ -54,7 +54,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& vardecl{boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node)};
       if (vardecl.m_initial_value)
       {
-        ValueComputation value = execute_expression(*vardecl.m_initial_value, context);
+        Evaluation value = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
         context.write(declaration_statement.tag());
@@ -65,7 +65,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
         context.uninitialized(declaration_statement.tag());
-        context.m_symbols.add(declaration_statement, ValueComputation());
+        context.m_symbols.add(declaration_statement, Evaluation());
       }
       return;
     }
@@ -73,18 +73,18 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
   context.m_symbols.add(declaration_statement);
 }
 
-ValueComputation execute_condition(ast::expression const& condition, Context& context)
+Evaluation execute_condition(ast::expression const& condition, Context& context)
 {
-  ValueComputation result = execute_expression(condition, context);
+  Evaluation result = execute_expression(condition, context);
   Dout(dc::continued, condition);
   return result;
 }
 
-ValueComputation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
+Evaluation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
 {
   DoutEntering(dc::notice, "execute_primary_expression(`" << primary_expression << "`)");
 
-  ValueComputation result;
+  Evaluation result;
   auto const& node = primary_expression.m_primary_expression_node;
   switch (node.which())
   {
@@ -160,7 +160,7 @@ template<> binary_operators get_operator<ast::multiplicative_expression>(ast::mu
     { return static_cast<binary_operators>(multiplicative_mo_mul + boost::fusion::get<0>(tail)); }
 
 template<typename T>
-ValueComputation execute_operator_list_expression(T const& expr, Context& context)
+Evaluation execute_operator_list_expression(T const& expr, Context& context)
 {
   // Only print Entering.. when there is actually an operator.
   DoutEntering(dc::notice(!expr.m_chained.empty()),
@@ -179,7 +179,7 @@ ValueComputation execute_operator_list_expression(T const& expr, Context& contex
   // <multiplicative_expression>
 
   // A chain, ie x + y + z really is (x + y) + z.
-  ValueComputation result = execute_operator_list_expression(expr.m_other_expression, context);
+  Evaluation result = execute_operator_list_expression(expr.m_other_expression, context);
   for (auto const& tail : expr.m_chained)
   {
     if (std::is_same<T, ast::logical_or_expression>::value ||
@@ -194,7 +194,7 @@ ValueComputation execute_operator_list_expression(T const& expr, Context& contex
 
 // Specialization for boost::fusion::tuple<operators, prev_precedence_type>
 template<typename OPERATORS, typename PREV_PRECEDENCE_TYPE>
-ValueComputation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple, Context& context)
+Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple, Context& context)
 {
   // Doesn't really make much sense to print this, as the function being called already prints basically the same info.
   //DoutEntering(dc::notice, "execute_operator_list_expression<" <<
@@ -205,12 +205,12 @@ ValueComputation execute_operator_list_expression(boost::fusion::tuple<OPERATORS
   return execute_operator_list_expression(boost::fusion::get<1>(tuple), context);
 }
 
-ValueComputation execute_postfix_expression(ast::postfix_expression const& expr, Context& context)
+Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Context& context)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
   DoutEntering(dc::notice(!expr.m_postfix_operators.empty()), "execute_postfix_expression(`" << expr << "`)");
 
-  ValueComputation result;
+  Evaluation result;
 
   auto const& node = expr.m_postfix_expression_node;
   ASSERT(node.which() == ast::PE_primary_expression);
@@ -239,12 +239,12 @@ ValueComputation execute_postfix_expression(ast::postfix_expression const& expr,
 
 // Specialization for unary_expression.
 template<>
-ValueComputation execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
+Evaluation execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
   DoutEntering(dc::notice(!expr.m_unary_operators.empty()), "execute_operator_list_expression(`" << expr << "`) [execute_unary_expression]");
 
-  ValueComputation result;
+  Evaluation result;
   auto const& node = expr.m_postfix_expression.m_postfix_expression_node;
   if (node.which() != ast::PE_primary_expression && !expr.m_postfix_expression.m_postfix_operators.empty())
   {
@@ -314,11 +314,11 @@ ValueComputation execute_operator_list_expression(ast::unary_expression const& e
   return result;
 }
 
-ValueComputation execute_expression(ast::assignment_expression const& expression, Context& context)
+Evaluation execute_expression(ast::assignment_expression const& expression, Context& context)
 {
   DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
   DebugMarkDown;
-  ValueComputation result;
+  Evaluation result;
   auto const& node = expression.m_assignment_expression_node;
   switch (node.which())
   {
@@ -342,7 +342,7 @@ ValueComputation execute_expression(ast::assignment_expression const& expression
       auto const& register_assignment{boost::get<ast::register_assignment>(node)};
       execute_expression(register_assignment.rhs, context);
       // Registers shouldn't be used...
-      result = ValueComputation(ValueComputation::not_used);
+      result = Evaluation(Evaluation::not_used);
       break;
     }
     case ast::AE_assignment:
@@ -357,9 +357,9 @@ ValueComputation execute_expression(ast::assignment_expression const& expression
   return result;
 }
 
-ValueComputation execute_expression(ast::expression const& expression, Context& context)
+Evaluation execute_expression(ast::expression const& expression, Context& context)
 {
-  ValueComputation result = execute_expression(expression.m_assignment_expression, context);
+  Evaluation result = execute_expression(expression.m_assignment_expression, context);
   for (auto const& assignment_expression : expression.m_chained)
     result = execute_expression(assignment_expression, context);
   return result;

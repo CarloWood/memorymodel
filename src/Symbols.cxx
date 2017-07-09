@@ -4,10 +4,10 @@
 #include "Context.h"
 #include "Graph.h"
 
-void Symbols::add(ast::declaration_statement const& declaration_statement, ValueComputation&& initialization)
+void Symbols::add(ast::declaration_statement const& declaration_statement, Evaluation&& initialization)
 {
   m_symbols.push_back(std::make_pair(declaration_statement.name(), declaration_statement));
-  m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), ValueComputation::make_unique(std::move(initialization))));
+  m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), Evaluation::make_unique(std::move(initialization))));
 }
 
 void Symbols::scope_start(bool is_thread, Context& context)

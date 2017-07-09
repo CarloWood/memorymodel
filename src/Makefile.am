@@ -28,8 +28,8 @@ libcppmem_a_SOURCES = \
 		 Graph.h \
 		 ast.cxx \
 		 ast.h \
-		 ValueComputation.cxx \
-		 ValueComputation.h \
+		 Evaluation.cxx \
+		 Evaluation.h \
 		 position_handler.cxx \
 		 position_handler.h \
 		 grammar_general.h \

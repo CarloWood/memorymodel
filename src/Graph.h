@@ -91,32 +91,32 @@ class Node
   std::memory_order m_memory_order;     // Memory order, only valid if m_atomic is true;
 
  public:
-  Node(id_type& next_node_id,
+  Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& mutex,
        mutex_type access_type) :
-    m_id(next_node_id++),
+    m_id(next_node_id),
     m_thread(thread),
     m_variable(mutex),
     m_access(convert(access_type)),
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id,
+  Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& variable) :
-    m_id(next_node_id++),
+    m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
     m_access(ReadAccess),
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id,
+  Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& variable,
        Value const& value) :
-    m_id(next_node_id++),
+    m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
     m_access(WriteAccess),
@@ -124,23 +124,23 @@ class Node
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type& next_node_id,
+  Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& variable,
        std::memory_order memory_order) :
-    m_id(next_node_id++),
+    m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
     m_access(ReadAccess),
     m_atomic(true),
     m_memory_order(memory_order) { }
 
-  Node(id_type& next_node_id,
+  Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& variable,
        Value const& value,
        std::memory_order memory_order) :
-    m_id(next_node_id++),
+    m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
     m_access(WriteAccess),
@@ -236,28 +236,18 @@ class Graph
   void print_nodes() const;
 
  public:
-  // Uninitialized declaration.
-  void uninitialized(ast::tag decl, Context& context);
-
-  // Non-atomic read and writes.
-  void read(ast::tag variable, Context& context);
-  void write(ast::tag variable, Context& context);
-
-  // Atomic read and writes.
-  void read(ast::tag variable, std::memory_order mo, Context& context);
-  void write(ast::tag variable, std::memory_order mo, Context& context);
-
-  // Mutex declaration and (un)locking.
-  void lockdecl(ast::tag mutex, Context& context);
-  void lock(ast::tag mutex, Context& context);
-  void unlock(ast::tag mutex, Context& context);
-
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
   void scope_end();
 
   // A new node was added.
-  void new_node(nodes_type::iterator const& node);
+  template<typename ...Args>
+  void new_node(Args... args)
+  {
+    DebugMarkUp;
+    auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, args...);
+    Dout(dc::notice, "Created node " << *node << '.');
+  }
 };
 
 #ifdef CWDEBUG

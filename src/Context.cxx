@@ -2,42 +2,58 @@
 #include "Context.h"
 #include "Graph.h"
 
+#ifdef CWDEBUG
+// To make DoutTag work.
+#define context (*this)
+#endif
+
 void Context::uninitialized(ast::tag decl)
 {
-  m_graph.uninitialized(decl, *this);
+  DoutTag(dc::notice, "[uninitialized declaration of", decl);
 }
 
 void Context::read(ast::tag variable)
 {
-  m_graph.read(variable, *this);
+  DoutTag(dc::notice, "[NA read from", variable);
+  m_graph.new_node(variable);
 }
 
 void Context::write(ast::tag variable)
 {
-  m_graph.write(variable, *this);
+  DoutTag(dc::notice, "[NA write to", variable);
+  Value v;
+  m_graph.new_node(variable, v);
 }
 
 void Context::read(ast::tag variable, std::memory_order mo)
 {
-  m_graph.read(variable, mo, *this);
+  DoutTag(dc::notice, "[" << mo << " read from", variable);
+  m_graph.new_node(variable, mo);
 }
 
 void Context::write(ast::tag variable, std::memory_order mo)
 {
-  m_graph.write(variable, mo, *this);
+  DoutTag(dc::notice, "[" << mo << " write to", variable);
+  Value v;
+  m_graph.new_node(variable, v, mo);
 }
 
 void Context::lockdecl(ast::tag mutex)
 {
-  m_graph.lockdecl(mutex, *this);
+  DoutTag(dc::notice, "[declaration of", mutex);
+  m_graph.new_node(mutex, mutex_decl);
 }
 
 void Context::lock(ast::tag mutex)
 {
-  m_graph.lock(mutex, *this);
+  DoutTag(dc::notice, "[lock of", mutex);
+  m_graph.new_node(mutex, mutex_lock1);
+  m_graph.new_node(mutex, mutex_lock2);
 }
 
 void Context::unlock(ast::tag mutex)
 {
-  m_graph.unlock(mutex, *this);
+  DoutTag(dc::notice, "[unlock of", mutex);
+  m_graph.new_node(mutex, mutex_unlock1);
+  m_graph.new_node(mutex, mutex_unlock2);
 }
