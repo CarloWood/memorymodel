@@ -57,15 +57,15 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         Evaluation value = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.write(declaration_statement.tag());
         context.m_symbols.add(declaration_statement, std::move(value));
+        context.write(declaration_statement.tag());
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.uninitialized(declaration_statement.tag());
         context.m_symbols.add(declaration_statement, Evaluation());
+        context.uninitialized(declaration_statement.tag());
       }
       return;
     }
@@ -350,6 +350,8 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
       Dout(dc::valuecomp, "Assignment value computation results in {" << result << "}; assigned to `" << assignment.lhs << "`.");
+      context.m_symbols.assign(assignment.lhs, std::move(result));
+      result = assignment.lhs;
       context.write(assignment.lhs);
       break;
     }

@@ -129,8 +129,17 @@ class Node
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Node const& node1, Node const& node2) { return node1.m_id < node2.m_id; }
+};
 
-  //friend std::ostream& operator<<(std::ostream& os, Node const& node);
+// Hack to print Nodes.
+struct NodeWithContext
+{
+  Node const& m_node;
+  Context& m_context;
+
+  NodeWithContext(Node const& node, Context& context) : m_node(node), m_context(context) { }
+
+  friend std::ostream& operator<<(std::ostream& os, NodeWithContext const& node);
 };
 
 enum edge_type {
@@ -208,7 +217,7 @@ class Graph
     m_next_edge_id{0},
     m_beginning_of_thread(false) { }
 
-  void print_nodes(Context const& context) const;
+  void print_nodes(Context& context) const;
 
  public:
   // Entering and leaving scopes.
@@ -217,11 +226,11 @@ class Graph
 
   // A new node was added.
   template<typename ...Args>
-  void new_node(Args... args)
+  void new_node(Context& context, Args... args)
   {
     DebugMarkUp;
     auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, args...);
-    //Dout(dc::notice, "Created node " << *node << '.');
+    Dout(dc::notice, "Created node " << NodeWithContext(*node, context) << '.');
   }
 };
 
