@@ -1,6 +1,9 @@
 #include "sys.h"
 #include "debug.h"
+#include "Evaluation.h"
+#include "ast.h"
 
+#ifdef CWDEBUG
 std::ostream& operator<<(std::ostream& os, std::memory_order mo)
 {
   switch (mo)
@@ -26,3 +29,14 @@ std::ostream& operator<<(std::ostream& os, std::memory_order mo)
   }
   return os;
 }
+
+void gdb_print_evaluation(Evaluation const& evaluation)
+{
+  std::cout << evaluation << std::endl;
+}
+
+void gdb_print_expression(ast::expression const& expression)
+{
+  std::cout << expression << std::endl;
+}
+#endif // CWDEBUG

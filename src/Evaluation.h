@@ -45,9 +45,9 @@ class Evaluation
     ast::unary_operators unary;                 // Only valid when m_state == unary.
     binary_operators binary;                    // Only valid when m_state == binary.
   } m_operator;
-  std::unique_ptr<Evaluation> m_lhs;      // Only valid when m_state == unary, binary or condition.
-  std::unique_ptr<Evaluation> m_rhs;      // Only valid when m_state == binary or condition.
-  std::unique_ptr<Evaluation> m_condition;// Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
+  std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == unary, binary or condition.
+  std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
+  std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
 
  public:
   Evaluation() : m_state(uninitialized), m_allocated(false) { }
@@ -58,7 +58,7 @@ class Evaluation
   Evaluation& operator=(ast::tag tag) { m_state = variable; m_simple.m_variable = tag; return *this; }
   void operator=(Evaluation&& value_computation);
 
-  // Shallow-copy value_computation and turn it into an allocation if it wasn't already.
+  // Shallow-copy value_computation and turn it into an allocation.
   static std::unique_ptr<Evaluation> make_unique(Evaluation&& value_computation);
   // Apply negation unary operator - to the Evaluation object pointed to by ptr.
   static void negate(std::unique_ptr<Evaluation>& ptr);
@@ -67,11 +67,10 @@ class Evaluation
   bool is_sum() const { return m_state == binary && (m_operator.binary == additive_ado_add || m_operator.binary == additive_ado_sub); }
   bool is_negated() const { return m_state == unary && m_operator.unary == ast::uo_minus; }
 
-
   void OP(binary_operators op, Evaluation&& rhs);         // *this OP= rhs.
-  void postfix_operator(ast::postfix_operators op);             // (*this)++ or (*this)--
-  void prefix_operator(ast::unary_operators op);                // ++*this or --*this
-  void unary_operator(ast::unary_operators op);                 // *this = OP *this
+  void postfix_operator(ast::postfix_operators op);       // (*this)++ or (*this)--
+  void prefix_operator(ast::unary_operators op);          // ++*this or --*this
+  void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
                             Evaluation&& false_value);
   void swap_sum();

@@ -80,22 +80,19 @@ std::string Node::type() const
   return type;
 }
 
-std::ostream& operator<<(std::ostream& os, Value const& value)
-{
-  return os << "VALUE";
-}
-
+#if 0
 std::ostream& operator<<(std::ostream& os, Node const& node)
 {
-  os << '"' << node.name() << ':' << node.type() << ' ' << node.m_variable << '=' << node.m_value << '"';
+  os << '"' << node.name() << ':' << node.type() << ' ' << node.m_variable << '=' << *m_symbols.m_initializations[node.m_variable] << '"';
   return os;
 }
+#endif
 
-void Graph::print_nodes() const
+void Graph::print_nodes(Context const& context) const
 {
   for (auto&& node : m_nodes)
   {
-    Dout(dc::notice, node);
+    Dout(dc::notice, '"' << node.name() << ':' << node.type() << ' ' << node.tag() << '=' << context.m_symbols.initialization(node.tag()) << '"');
   }
 }
 

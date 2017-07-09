@@ -10,6 +10,13 @@ void Symbols::add(ast::declaration_statement const& declaration_statement, Evalu
   m_initializations.insert(initializations_type::value_type(declaration_statement.tag(), Evaluation::make_unique(std::move(initialization))));
 }
 
+void Symbols::assign(ast::tag variable, Evaluation&& initialization)
+{
+  auto entry = m_initializations.find(variable);
+  ASSERT(entry != m_initializations.end());
+  entry->second = std::move(Evaluation::make_unique(std::move(initialization)));
+}
+
 void Symbols::scope_start(bool is_thread, Context& context)
 {
   context.m_graph.scope_start(is_thread);

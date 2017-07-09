@@ -15,27 +15,25 @@ void Context::uninitialized(ast::tag decl)
 void Context::read(ast::tag variable)
 {
   DoutTag(dc::notice, "[NA read from", variable);
-  m_graph.new_node(variable);
+  m_graph.new_node(false, variable);
 }
 
 void Context::write(ast::tag variable)
 {
   DoutTag(dc::notice, "[NA write to", variable);
-  Value v;
-  m_graph.new_node(variable, v);
+  m_graph.new_node(true, variable);
 }
 
 void Context::read(ast::tag variable, std::memory_order mo)
 {
   DoutTag(dc::notice, "[" << mo << " read from", variable);
-  m_graph.new_node(variable, mo);
+  m_graph.new_node(false, variable, mo);
 }
 
 void Context::write(ast::tag variable, std::memory_order mo)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  Value v;
-  m_graph.new_node(variable, v, mo);
+  m_graph.new_node(true, variable, mo);
 }
 
 void Context::lockdecl(ast::tag mutex)

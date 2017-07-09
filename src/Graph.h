@@ -71,11 +71,6 @@ inline Access convert(mutex_type mt)
 char const* access_str(Access access);
 std::ostream& operator<<(std::ostream& os, Access access);
 
-class Value
-{
-  friend std::ostream& operator<<(std::ostream& os, Value const& value);
-};
-
 class Node
 {
  public:
@@ -86,11 +81,36 @@ class Node
   ThreadPtr m_thread;                   // The thread that this node belongs to.
   ast::tag m_variable;                  // The variable involved.
   Access m_access;                      // The type of access.
-  Value m_value;                        // The value read or written.
   bool m_atomic;                        // Set if this is an atomic access.
   std::memory_order m_memory_order;     // Memory order, only valid if m_atomic is true;
 
  public:
+  // Non-Atomic Read or Write.
+  Node(id_type next_node_id,
+       ThreadPtr const& thread,
+       bool write,
+       ast::tag const& variable) :
+    m_id(next_node_id),
+    m_thread(thread),
+    m_variable(variable),
+    m_access(write ? WriteAccess : ReadAccess),
+    m_atomic(false),
+    m_memory_order(std::memory_order_seq_cst) { }
+
+  // Atomic Read or Write.
+  Node(id_type next_node_id,
+       ThreadPtr const& thread,
+       bool write,
+       ast::tag const& variable,
+       std::memory_order memory_order) :
+    m_id(next_node_id),
+    m_thread(thread),
+    m_variable(variable),
+    m_access(write ? WriteAccess : ReadAccess),
+    m_atomic(true),
+    m_memory_order(memory_order) { }
+
+  // Other Node.
   Node(id_type next_node_id,
        ThreadPtr const& thread,
        ast::tag const& mutex,
@@ -102,60 +122,15 @@ class Node
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  Node(id_type next_node_id,
-       ThreadPtr const& thread,
-       ast::tag const& variable) :
-    m_id(next_node_id),
-    m_thread(thread),
-    m_variable(variable),
-    m_access(ReadAccess),
-    m_atomic(false),
-    m_memory_order(std::memory_order_seq_cst) { }
-
-  Node(id_type next_node_id,
-       ThreadPtr const& thread,
-       ast::tag const& variable,
-       Value const& value) :
-    m_id(next_node_id),
-    m_thread(thread),
-    m_variable(variable),
-    m_access(WriteAccess),
-    m_value(value),
-    m_atomic(false),
-    m_memory_order(std::memory_order_seq_cst) { }
-
-  Node(id_type next_node_id,
-       ThreadPtr const& thread,
-       ast::tag const& variable,
-       std::memory_order memory_order) :
-    m_id(next_node_id),
-    m_thread(thread),
-    m_variable(variable),
-    m_access(ReadAccess),
-    m_atomic(true),
-    m_memory_order(memory_order) { }
-
-  Node(id_type next_node_id,
-       ThreadPtr const& thread,
-       ast::tag const& variable,
-       Value const& value,
-       std::memory_order memory_order) :
-    m_id(next_node_id),
-    m_thread(thread),
-    m_variable(variable),
-    m_access(WriteAccess),
-    m_value(value),
-    m_atomic(true),
-    m_memory_order(memory_order) { }
-
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }
   std::string type() const;
+  ast::tag tag() const { return m_variable; }
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Node const& node1, Node const& node2) { return node1.m_id < node2.m_id; }
 
-  friend std::ostream& operator<<(std::ostream& os, Node const& node);
+  //friend std::ostream& operator<<(std::ostream& os, Node const& node);
 };
 
 enum edge_type {
@@ -233,7 +208,7 @@ class Graph
     m_next_edge_id{0},
     m_beginning_of_thread(false) { }
 
-  void print_nodes() const;
+  void print_nodes(Context const& context) const;
 
  public:
   // Entering and leaving scopes.
@@ -246,7 +221,7 @@ class Graph
   {
     DebugMarkUp;
     auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, args...);
-    Dout(dc::notice, "Created node " << *node << '.');
+    //Dout(dc::notice, "Created node " << *node << '.');
   }
 };
 

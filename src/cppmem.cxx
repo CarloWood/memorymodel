@@ -617,5 +617,5 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  graph.print_nodes();
+  graph.print_nodes(context);
 }
