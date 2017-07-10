@@ -57,17 +57,15 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
         Evaluation value = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.m_symbols.add(declaration_statement, std::move(value));
-        context.write(declaration_statement.tag());
+        context.write(declaration_statement.tag(), std::move(value));
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.m_symbols.add(declaration_statement, Evaluation());
         context.uninitialized(declaration_statement.tag());
       }
-      return;
+      break;
     }
   }
   context.m_symbols.add(declaration_statement);
@@ -230,7 +228,8 @@ Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Conte
     for (auto const& postfix_operator : expr.m_postfix_operators)
     {
       result.postfix_operator(postfix_operator);
-      context.write(tag);
+      context.write(tag, std::move(result));
+      result = tag;
     }
   }
 
@@ -270,7 +269,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
             THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", primary_expression_node));
           ast::tag const& tag{boost::get<ast::tag>(primary_expression_node)};
           result.prefix_operator(unary_operator);
-          context.write(tag);
+          context.write(tag, std::move(result));
+          result = tag;
         }
         else
           result.unary_operator(unary_operator);
@@ -283,7 +283,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       // FIXME TODO
       //result = execute_expression(atomic_fetch_add_explicit.m_expression, context);
       context.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
-      context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
+      context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, std::move(result));
+      result = atomic_fetch_add_explicit.m_memory_location_id;
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
@@ -292,7 +293,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       // FIXME TODO
       //result = execute_expression(atomic_fetch_sub_explicit.m_expression, context);
       context.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
-      context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
+      context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, std::move(result));
+      result = atomic_fetch_sub_explicit.m_memory_location_id;
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
@@ -350,9 +352,8 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
       Dout(dc::valuecomp, "Assignment value computation results in {" << result << "}; assigned to `" << assignment.lhs << "`.");
-      context.m_symbols.assign(assignment.lhs, std::move(result));
+      context.write(assignment.lhs, std::move(result));
       result = assignment.lhs;
-      context.write(assignment.lhs);
       break;
     }
   }
@@ -385,10 +386,10 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_store_call:
     {
       auto const& store_call{boost::get<ast::store_call>(node)};
-      execute_expression(store_call.m_val, context);
+      Evaluation value = execute_expression(store_call.m_val, context);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      context.write(store_call.m_memory_location_id, store_call.m_memory_order);
+      context.write(store_call.m_memory_location_id, store_call.m_memory_order, std::move(value));
       break;
     }
     case ast::SN_function_call:
@@ -619,5 +620,5 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  graph.print_nodes(context);
+  graph.print_nodes();
 }

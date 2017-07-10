@@ -24,11 +24,11 @@ struct Context {
 
   // Non-atomic read and writes.
   void read(ast::tag variable);
-  void write(ast::tag variable);
+  void write(ast::tag variable, Evaluation&& evaluation);
 
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo);
-  void write(ast::tag variable, std::memory_order mo);
+  void write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
 
   // Mutex declaration and (un)locking.
   void lockdecl(ast::tag mutex);

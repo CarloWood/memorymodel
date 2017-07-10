@@ -4,12 +4,14 @@
 #include "utils/ulong_to_base.h"
 #include "ast.h"
 #include "debug.h"
+#include "Evaluation.h"
 #include <set>
 #include <memory>
 #include <iosfwd>
 #include <string>
 #include <stack>
 #include <vector>
+#include <utility>
 
 class Thread;
 struct Context;
@@ -83,32 +85,58 @@ class Node
   Access m_access;                      // The type of access.
   bool m_atomic;                        // Set if this is an atomic access.
   std::memory_order m_memory_order;     // Memory order, only valid if m_atomic is true;
+  std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_variable -- only valid when m_access == WriteAccess.
 
  public:
-  // Non-Atomic Read or Write.
+  // Non-Atomic Read.
   Node(id_type next_node_id,
        ThreadPtr const& thread,
-       bool write,
        ast::tag const& variable) :
     m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
-    m_access(write ? WriteAccess : ReadAccess),
+    m_access(ReadAccess),
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  // Atomic Read or Write.
+  // Non-Atomic Write.
   Node(id_type next_node_id,
        ThreadPtr const& thread,
-       bool write,
+       ast::tag const& variable,
+       Evaluation&& evaluation) :
+    m_id(next_node_id),
+    m_thread(thread),
+    m_variable(variable),
+    m_access(WriteAccess),
+    m_atomic(false),
+    m_memory_order(std::memory_order_seq_cst),
+    m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
+
+  // Atomic Read.
+  Node(id_type next_node_id,
+       ThreadPtr const& thread,
        ast::tag const& variable,
        std::memory_order memory_order) :
     m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
-    m_access(write ? WriteAccess : ReadAccess),
+    m_access(ReadAccess),
     m_atomic(true),
     m_memory_order(memory_order) { }
+
+  // Atomic Write.
+  Node(id_type next_node_id,
+       ThreadPtr const& thread,
+       ast::tag const& variable,
+       std::memory_order memory_order,
+       Evaluation&& evaluation) :
+    m_id(next_node_id),
+    m_thread(thread),
+    m_variable(variable),
+    m_access(WriteAccess),
+    m_atomic(true),
+    m_memory_order(memory_order),
+    m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
 
   // Other Node.
   Node(id_type next_node_id,
@@ -126,20 +154,12 @@ class Node
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }
   std::string type() const;
   ast::tag tag() const { return m_variable; }
+  bool is_write() const { return m_access == WriteAccess; }
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Node const& node1, Node const& node2) { return node1.m_id < node2.m_id; }
-};
 
-// Hack to print Nodes.
-struct NodeWithContext
-{
-  Node const& m_node;
-  Context& m_context;
-
-  NodeWithContext(Node const& node, Context& context) : m_node(node), m_context(context) { }
-
-  friend std::ostream& operator<<(std::ostream& os, NodeWithContext const& node);
+  friend std::ostream& operator<<(std::ostream& os, Node const& node);
 };
 
 enum edge_type {
@@ -217,7 +237,7 @@ class Graph
     m_next_edge_id{0},
     m_beginning_of_thread(false) { }
 
-  void print_nodes(Context& context) const;
+  void print_nodes() const;
 
  public:
   // Entering and leaving scopes.
@@ -226,11 +246,11 @@ class Graph
 
   // A new node was added.
   template<typename ...Args>
-  void new_node(Context& context, Args... args)
+  void new_node(Args&&... args)
   {
     DebugMarkUp;
-    auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, args...);
-    Dout(dc::notice, "Created node " << NodeWithContext(*node, context) << '.');
+    auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, std::forward<Args>(args)...);
+    Dout(dc::notice, "Created node " << *node << '.');
   }
 };
 

@@ -15,43 +15,43 @@ void Context::uninitialized(ast::tag decl)
 void Context::read(ast::tag variable)
 {
   DoutTag(dc::notice, "[NA read from", variable);
-  m_graph.new_node(*this, false, variable);
+  m_graph.new_node(variable);
 }
 
-void Context::write(ast::tag variable)
+void Context::write(ast::tag variable, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[NA write to", variable);
-  m_graph.new_node(*this, true, variable);
+  m_graph.new_node(variable, std::move(evaluation));
 }
 
 void Context::read(ast::tag variable, std::memory_order mo)
 {
   DoutTag(dc::notice, "[" << mo << " read from", variable);
-  m_graph.new_node(*this, false, variable, mo);
+  m_graph.new_node(variable, mo);
 }
 
-void Context::write(ast::tag variable, std::memory_order mo)
+void Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  m_graph.new_node(*this, true, variable, mo);
+  m_graph.new_node(variable, mo, std::move(evaluation));
 }
 
 void Context::lockdecl(ast::tag mutex)
 {
   DoutTag(dc::notice, "[declaration of", mutex);
-  m_graph.new_node(*this, mutex, mutex_decl);
+  m_graph.new_node(mutex, mutex_decl);
 }
 
 void Context::lock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[lock of", mutex);
-  m_graph.new_node(*this, mutex, mutex_lock1);
-  m_graph.new_node(*this, mutex, mutex_lock2);
+  m_graph.new_node(mutex, mutex_lock1);
+  m_graph.new_node(mutex, mutex_lock2);
 }
 
 void Context::unlock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[unlock of", mutex);
-  m_graph.new_node(*this, mutex, mutex_unlock1);
-  m_graph.new_node(*this, mutex, mutex_unlock2);
+  m_graph.new_node(mutex, mutex_unlock1);
+  m_graph.new_node(mutex, mutex_unlock2);
 }
