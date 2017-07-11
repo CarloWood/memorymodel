@@ -1,7 +1,10 @@
 #pragma once
 
 #include "ast.h"
+#include "debug.h"
 #include <iosfwd>
+
+struct Context;
 
 enum binary_operators {
   multiplicative_mo_mul,
@@ -31,11 +34,12 @@ class Evaluation
   enum Unused { not_used };
 
  private:
-  enum { unused, uninitialized, literal, variable, unary, binary, condition } m_state;  // See also is_valid.
+  enum { unused, uninitialized, literal, variable, pre, post, unary, binary, condition } m_state;  // See also is_valid.
   bool m_allocated;
   union Simple
   {
     int m_literal;                              // Only valid when m_state == literal.
+    int m_increment;                            // Only valid when m_state == pre or post; either -1 or +1.
     ast::tag m_variable;                        // Only valid when m_state == variable.
     Simple() { }
     explicit Simple(int literal) : m_literal(literal) { }
@@ -45,7 +49,7 @@ class Evaluation
     ast::unary_operators unary;                 // Only valid when m_state == unary.
     binary_operators binary;                    // Only valid when m_state == binary.
   } m_operator;
-  std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == unary, binary or condition.
+  std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == pre, post, unary, binary or condition.
   std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
   std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
 
@@ -73,15 +77,23 @@ class Evaluation
   void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
                             Evaluation&& false_value);
+  void write(ast::tag tag, Context& context);
+  void write(ast::tag tag, std::memory_order mo, Context& context);
   void swap_sum();
   void strip_rhs();
 
   friend std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation);
+
+  void print_tree(Context& context, bool recursive = false) const;
+
+ private:
+  void print_on(std::ostream& os) const;
 };
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 extern channel_ct valuecomp;
 extern channel_ct simplify;
+extern channel_ct evaltree;
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

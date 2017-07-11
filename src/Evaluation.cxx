@@ -1,6 +1,9 @@
 #include "sys.h"
 #include "debug.h"
 #include "Evaluation.h"
+#include "Context.h"
+#include "Graph.h"
+#include "TagCompare.h"
 #include "utils/macros.h"
 #include "utils/AIAlert.h"
 #include <iostream>
@@ -77,9 +80,16 @@ std::ostream& operator<<(std::ostream& os, binary_operators op)
   return os << operator_str(op);
 }
 
-std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
+char const* increment_str(int increment)
+{ 
+  if (increment > 0)
+    return "++";
+  return "--";
+}
+
+void Evaluation::print_on(std::ostream& os) const
 {
-  switch (value_computation.m_state)
+  switch (m_state)
   {
     case Evaluation::unused:
       os << "<\e[31mUNUSED Evaluation\e[0m>";
@@ -88,22 +98,33 @@ std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
       os << "<UNINITIALIZED Evaluation>";
       break;
     case Evaluation::literal:
-      os << value_computation.m_simple.m_literal;
+      os << m_simple.m_literal;
       break;
     case Evaluation::variable:
-      os << value_computation.m_simple.m_variable;
+      os << m_simple.m_variable;
+      break;
+    case Evaluation::pre:
+      os << increment_str(m_simple.m_increment) << *m_lhs;
+      break;
+    case Evaluation::post:
+      os << *m_lhs << increment_str(m_simple.m_increment);
       break;
     case Evaluation::unary:
-      os << code(value_computation.m_operator.unary) << '(' << *value_computation.m_lhs << ')';
+      os << code(m_operator.unary) << '(' << *m_lhs << ')';
       break;
     case Evaluation::binary:
-      os << '(' << *value_computation.m_lhs << ") " << code(value_computation.m_operator.binary) << " (" << *value_computation.m_rhs << ')';
+      os << '(' << *m_lhs << ") " << code(m_operator.binary) << " (" << *m_rhs << ')';
       break;
     case Evaluation::condition:
-      os << '(' << *value_computation.m_condition << ") ? (" << *value_computation.m_lhs << ") : (" << *value_computation.m_rhs << ')';
+      os << '(' << *m_condition << ") ? (" << *m_lhs << ") : (" << *m_rhs << ')';
       break;
   }
-  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
+{
+  value_computation.print_on(os << '{');
+  return os << '}';
 }
 
 //static
@@ -201,7 +222,7 @@ void Evaluation::strip_rhs()
 
 void Evaluation::OP(binary_operators op, Evaluation&& rhs)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::OP(" << op << ", {" << rhs << "}) [this = " << *this << "] ==> ");
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::OP(" << op << ", " << rhs << ") [this = " << *this << "] ==> ");
   // Should never try to use an unused or uninitialized Evaluation in a binary operator.
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
@@ -273,7 +294,7 @@ void Evaluation::OP(binary_operators op, Evaluation&& rhs)
     // Simplify sums.
     if (op == additive_ado_add || op == additive_ado_sub)
     {
-      Dout(dc::simplify, "Simplifying {" << *this << "}");
+      Dout(dc::simplify, "Simplifying " << *this << '.');
 
       // Trying to subtract a negated value computation?
       if (op == additive_ado_sub && m_rhs->is_negated())
@@ -345,7 +366,7 @@ void Evaluation::OP(binary_operators op, Evaluation&& rhs)
       }
     }
   }
-  Dout(dc::finish, '{' << *this << '}');
+  Dout(dc::finish, *this << '.');
 }
 
 void Evaluation::postfix_operator(ast::postfix_operators op)
@@ -355,8 +376,10 @@ void Evaluation::postfix_operator(ast::postfix_operators op)
   ASSERT(m_state != unused);
   if (m_state == uninitialized)
     THROW_ALERT("Applying postfix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
-  OP(op == ast::po_inc ? additive_ado_add : additive_ado_sub, 1);
-  Dout(dc::finish, '{' << *this << '}');
+  m_lhs = make_unique(std::move(*this));
+  m_state = post;
+  m_simple.m_increment = op == ast::po_inc ? 1 : -1;
+  Dout(dc::finish, *this << '.');
 }
 
 void Evaluation::prefix_operator(ast::unary_operators op)
@@ -368,8 +391,20 @@ void Evaluation::prefix_operator(ast::unary_operators op)
     THROW_ALERT("Applying prefix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
   // Call unary_operator for these values.
   ASSERT(op == ast::uo_inc || op == ast::uo_dec);
-  OP(op == ast::uo_inc ? additive_ado_add : additive_ado_sub, 1);
-  Dout(dc::finish, '{' << *this << '}');
+  m_lhs = make_unique(std::move(*this));
+  m_state = pre;
+  m_simple.m_increment = op == ast::uo_inc ? 1 : -1;
+  Dout(dc::finish, *this << '.');
+}
+
+void Evaluation::write(ast::tag tag, Context& context)
+{
+  context.write(tag, std::move(*this));
+}
+
+void Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
+{
+  context.write(tag, mo, std::move(*this));
 }
 
 Evaluation::Evaluation(Evaluation&& value_computation) :
@@ -444,12 +479,12 @@ void Evaluation::unary_operator(ast::unary_operators op)
     m_operator.unary = op;
     m_state = unary;
   }
-  Dout(dc::finish, '{' << *this << '}');
+  Dout(dc::finish, *this << '.');
 }
 
 void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& false_value)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator({" << true_value << "}, {" << false_value << "}) [this = " << *this << "] ==> ");
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_value << ", " << false_value << ") [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
     Dout(dc::simplify, "Simplifying because condition is a literal...");
@@ -465,12 +500,66 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
     m_lhs = make_unique(std::move(true_value));
     m_rhs = make_unique(std::move(false_value));
   }
-  Dout(dc::finish, '{' << *this << '}');
+  Dout(dc::finish, *this << '.');
+}
+
+void Evaluation::print_tree(Context& context, bool recursive) const
+{
+  static std::set<ast::tag, TagCompare> dirty;
+  if (!recursive)
+    dirty.clear();
+  if (m_state == variable && !dirty.insert(m_simple.m_variable).second)
+  {
+    Dout(dc::evaltree, *this << " (see above).");
+    return;
+  }
+
+  Dout(dc::evaltree, *this);
+  debug::Mark mark;
+
+  switch (m_state)
+  {
+    case unused:
+    case uninitialized:
+    case literal:
+      // We're done.
+      break;
+    case variable:
+    {
+      ast::tag tag = m_simple.m_variable;
+      context.m_graph.for_each_write_node(tag,
+          [](Node const& node, Context& context)
+          {
+            Evaluation const* evaluation = node.get_evaluation();
+            evaluation->print_tree(context, true);
+          }, context);
+      break;
+    }
+    case pre:
+      m_lhs->print_tree(context, true);
+      break;
+    case post:
+      m_lhs->print_tree(context, true);
+      break;
+    case unary:
+      m_lhs->print_tree(context, true);
+      break;
+    case binary:
+      m_lhs->print_tree(context, true);
+      m_rhs->print_tree(context, true);
+      break;
+    case condition:
+      m_condition->print_tree(context, true);
+      m_lhs->print_tree(context, true);
+      m_rhs->print_tree(context, true);
+      break;
+  }
 }
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct valuecomp("VALUECOMP");
 channel_ct simplify("SIMPLIFY");
+channel_ct evaltree("EVALTREE");
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

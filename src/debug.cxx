@@ -30,12 +30,12 @@ std::ostream& operator<<(std::ostream& os, std::memory_order mo)
   return os;
 }
 
-void gdb_print_evaluation(Evaluation const& evaluation)
+void gdb_print_evaluation(Evaluation const&& evaluation)
 {
   std::cout << evaluation << std::endl;
 }
 
-void gdb_print_expression(ast::expression const& expression)
+void gdb_print_expression(ast::expression const&& expression)
 {
   std::cout << expression << std::endl;
 }

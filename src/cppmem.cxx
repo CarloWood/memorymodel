@@ -25,6 +25,10 @@ Evaluation execute_expression(ast::expression const& expression, Context& contex
 
 void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
 {
+  DoutEntering(dc::notice, "execute_declaration(`" << declaration_statement << "`)");
+  // Our declarations are not processed as 'expression statements', but they are expressions in themselves. (TODO: make sure this is right)
+  FullExpressionDetector detector(context);
+
   switch (declaration_statement.m_declaration_statement_node.which())
   {
     case ast::DS_mutex_decl:
@@ -54,10 +58,11 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& vardecl{boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node)};
       if (vardecl.m_initial_value)
       {
+        // This is a `initializer-clause` - but is this already part of an expression (the expression-statement that is the declaration)?
         Evaluation value = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.write(declaration_statement.tag(), std::move(value));
+        value.write(declaration_statement.tag(), context);
       }
       else
       {
@@ -73,6 +78,8 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
 
 Evaluation execute_condition(ast::expression const& condition, Context& context)
 {
+  DoutEntering(dc::notice, "execute_condition(`" << condition << "`)");
+
   Evaluation result = execute_expression(condition, context);
   Dout(dc::continued, condition);
   return result;
@@ -228,8 +235,7 @@ Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Conte
     for (auto const& postfix_operator : expr.m_postfix_operators)
     {
       result.postfix_operator(postfix_operator);
-      context.write(tag, std::move(result));
-      result = tag;
+      result.write(tag, context);
     }
   }
 
@@ -241,7 +247,7 @@ template<>
 Evaluation execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
-  DoutEntering(dc::notice(!expr.m_unary_operators.empty()), "execute_operator_list_expression(`" << expr << "`) [execute_unary_expression]");
+  DoutEntering(dc::notice(!expr.m_unary_operators.empty()), "execute_operator_list_expression(`" << expr << "`) [for pre-increment, pre-decrement and unary expressions]");
 
   Evaluation result;
   auto const& node = expr.m_postfix_expression.m_postfix_expression_node;
@@ -269,8 +275,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
             THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", primary_expression_node));
           ast::tag const& tag{boost::get<ast::tag>(primary_expression_node)};
           result.prefix_operator(unary_operator);
-          context.write(tag, std::move(result));
-          result = tag;
+          result.write(tag, context);
         }
         else
           result.unary_operator(unary_operator);
@@ -320,6 +325,9 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
 {
   DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
   DebugMarkDown;
+  // - expression-statement (as part of statement and for-init-statement)
+  FullExpressionDetector detector(context);
+
   Evaluation result;
   auto const& node = expression.m_assignment_expression_node;
   switch (node.which())
@@ -342,7 +350,7 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     case ast::AE_register_assignment:
     {
       auto const& register_assignment{boost::get<ast::register_assignment>(node)};
-      execute_expression(register_assignment.rhs, context);
+      execute_expression(register_assignment.rhs, context).print_tree(context);
       // Registers shouldn't be used...
       result = Evaluation(Evaluation::not_used);
       break;
@@ -351,9 +359,8 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     {
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
-      Dout(dc::valuecomp, "Assignment value computation results in {" << result << "}; assigned to `" << assignment.lhs << "`.");
-      context.write(assignment.lhs, std::move(result));
-      result = assignment.lhs;
+      Dout(dc::valuecomp, "Assignment value computation results in " << result << "; assigned to `" << assignment.lhs << "`.");
+      result.write(assignment.lhs, context);
       break;
     }
   }
@@ -362,6 +369,9 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
 
 Evaluation execute_expression(ast::expression const& expression, Context& context)
 {
+  DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
+  // - expression (as part of noptr-new-declarator, condition, iteration-statement, jump-statement and decltype-specifier)
+  FullExpressionDetector detector(context);
   Evaluation result = execute_expression(expression.m_assignment_expression, context);
   for (auto const& assignment_expression : expression.m_chained)
     result = execute_expression(assignment_expression, context);
@@ -389,7 +399,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       Evaluation value = execute_expression(store_call.m_val, context);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      context.write(store_call.m_memory_location_id, store_call.m_memory_order, std::move(value));
+      value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
       break;
     }
     case ast::SN_function_call:
@@ -461,6 +471,7 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_iteration_statement:
     {
       auto const& iteration_statement{boost::get<ast::iteration_statement>(node)};
+      // We only support while () { } at the moment.
       Dout(dc::notice|continued_cf, "while (");
       try { execute_condition(iteration_statement.m_while_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
