@@ -147,15 +147,27 @@ void Evaluation::print_on(std::ostream& os) const
   bool first = true;
   for (auto&& node : m_value_computations)
   {
-    os << (first ? '/' : ',') << *node;
+    os << (first ? "\e[37m/" : ",") << *node;
     first = false;
   }
+  if (!first)
+    os << "\e[0m";
   first = true;
   for (auto&& node : m_side_effects)
   {
-    os << (first ? '/' : ',') << *node;
+    os << (first ? "\e[37m/" : ",") << *node;
     first = false;
   }
+  if (!first)
+    os << "\e[0m";
+#ifdef TRACK_EVALUATION
+  Debug(
+    if (dc::tracked.is_on())
+    {
+      os << '(' << static_cast<Tracked const&>(*this) << ')';
+    }
+  );
+#endif
 }
 
 std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
@@ -329,9 +341,12 @@ void Evaluation::OP(binary_operators op, Evaluation&& rhs)
   else
   {
     m_lhs = make_unique(std::move(*this));
-    m_rhs = make_unique(std::move(rhs));
-    m_operator.binary = op;
+#ifdef TRACK_EVALUATION
+    refresh();
+#endif
     m_state = binary;
+    m_operator.binary = op;
+    m_rhs = make_unique(std::move(rhs));
 
     // Simplify sums.
     if (op == additive_ado_add || op == additive_ado_sub)
@@ -419,6 +434,9 @@ void Evaluation::postfix_operator(ast::postfix_operators op)
   if (m_state == uninitialized)
     THROW_ALERT("Applying postfix operator `[OPERATOR]` to uninitialized variable `[VARIABLE]`", AIArgs("[OPERATOR]", op)("[VARIABLE]", *this));
   m_lhs = make_unique(std::move(*this));
+#ifdef TRACK_EVALUATION
+  refresh();
+#endif
   m_state = post;
   m_simple.m_increment = op == ast::po_inc ? 1 : -1;
   Dout(dc::finish, *this << '.');
@@ -434,6 +452,9 @@ void Evaluation::prefix_operator(ast::unary_operators op)
   // Call unary_operator for these values.
   ASSERT(op == ast::uo_inc || op == ast::uo_dec);
   m_lhs = make_unique(std::move(*this));
+#ifdef TRACK_EVALUATION
+  refresh();
+#endif
   m_state = pre;
   m_simple.m_increment = op == ast::uo_inc ? 1 : -1;
   Dout(dc::finish, *this << '.');
@@ -475,7 +496,17 @@ void Evaluation::add_side_effect(std::set<Node>::iterator const& node)
   m_side_effects.push_back(node);
 }
 
+//   Foo(Foo& orig) : tracked::Tracked<&name_Foo>{orig}, ... { }
+//   Foo(Foo const& orig) : tracked::Tracked<&name_Foo>{orig}, ... { }
+//   Foo(Foo&& orig) : tracked::Tracked<&name_Foo>{std::move(orig)}, ... { }
+//   Foo(Foo const&& orig) : tracked::Tracked<&name_Foo>{std::move(orig)}, ... { }
+//   void operator=(Foo const& orig) { tracked::Tracked<&name_Foo>::operator=(orig); ... }
+//   void operator=(Foo&& orig) { tracked::Tracked<&name_Foo>::operator=(std::move(orig)); ... }
+
 Evaluation::Evaluation(Evaluation&& value_computation) :
+#ifdef TRACK_EVALUATION
+    tracked::Tracked<&name_Evaluation>{std::move(value_computation)},
+#endif
     m_state(value_computation.m_state),
     m_allocated(value_computation.m_allocated),
     m_simple(value_computation.m_simple),
@@ -493,6 +524,9 @@ Evaluation::Evaluation(Evaluation&& value_computation) :
 
 void Evaluation::operator=(Evaluation&& value_computation)
 {
+#ifdef TRACK_EVALUATION
+  tracked::Tracked<&name_Evaluation>::operator=(std::move(value_computation));
+#endif
   m_state = value_computation.m_state;
   m_allocated = value_computation.m_allocated;
   m_simple = value_computation.m_simple;
@@ -544,12 +578,27 @@ void Evaluation::unary_operator(ast::unary_operators op)
     }
   }
   else if (op == ast::uo_minus && is_negated())
-    *this = std::move(*m_lhs);
+  {
+    m_state = m_lhs->m_state;
+    // Make sure we won't use this again!
+    m_lhs->m_state = unused;
+    m_allocated = false;
+    m_simple = m_lhs->m_simple;
+    m_operator = m_lhs->m_operator;
+    m_rhs = std::move(m_lhs->m_rhs);
+    m_condition = std::move(m_lhs->m_condition);
+    m_value_computations = std::move(m_lhs->m_value_computations);
+    m_side_effects = std::move(m_lhs->m_side_effects);
+    m_lhs = std::move(m_lhs->m_lhs);
+  }
   else
   {
     m_lhs = make_unique(std::move(*this));
-    m_operator.unary = op;
+#ifdef TRACK_EVALUATION
+    refresh();
+#endif
     m_state = unary;
+    m_operator.unary = op;
   }
   Dout(dc::finish, *this << '.');
 }
@@ -568,6 +617,9 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
   else
   {
     m_condition = make_unique(std::move(*this));
+#ifdef TRACK_EVALUATION
+    refresh();
+#endif
     m_state = condition;
     m_lhs = make_unique(std::move(true_value));
     m_rhs = make_unique(std::move(false_value));
@@ -627,6 +679,10 @@ void Evaluation::print_tree(Context& context, bool recursive) const
       break;
   }
 }
+
+#ifdef TRACK_EVALUATION
+char const* name_Evaluation = "Evaluation";
+#endif
 
 void Evaluation::for_each_node(std::function<void(Node const&)> const& action) const
 {

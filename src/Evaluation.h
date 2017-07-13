@@ -5,6 +5,10 @@
 #include <iosfwd>
 #include <set>
 
+#ifdef TRACK_EVALUATION
+#include "tracked.h"
+#endif
+
 struct Context;
 class Node;
 
@@ -31,8 +35,19 @@ enum binary_operators {
 
 std::ostream& operator<<(std::ostream& os, binary_operators op);
 
+#ifdef TRACK_EVALUATION
+extern char const* name_Evaluation;
+#endif
+
 class Evaluation
+#ifdef TRACK_EVALUATION
+    : public tracked::Tracked<&name_Evaluation>
+#endif
 {
+#ifdef TRACK_EVALUATION
+  using tracked::Tracked<&name_Evaluation>::Tracked;
+#endif
+
  public:
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition };  // See also is_valid.
@@ -64,8 +79,24 @@ class Evaluation
   Evaluation(Evaluation&& value_computation);
   explicit Evaluation(Unused) : m_state(unused), m_allocated(false) { }
   Evaluation(int value) : m_state(literal), m_allocated(false), m_simple(value) { }
-  Evaluation& operator=(int value) { m_state = literal; m_simple.m_literal = value; return *this; }
-  Evaluation& operator=(ast::tag tag) { m_state = variable; m_simple.m_variable = tag; return *this; }
+  Evaluation& operator=(int value)
+  {
+#ifdef TRACK_EVALUATION
+    ASSERT(entry()->status_below(Tracked::Entry::pillaged));
+#endif
+    m_state = literal;
+    m_simple.m_literal = value;
+    return *this;
+  }
+  Evaluation& operator=(ast::tag tag)
+  {
+#ifdef TRACK_EVALUATION
+    ASSERT(entry()->status_below(Tracked::Entry::pillaged));
+#endif
+    m_state = variable;
+    m_simple.m_variable = tag;
+    return *this;
+  }
   void operator=(Evaluation&& value_computation);
 
   // Shallow-copy value_computation and turn it into an allocation.
@@ -73,7 +104,13 @@ class Evaluation
   // Apply negation unary operator - to the Evaluation object pointed to by ptr.
   static void negate(std::unique_ptr<Evaluation>& ptr);
 
-  bool is_valid() const { return m_state > uninitialized; }
+  bool is_valid() const
+  {
+#ifdef TRACK_EVALUATION
+    ASSERT(entry()->status_below(Tracked::Entry::pillaged));
+#endif
+    return m_state > uninitialized;
+  }
   bool is_sum() const { return m_state == binary && (m_operator.binary == additive_ado_add || m_operator.binary == additive_ado_sub); }
   bool is_negated() const { return m_state == unary && m_operator.unary == ast::uo_minus; }
   bool is_allocated() const { return m_allocated; }

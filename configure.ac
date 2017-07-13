@@ -25,6 +25,12 @@ m4_include([cwm4/configure_ac_top.m4])
 # We use doxygen for documentation.
 #CW_DOXYGEN
 
+# --track-evaluations
+AC_ARG_ENABLE(track-evaluations,      [  --enable-track-evaluations       write extra debug output @<:@no@:>@], [cw_config_track_evaluations=$enableval], [cw_config_track_evaluations=no])
+if test x"$cw_config_track_evaluations" = x"yes"; then
+AC_DEFINE([TRACK_EVALUATION], [1], [Write debug output concerning Evaluation tracking (on channel tracked).])
+fi
+
 AX_BOOST_BASE([1.58.0])
 AX_BOOST_UNIT_TEST_FRAMEWORK
 

@@ -26,6 +26,9 @@ void Context::write(ast::tag variable, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[NA write to", variable);
   auto node = m_graph.new_node(variable, std::move(evaluation));
+#ifdef TRACK_EVALUATION
+  evaluation.refresh(); // Allow re-use of moved object.
+#endif
   evaluation = variable;
   evaluation.add_side_effect(node);
 }
@@ -42,6 +45,9 @@ void Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evalua
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
   auto node = m_graph.new_node(variable, mo, std::move(evaluation));
+#ifdef TRACK_EVALUATION
+  evaluation.refresh(); // Allow re-use of moved object.
+#endif
   evaluation = variable;
   evaluation.add_side_effect(node);
 }
