@@ -149,6 +149,7 @@ class Node
   std::string type() const;
   ast::tag tag() const { return m_variable; }
   bool is_write() const { return m_access == WriteAccess; }
+  Evaluation* get_evaluation() { return m_evaluation.get(); }
   Evaluation const* get_evaluation() const { return m_evaluation.get(); }
 
   // Less-than comparator for Graph::m_nodes.

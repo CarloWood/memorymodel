@@ -130,6 +130,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   multiplicative_operator.add
       ("*", ast::mo_mul)
       ("/", ast::mo_div)
+      ("%", ast::mo_mod)
   ;
 
   unary_operator.add

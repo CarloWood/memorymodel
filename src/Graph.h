@@ -89,7 +89,7 @@ class Graph
 
   // A new node was added.
   template<typename ...Args>
-  nodes_type::const_iterator new_node(Args&&... args)
+  nodes_type::iterator new_node(Args&&... args)
   {
     DebugMarkUp;
     auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, m_current_thread, std::forward<Args>(args)...);

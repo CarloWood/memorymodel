@@ -213,6 +213,7 @@ char const* code(multiplicative_operators op)
   {
     case mo_mul: return "*";
     case mo_div: return "/";
+    case mo_mod: return "%";
   }
   return "UNKNOWN multiplicative_operator";
 }
@@ -755,6 +756,7 @@ char const* multiplicative_operators_str(multiplicative_operators op)
   {
     AI_CASE_RETURN(mo_mul);
     AI_CASE_RETURN(mo_div);
+    AI_CASE_RETURN(mo_mod);
   }
   return "UNKNOWN multiplicative_operators";
 }

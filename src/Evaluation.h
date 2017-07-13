@@ -3,12 +3,15 @@
 #include "ast.h"
 #include "debug.h"
 #include <iosfwd>
+#include <set>
 
 struct Context;
+class Node;
 
 enum binary_operators {
   multiplicative_mo_mul,
   multiplicative_mo_div,
+  multiplicative_mo_mod,
   additive_ado_add,
   additive_ado_sub,
   shift_so_shl,
@@ -32,9 +35,10 @@ class Evaluation
 {
  public:
   enum Unused { not_used };
+  enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition };  // See also is_valid.
 
  private:
-  enum { unused, uninitialized, literal, variable, pre, post, unary, binary, condition } m_state;  // See also is_valid.
+  State m_state;
   bool m_allocated;
   union Simple
   {
@@ -52,6 +56,8 @@ class Evaluation
   std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == pre, post, unary, binary or condition.
   std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
   std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
+  std::vector<std::set<Node>::iterator> m_value_computations;
+  std::vector<std::set<Node>::iterator> m_side_effects;
 
  public:
   Evaluation() : m_state(uninitialized), m_allocated(false) { }
@@ -70,6 +76,7 @@ class Evaluation
   bool is_valid() const { return m_state > uninitialized; }
   bool is_sum() const { return m_state == binary && (m_operator.binary == additive_ado_add || m_operator.binary == additive_ado_sub); }
   bool is_negated() const { return m_state == unary && m_operator.unary == ast::uo_minus; }
+  bool is_allocated() const { return m_allocated; }
 
   void OP(binary_operators op, Evaluation&& rhs);         // *this OP= rhs.
   void postfix_operator(ast::postfix_operators op);       // (*this)++ or (*this)--
@@ -77,14 +84,20 @@ class Evaluation
   void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
                             Evaluation&& false_value);
+  void read(ast::tag tag, Context& context);
+  void read(ast::tag tag, std::memory_order mo, Context& context);
+  void add_value_computation(std::set<Node>::iterator const& node);
   void write(ast::tag tag, Context& context);
   void write(ast::tag tag, std::memory_order mo, Context& context);
+  void add_side_effect(std::set<Node>::iterator const& node);
   void swap_sum();
   void strip_rhs();
 
   friend std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation);
+  friend char const* state_str(State state);
 
   void print_tree(Context& context, bool recursive = false) const;
+  void for_each_node(std::function<void(Node const&)> const& action) const;
 
  private:
   void print_on(std::ostream& os) const;

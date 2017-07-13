@@ -17,43 +17,32 @@ struct Context {
   Graph& m_graph;
 
  private:
-  using sequence_point_id_type  = int;
-  using node_ptr_type           = Graph::nodes_type::const_iterator;
-  using value_computations_type = std::list<std::pair<sequence_point_id_type, node_ptr_type>>;
-  using side_effects_type       = std::list<std::pair<sequence_point_id_type, node_ptr_type>>;
-
-  sequence_point_id_type        m_current_sequence_point_id;
-  value_computations_type       m_value_computations;
-  side_effects_type             m_side_effects;
-
   int m_full_expression_detector_depth;
-
-  void add_value_computation(node_ptr_type node) { m_value_computations.push_back(std::make_pair(m_current_sequence_point_id, node)); }
-  void add_side_effect(node_ptr_type node) { m_side_effects.push_back(std::make_pair(m_current_sequence_point_id, node)); }
+  Evaluation m_last_full_expression;
 
  public:
-  Context(position_handler<iterator_type>& ph, Graph& g) : m_position_handler(ph), m_graph(g), m_current_sequence_point_id(0), m_full_expression_detector_depth(0) { }
+  Context(position_handler<iterator_type>& ph, Graph& g) :
+      m_position_handler(ph), m_graph(g), m_full_expression_detector_depth(0), m_last_full_expression(Evaluation::not_used) { }
 
   // Uninitialized declaration.
-  void uninitialized(ast::tag decl);
+  Evaluation uninitialized(ast::tag decl);
 
   // Non-atomic read and writes.
-  void read(ast::tag variable);
+  void read(ast::tag variable, Evaluation& evaluation);
   void write(ast::tag variable, Evaluation&& evaluation);
 
   // Atomic read and writes.
-  void read(ast::tag variable, std::memory_order mo);
+  void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
   void write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
 
   // Mutex declaration and (un)locking.
-  void lockdecl(ast::tag mutex);
-  void lock(ast::tag mutex);
-  void unlock(ast::tag mutex);
+  Evaluation lockdecl(ast::tag mutex);
+  Evaluation lock(ast::tag mutex);
+  Evaluation unlock(ast::tag mutex);
 
   // Called at sequence-points.
-  void sequence_point();
   void detect_full_expression_start();
-  void detect_full_expression_end();
+  void detect_full_expression_end(Evaluation& full_expression);
 };
 
 // Statements that are not expressions, but contain expressions, are
@@ -131,7 +120,10 @@ struct Context {
 // Note that constant-expression is always a full-expression (as per http://eel.is/c++draft/intro.execution#12.2)
 //
 struct FullExpressionDetector {
+  Evaluation& m_full_expression;        // Potential full-expression.
   Context& m_context;
-  FullExpressionDetector(Context& context) : m_context(context) { context.detect_full_expression_start(); }
-  ~FullExpressionDetector() { m_context.detect_full_expression_end(); }
+  FullExpressionDetector(Evaluation& full_expression, Context& context) :
+      m_full_expression(full_expression), m_context(context)
+    { context.detect_full_expression_start(); }
+  ~FullExpressionDetector() { m_context.detect_full_expression_end(m_full_expression); }
 };

@@ -26,8 +26,28 @@ Evaluation execute_expression(ast::expression const& expression, Context& contex
 void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
 {
   DoutEntering(dc::notice, "execute_declaration(`" << declaration_statement << "`)");
-  // Our declarations are not processed as 'expression statements', but they are expressions in themselves. (TODO: make sure this is right)
-  FullExpressionDetector detector(context);
+
+  // http://eel.is/c++draft/intro.execution#12.5 states
+  //
+  //   12.5 An expression that is not a subexpression of another expression and
+  //   that is not otherwise part of a full-expression. If a language construct
+  //   is defined to produce an implicit call of a function, a use of the language
+  //   construct is considered to be an expression for the purposes of this definition.
+  //   Conversions applied to the result of an expression in order to satisfy the
+  //   requirements of the language construct in which the expression appears are
+  //   also considered to be part of the full-expression.
+  //
+  //   For an initializer, performing the initialization of the entity (including
+  //   evaluating default member initializers of an aggregate) is also considered
+  //   part of the full-expression.
+  //
+  // Therefore, although a declaration isn't an (assignment-)expression, the side-effect
+  // of initialization of the declared variable is to be considered part of the full-
+  // expression (see also examples below 12.5).
+
+  Evaluation full_expression;   // Evaluation (value computation and side-effect) of
+                                // this full-expression.
+  FullExpressionDetector detector(full_expression, context);
 
   switch (declaration_statement.m_declaration_statement_node.which())
   {
@@ -36,12 +56,13 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& mutex_decl{boost::get<ast::mutex_decl>(declaration_statement.m_declaration_statement_node)};
       Dout(dc::notice, declaration_statement);
       DebugMarkUp;
-      context.lockdecl(mutex_decl);
+      full_expression = context.lockdecl(mutex_decl);
       break;
     }
     case ast::DS_condition_variable_decl:
     {
       DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
+      // TODO:  full_expression = ?
       break;
     }
     case ast::DS_unique_lock_decl:
@@ -49,7 +70,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& unique_lock_decl{boost::get<ast::unique_lock_decl>(declaration_statement.m_declaration_statement_node)};
       DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
       DebugMarkUp;
-      context.lock(unique_lock_decl.m_mutex);
+      full_expression = context.lock(unique_lock_decl.m_mutex);
       context.m_locks.add(unique_lock_decl, context);
       break;
     }
@@ -59,16 +80,16 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       if (vardecl.m_initial_value)
       {
         // This is a `initializer-clause` - but is this already part of an expression (the expression-statement that is the declaration)?
-        Evaluation value = execute_expression(*vardecl.m_initial_value, context);
+        full_expression = execute_expression(*vardecl.m_initial_value, context);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        value.write(declaration_statement.tag(), context);
+        full_expression.write(declaration_statement.tag(), context);
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        context.uninitialized(declaration_statement.tag());
+        full_expression = context.uninitialized(declaration_statement.tag());
       }
       break;
     }
@@ -131,7 +152,7 @@ Evaluation execute_primary_expression(ast::primary_expression const& primary_exp
       // This must be a non-atomic int or bool, or we wouldn't be reading from it.
       assert(declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl &&
           !boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node).m_type.is_atomic());
-      context.read(tag);
+      result.read(tag, context);
       break;
     }
     case ast::PE_expression:
@@ -287,8 +308,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
       // FIXME TODO
       //result = execute_expression(atomic_fetch_add_explicit.m_expression, context);
-      context.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
-      context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, std::move(result));
+      //context.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
+      //context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, std::move(result));
       result = atomic_fetch_add_explicit.m_memory_location_id;
       break;
     }
@@ -297,8 +318,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
       // FIXME TODO
       //result = execute_expression(atomic_fetch_sub_explicit.m_expression, context);
-      context.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
-      context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, std::move(result));
+      //context.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
+      //context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, std::move(result));
       result = atomic_fetch_sub_explicit.m_memory_location_id;
       break;
     }
@@ -313,8 +334,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
     case ast::PE_load_call:
     {
       auto const& load_call{boost::get<ast::load_call>(node)};
-      context.read(load_call.m_memory_location_id, load_call.m_memory_order);
       result = load_call.m_memory_location_id;
+      result.read(load_call.m_memory_location_id, load_call.m_memory_order, context);
       break;
     }
   }
@@ -325,10 +346,11 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
 {
   DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
   DebugMarkDown;
-  // - expression-statement (as part of statement and for-init-statement)
-  FullExpressionDetector detector(context);
 
   Evaluation result;
+  // - expression-statement (as part of statement and for-init-statement)
+  FullExpressionDetector detector(result, context);
+
   auto const& node = expression.m_assignment_expression_node;
   switch (node.which())
   {
@@ -350,9 +372,10 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     case ast::AE_register_assignment:
     {
       auto const& register_assignment{boost::get<ast::register_assignment>(node)};
-      execute_expression(register_assignment.rhs, context).print_tree(context);
-      // Registers shouldn't be used...
-      result = Evaluation(Evaluation::not_used);
+      result = execute_expression(register_assignment.rhs, context);
+      result.print_tree(context);
+      // Assignment to a register doesn't generate a side-effect (we're not really writing to memory),
+      // so just leave the result what it is as it represents the full-expression of this assignment.
       break;
     }
     case ast::AE_assignment:
@@ -369,10 +392,11 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
 
 Evaluation execute_expression(ast::expression const& expression, Context& context)
 {
-  DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
+  DoutEntering(dc::notice(expression.m_chained.size() > 1), "execute_expression(`" << expression << "`).");
+  Evaluation result;
   // - expression (as part of noptr-new-declarator, condition, iteration-statement, jump-statement and decltype-specifier)
-  FullExpressionDetector detector(context);
-  Evaluation result = execute_expression(expression.m_assignment_expression, context);
+  FullExpressionDetector detector(result, context);
+  result = execute_expression(expression.m_assignment_expression, context);
   for (auto const& assignment_expression : expression.m_chained)
     result = execute_expression(assignment_expression, context);
   return result;

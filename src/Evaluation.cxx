@@ -16,6 +16,8 @@ char const* code(binary_operators op)
       return "*";
     case multiplicative_mo_div:
       return "/";
+    case multiplicative_mo_mod:
+      return "%";
     case additive_ado_add:
       return "+";
     case additive_ado_sub:
@@ -56,6 +58,7 @@ char const* operator_str(binary_operators op)
   {
     AI_CASE_RETURN(multiplicative_mo_mul);
     AI_CASE_RETURN(multiplicative_mo_div);
+    AI_CASE_RETURN(multiplicative_mo_mod);
     AI_CASE_RETURN(additive_ado_add);
     AI_CASE_RETURN(additive_ado_sub);
     AI_CASE_RETURN(shift_so_shl);
@@ -78,6 +81,28 @@ char const* operator_str(binary_operators op)
 std::ostream& operator<<(std::ostream& os, binary_operators op)
 {
   return os << operator_str(op);
+}
+
+char const* state_str(Evaluation::State state)
+{
+  switch (state)
+  {
+    AI_CASE_RETURN(Evaluation::unused);
+    AI_CASE_RETURN(Evaluation::uninitialized);
+    AI_CASE_RETURN(Evaluation::literal);
+    AI_CASE_RETURN(Evaluation::variable);
+    AI_CASE_RETURN(Evaluation::pre);
+    AI_CASE_RETURN(Evaluation::post);
+    AI_CASE_RETURN(Evaluation::unary);
+    AI_CASE_RETURN(Evaluation::binary);
+    AI_CASE_RETURN(Evaluation::condition);
+  }
+  return "UNKNOWN Evaluation::State";
+}
+
+std::ostream& operator<<(std::ostream& os, Evaluation::State state)
+{
+  return os << state_str(state);
 }
 
 char const* increment_str(int increment)
@@ -118,6 +143,18 @@ void Evaluation::print_on(std::ostream& os) const
     case Evaluation::condition:
       os << '(' << *m_condition << ") ? (" << *m_lhs << ") : (" << *m_rhs << ')';
       break;
+  }
+  bool first = true;
+  for (auto&& node : m_value_computations)
+  {
+    os << (first ? '/' : ',') << *node;
+    first = false;
+  }
+  first = true;
+  for (auto&& node : m_side_effects)
+  {
+    os << (first ? '/' : ',') << *node;
+    first = false;
   }
 }
 
@@ -217,6 +254,8 @@ void Evaluation::strip_rhs()
   m_operator = m_lhs->m_operator;
   m_rhs = std::move(m_lhs->m_rhs);
   m_condition = std::move(m_lhs->m_condition);
+  m_value_computations = std::move(m_lhs->m_value_computations);
+  m_side_effects = std::move(m_lhs->m_side_effects);
   m_lhs = std::move(m_lhs->m_lhs);
 }
 
@@ -236,6 +275,9 @@ void Evaluation::OP(binary_operators op, Evaluation&& rhs)
         break;
       case multiplicative_mo_div:
         m_simple.m_literal /= rhs.m_simple.m_literal;
+        break;
+      case multiplicative_mo_mod:
+        m_simple.m_literal %= rhs.m_simple.m_literal;
         break;
       case additive_ado_add:
         m_simple.m_literal += rhs.m_simple.m_literal;
@@ -397,6 +439,16 @@ void Evaluation::prefix_operator(ast::unary_operators op)
   Dout(dc::finish, *this << '.');
 }
 
+void Evaluation::read(ast::tag tag, Context& context)
+{
+  context.read(tag, *this);
+}
+
+void Evaluation::read(ast::tag tag, std::memory_order mo, Context& context)
+{
+  context.read(tag, *this);
+}
+
 void Evaluation::write(ast::tag tag, Context& context)
 {
   context.write(tag, std::move(*this));
@@ -407,6 +459,22 @@ void Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
   context.write(tag, mo, std::move(*this));
 }
 
+void Evaluation::add_value_computation(std::set<Node>::iterator const& node)
+{
+  DoutEntering(dc::notice, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
+  // FIXME: I think that we always only have at most a single value computation?
+  ASSERT(m_value_computations.empty());
+  m_value_computations.push_back(node);
+}
+
+void Evaluation::add_side_effect(std::set<Node>::iterator const& node)
+{
+  DoutEntering(dc::notice, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
+  // FIXME: I think that we always only have at most a single side effect?
+  ASSERT(m_value_computations.empty());
+  m_side_effects.push_back(node);
+}
+
 Evaluation::Evaluation(Evaluation&& value_computation) :
     m_state(value_computation.m_state),
     m_allocated(value_computation.m_allocated),
@@ -414,7 +482,9 @@ Evaluation::Evaluation(Evaluation&& value_computation) :
     m_operator(value_computation.m_operator),
     m_lhs(std::move(value_computation.m_lhs)),
     m_rhs(std::move(value_computation.m_rhs)),
-    m_condition(std::move(value_computation.m_condition))
+    m_condition(std::move(value_computation.m_condition)),
+    m_value_computations(std::move(value_computation.m_value_computations)),
+    m_side_effects(std::move(value_computation.m_side_effects))
 {
   ASSERT(m_state != unused);
   // Make sure we won't use this again!
@@ -430,6 +500,8 @@ void Evaluation::operator=(Evaluation&& value_computation)
   m_lhs = std::move(value_computation.m_lhs);
   m_rhs = std::move(value_computation.m_rhs);
   m_condition = std::move(value_computation.m_condition);
+  m_value_computations = std::move(value_computation.m_value_computations);
+  m_side_effects = std::move(value_computation.m_side_effects);
   // Make sure we won't use this again!
   value_computation.m_state = unused;
 }
@@ -552,6 +624,51 @@ void Evaluation::print_tree(Context& context, bool recursive) const
       m_condition->print_tree(context, true);
       m_lhs->print_tree(context, true);
       m_rhs->print_tree(context, true);
+      break;
+  }
+}
+
+void Evaluation::for_each_node(std::function<void(Node const&)> const& action) const
+{
+  DoutEntering(dc::notice, "Evaluation::for_each_node(...) [this = " << *this << "].");
+  ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
+  Dout(dc::notice, m_state);
+  switch (m_state)
+  {
+    case unused:
+      assert(m_state != unused);
+      break;
+    case uninitialized:
+      break;
+    case literal:
+      break;
+    case variable:
+    {
+      Dout(dc::notice, "Size of m_value_computations = " << m_value_computations.size());
+      for(auto&& node : m_value_computations)
+        action(*node);
+      Dout(dc::notice, "Size of m_side_effects = " << m_side_effects.size());
+      for(auto&& node : m_side_effects)
+        action(*node);
+      break;
+    }
+    case pre:
+      m_lhs->for_each_node(action);
+      break;
+    case post:
+      m_lhs->for_each_node(action);
+      break;
+    case unary:
+      m_lhs->for_each_node(action);
+      break;
+    case binary:
+      m_lhs->for_each_node(action);
+      m_rhs->for_each_node(action);
+      break;
+    case condition:
+      m_condition->for_each_node(action);
+      m_lhs->for_each_node(action);
+      m_rhs->for_each_node(action);
       break;
   }
 }
