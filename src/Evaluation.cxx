@@ -480,7 +480,7 @@ void Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
   context.write(tag, mo, std::move(*this));
 }
 
-void Evaluation::add_value_computation(std::set<Node>::iterator const& node)
+void Evaluation::add_value_computation(node_iterator const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single value computation?
@@ -488,7 +488,7 @@ void Evaluation::add_value_computation(std::set<Node>::iterator const& node)
   m_value_computations.push_back(node);
 }
 
-void Evaluation::add_side_effect(std::set<Node>::iterator const& node)
+void Evaluation::add_side_effect(node_iterator const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single side effect?
@@ -684,7 +684,7 @@ void Evaluation::print_tree(Context& context, bool recursive) const
 char const* name_Evaluation = "Evaluation";
 #endif
 
-void Evaluation::for_each_node(std::function<void(Node const&)> const& action) const
+void Evaluation::for_each_node(std::function<void(node_iterator const&)> const& action) const
 {
   DoutEntering(dc::notice, "Evaluation::for_each_node(...) [this = " << *this << "].");
   ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
@@ -702,10 +702,10 @@ void Evaluation::for_each_node(std::function<void(Node const&)> const& action) c
     {
       Dout(dc::notice, "Size of m_value_computations = " << m_value_computations.size());
       for(auto&& node : m_value_computations)
-        action(*node);
+        action(node);
       Dout(dc::notice, "Size of m_side_effects = " << m_side_effects.size());
       for(auto&& node : m_side_effects)
-        action(*node);
+        action(node);
       break;
     }
     case pre:

@@ -28,6 +28,8 @@ libcppmem_a_SOURCES = \
 		 Graph.h \
 		 Node.cxx \
 		 Node.h \
+		 Edge.cxx \
+		 Edge.h \
 		 ast.cxx \
 		 ast.h \
 		 Evaluation.cxx \

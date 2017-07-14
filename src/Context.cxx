@@ -108,16 +108,16 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     int number_of_nodes = 0;
     // Find all nodes in the current full_expression.
     full_expression.for_each_node(
-        [this, &number_of_nodes](Node const& after_node)
+        [this, &number_of_nodes](Evaluation::node_iterator const& after_node)
         {
           ++number_of_nodes;
           // Generate all sequenced-before edges between full-expressions.
           if (m_last_full_expression.is_valid())
           {
             m_last_full_expression.for_each_node(
-                [&after_node](Node const& before_node)
+                [this, &after_node](Evaluation::node_iterator const& before_node)
                 {
-                  Dout(dc::notice, "ADDING: " << before_node << " --sb--> " << after_node);
+                  m_graph.new_edge(before_node, after_node, edge_sb);
                 }
             );
           }

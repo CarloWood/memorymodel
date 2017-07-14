@@ -49,6 +49,7 @@ class Evaluation
 #endif
 
  public:
+  using node_iterator = std::set<Node>::iterator;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition };  // See also is_valid.
 
@@ -71,8 +72,8 @@ class Evaluation
   std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == pre, post, unary, binary or condition.
   std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
   std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
-  std::vector<std::set<Node>::iterator> m_value_computations;
-  std::vector<std::set<Node>::iterator> m_side_effects;
+  std::vector<node_iterator> m_value_computations;
+  std::vector<node_iterator> m_side_effects;
 
  public:
   Evaluation() : m_state(uninitialized), m_allocated(false) { }
@@ -123,10 +124,10 @@ class Evaluation
                             Evaluation&& false_value);
   void read(ast::tag tag, Context& context);
   void read(ast::tag tag, std::memory_order mo, Context& context);
-  void add_value_computation(std::set<Node>::iterator const& node);
+  void add_value_computation(node_iterator const& node);
   void write(ast::tag tag, Context& context);
   void write(ast::tag tag, std::memory_order mo, Context& context);
-  void add_side_effect(std::set<Node>::iterator const& node);
+  void add_side_effect(node_iterator const& node);
   void swap_sum();
   void strip_rhs();
 
@@ -134,7 +135,7 @@ class Evaluation
   friend char const* state_str(State state);
 
   void print_tree(Context& context, bool recursive = false) const;
-  void for_each_node(std::function<void(Node const&)> const& action) const;
+  void for_each_node(std::function<void(node_iterator const&)> const& action) const;
 
  private:
   void print_on(std::ostream& os) const;
