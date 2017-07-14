@@ -110,7 +110,6 @@ class Graph
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
-extern channel_ct sb_barrier;
-extern channel_ct edge;
+extern channel_ct sb_edge;
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

@@ -49,7 +49,7 @@ void Graph::print_nodes() const
 
 void Graph::scope_start(bool is_thread)
 {
-  DoutEntering(dc::sb_barrier, "Graph::scope_start('is_thread' = " << is_thread << ")");
+  DoutEntering(dc::notice, "Graph::scope_start('is_thread' = " << is_thread << ")");
   m_threads.push(is_thread);
   if (is_thread)
   {
@@ -63,7 +63,7 @@ void Graph::scope_start(bool is_thread)
 void Graph::scope_end()
 {
   bool is_thread = m_threads.top();
-  DoutEntering(dc::sb_barrier, "Graph::scope_end() [is_thread = " << is_thread << "].");
+  DoutEntering(dc::notice, "Graph::scope_end() [is_thread = " << is_thread << "].");
   m_threads.pop();
   if (is_thread)
   {
@@ -108,7 +108,6 @@ std::ostream& operator<<(std::ostream& os, edge_type type)
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
-channel_ct sb_barrier("SBBARRIER");
-channel_ct edge("EDGE");
+channel_ct sb_edge("SB_EDGE");
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

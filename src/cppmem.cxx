@@ -211,7 +211,7 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
     if (std::is_same<T, ast::logical_or_expression>::value ||
         std::is_same<T, ast::logical_and_expression>::value)
     {
-      Dout(dc::sb_barrier, "Boolean expression (operator || or &&)");
+      Dout(dc::sb_edge, "Boolean expression (operator || or &&)");
     }
     result.OP(get_operator<T>(tail), execute_operator_list_expression(tail, context));
   }
