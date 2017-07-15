@@ -112,12 +112,15 @@ char const* increment_str(int increment)
   return "--";
 }
 
-void Evaluation::print_on(std::ostream& os) const
+void Evaluation::print_on(std::ostream& os, bool recursive) const
 {
   switch (m_state)
   {
     case Evaluation::unused:
-      os << "<\e[31mUNUSED Evaluation\e[0m>";
+      if (recursive)
+        os << "<UNUSED Evaluation>";
+      else
+        os << "<\e[31mUNUSED Evaluation\e[0m>";
       break;
     case Evaluation::uninitialized:
       os << "<UNINITIALIZED Evaluation>";
@@ -129,36 +132,58 @@ void Evaluation::print_on(std::ostream& os) const
       os << m_simple.m_variable;
       break;
     case Evaluation::pre:
-      os << increment_str(m_simple.m_increment) << *m_lhs;
+      os << increment_str(m_simple.m_increment);
+      m_lhs->print_on(os, true);
       break;
     case Evaluation::post:
-      os << *m_lhs << increment_str(m_simple.m_increment);
+      m_lhs->print_on(os, true);
+      os << increment_str(m_simple.m_increment);
       break;
     case Evaluation::unary:
-      os << code(m_operator.unary) << '(' << *m_lhs << ')';
+      os << code(m_operator.unary) << '(';
+      m_lhs->print_on(os, true);
+      os << ')';
       break;
     case Evaluation::binary:
-      os << '(' << *m_lhs << ") " << code(m_operator.binary) << " (" << *m_rhs << ')';
+      os << '(';
+      m_lhs->print_on(os, true);
+      os << ") " << code(m_operator.binary) << " (";
+      m_rhs->print_on(os, true);
+      os << ')';
       break;
     case Evaluation::condition:
-      os << '(' << *m_condition << ") ? (" << *m_lhs << ") : (" << *m_rhs << ')';
+      os << '(';
+      m_condition->print_on(os, true);
+      os << ") ? (";
+      m_lhs->print_on(os, true);
+      os << ") : (";
+      m_rhs->print_on(os, true);
+      os << ')';
       break;
   }
   bool first = true;
   for (auto&& node : m_value_computations)
   {
-    os << (first ? "\e[37m/" : ",") << *node;
+    if (recursive)
+      os << (first ? "/" : ",");
+    else
+      os << (first ? "\e[37m/" : ",");
+    os << *node;
     first = false;
   }
-  if (!first)
+  if (!first && !recursive)
     os << "\e[0m";
   first = true;
   for (auto&& node : m_side_effects)
   {
-    os << (first ? "\e[37m/" : ",") << *node;
+    if (recursive)
+      os << (first ? "/" : ",");
+    else
+      os << (first ? "\e[37m/" : ",");
+    os << *node;
     first = false;
   }
-  if (!first)
+  if (!first && !recursive)
     os << "\e[0m";
 #ifdef TRACK_EVALUATION
   Debug(
@@ -492,7 +517,7 @@ void Evaluation::add_side_effect(node_iterator const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single side effect?
-  ASSERT(m_value_computations.empty());
+  ASSERT(m_value_computations.empty() || node->is_second_mutex_access());
   m_side_effects.push_back(node);
 }
 
@@ -627,66 +652,13 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
   Dout(dc::finish, *this << '.');
 }
 
-void Evaluation::print_tree(Context& context, bool recursive) const
-{
-  static std::set<ast::tag, TagCompare> dirty;
-  if (!recursive)
-    dirty.clear();
-  if (m_state == variable && !dirty.insert(m_simple.m_variable).second)
-  {
-    Dout(dc::evaltree, *this << " (see above).");
-    return;
-  }
-
-  Dout(dc::evaltree, *this);
-  debug::Mark mark;
-
-  switch (m_state)
-  {
-    case unused:
-    case uninitialized:
-    case literal:
-      // We're done.
-      break;
-    case variable:
-    {
-      ast::tag tag = m_simple.m_variable;
-      context.m_graph.for_each_write_node(tag,
-          [](Node const& node, Context& context)
-          {
-            Evaluation const* evaluation = node.get_evaluation();
-            evaluation->print_tree(context, true);
-          }, context);
-      break;
-    }
-    case pre:
-      m_lhs->print_tree(context, true);
-      break;
-    case post:
-      m_lhs->print_tree(context, true);
-      break;
-    case unary:
-      m_lhs->print_tree(context, true);
-      break;
-    case binary:
-      m_lhs->print_tree(context, true);
-      m_rhs->print_tree(context, true);
-      break;
-    case condition:
-      m_condition->print_tree(context, true);
-      m_lhs->print_tree(context, true);
-      m_rhs->print_tree(context, true);
-      break;
-  }
-}
-
 #ifdef TRACK_EVALUATION
 char const* name_Evaluation = "Evaluation";
 #endif
 
-void Evaluation::for_each_node(std::function<void(node_iterator const&)> const& action) const
+void Evaluation::for_each_node(Node::sb_mask_type filter, std::function<void(node_iterator const&)> const& action) const
 {
-  DoutEntering(dc::notice, "Evaluation::for_each_node(...) [this = " << *this << "].");
+  DoutEntering(dc::notice, "Evaluation::for_each_node(" << Node::Filter(filter) << ", ...) [this = " << *this << "].");
   ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
   Dout(dc::notice, m_state);
   switch (m_state)
@@ -701,30 +673,52 @@ void Evaluation::for_each_node(std::function<void(node_iterator const&)> const& 
     case variable:
     {
       Dout(dc::notice, "Size of m_value_computations = " << m_value_computations.size());
-      for(auto&& node : m_value_computations)
-        action(node);
+      for (auto&& node : m_value_computations)
+      {
+        if (node->is_head_tail_type(filter))
+        {
+          Dout(dc::notice, "Calling action(" << *node << ")");
+          action(node);
+        }
+        else
+        {
+          Dout(dc::notice, "Call to action(" << *node << ") was filtered.");
+        }
+      }
       Dout(dc::notice, "Size of m_side_effects = " << m_side_effects.size());
-      for(auto&& node : m_side_effects)
-        action(node);
+      for (auto&& node : m_side_effects)
+      {
+        if (node->is_head_tail_type(filter))
+        {
+          Dout(dc::notice, "Calling action(" << *node << ")");
+          action(node);
+        }
+        else
+        {
+          Dout(dc::notice, "Call to action(" << *node << ") was filtered.");
+        }
+        if (node->is_write())
+          node->get_evaluation()->for_each_node(filter, action);
+      }
       break;
     }
     case pre:
-      m_lhs->for_each_node(action);
+      m_lhs->for_each_node(filter, action);
       break;
     case post:
-      m_lhs->for_each_node(action);
+      m_lhs->for_each_node(filter, action);
       break;
     case unary:
-      m_lhs->for_each_node(action);
+      m_lhs->for_each_node(filter, action);
       break;
     case binary:
-      m_lhs->for_each_node(action);
-      m_rhs->for_each_node(action);
+      m_lhs->for_each_node(filter, action);
+      m_rhs->for_each_node(filter, action);
       break;
     case condition:
-      m_condition->for_each_node(action);
-      m_lhs->for_each_node(action);
-      m_rhs->for_each_node(action);
+      m_condition->for_each_node(filter, action);
+      m_lhs->for_each_node(filter, action);
+      m_rhs->for_each_node(filter, action);
       break;
   }
 }

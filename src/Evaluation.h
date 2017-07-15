@@ -63,6 +63,7 @@ class Evaluation
     ast::tag m_variable;                        // Only valid when m_state == variable.
     Simple() { }
     explicit Simple(int literal) : m_literal(literal) { }
+    explicit Simple(ast::tag tag) : m_variable(tag) { }
   } m_simple;
   union
   {
@@ -80,6 +81,7 @@ class Evaluation
   Evaluation(Evaluation&& value_computation);
   explicit Evaluation(Unused) : m_state(unused), m_allocated(false) { }
   Evaluation(int value) : m_state(literal), m_allocated(false), m_simple(value) { }
+  Evaluation(ast::tag tag) : m_state(variable), m_allocated(false), m_simple(tag) { }
   Evaluation& operator=(int value)
   {
 #ifdef TRACK_EVALUATION
@@ -134,11 +136,8 @@ class Evaluation
   friend std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation);
   friend char const* state_str(State state);
 
-  void print_tree(Context& context, bool recursive = false) const;
-  void for_each_node(std::function<void(node_iterator const&)> const& action) const;
-
- private:
-  void print_on(std::ostream& os) const;
+  void print_on(std::ostream& os, bool recursive = false) const;
+  void for_each_node(unsigned int filter, std::function<void(node_iterator const&)> const& action) const;
 };
 
 #ifdef CWDEBUG

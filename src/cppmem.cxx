@@ -13,6 +13,7 @@
 #include "cppmem_parser.h"
 #include "utils/AIAlert.h"
 #include <libcwd/type_info.h>
+#include <cstdlib>      // std::system
 #include <boost/variant/get.hpp>
 #include <iostream>
 #include <fstream>
@@ -373,7 +374,6 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     {
       auto const& register_assignment{boost::get<ast::register_assignment>(node)};
       result = execute_expression(register_assignment.rhs, context);
-      result.print_tree(context);
       // Assignment to a register doesn't generate a side-effect (we're not really writing to memory),
       // so just leave the result what it is as it represents the full-expression of this assignment.
       break;
@@ -655,5 +655,11 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  graph.print_nodes();
+  std::string const source_filename = filename;
+  std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
+  std::string const dot_filename = basename + ".dot";
+  std::string const png_filename = basename + ".png";
+  graph.generate_dot_file(dot_filename);
+  std::string command = "dot -Kdot -Tpng -o " + png_filename + " " + dot_filename;
+  std::system(command.c_str());
 }

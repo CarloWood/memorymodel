@@ -1,5 +1,8 @@
 #include "sys.h"
 #include "Node.h"
+#include "utils/is_power_of_two.h"
+#include "utils/macros.h"
+#include <sstream>
 
 std::string Node::type() const
 {
@@ -50,4 +53,51 @@ std::string Node::type() const
   return type;
 }
 
+std::string Node::label(bool dot_file) const
+{
+  std::ostringstream ss;
+  ss << name() << ':' << type() << ' ' << tag() << '=';
+  if (!dot_file)
+  {
+    if (is_write())
+      m_evaluation->print_on(ss);
+  }
+  return ss.str();
+}
 
+char const* sb_mask_str(Node::sb_mask_type bit)
+{
+  ASSERT(utils::is_power_of_two(bit));
+  switch (bit)
+  {
+    AI_CASE_RETURN(Node::value_computation_tails);
+    AI_CASE_RETURN(Node::value_computation_heads);
+    AI_CASE_RETURN(Node::side_effect_tails);
+    AI_CASE_RETURN(Node::side_effect_heads);
+  }
+  return "UNKNOWN sb_mask_type";
+}
+
+std::ostream& operator<<(std::ostream& os, Node::Filter filter)
+{
+  Node::sb_mask_type sb_mask = filter.m_sb_mask;
+  if (sb_mask == Node::heads)
+    os << "Node::heads";
+  else if (sb_mask == Node::tails)
+    os << "Node::tails";
+  else
+  {
+    bool first = true;
+    for (Node::sb_mask_type bit = 1; bit != Node::sb_unused_bit; bit <<= 1)
+    {
+      if ((sb_mask & bit))
+      {
+        if (!first)
+          os << '|';
+        os << sb_mask_str(bit);
+      }
+      first = false;
+    }
+  }
+  return os;
+}

@@ -30,7 +30,8 @@ class Graph
     m_next_edge_id{0},
     m_beginning_of_thread(false) { }
 
-  void print_nodes() const;
+  void generate_dot_file(std::string const& filename) const;
+  int number_of_threads() const { return m_next_thread_id; }
 
  public:
   // Entering and leaving scopes.
@@ -54,7 +55,15 @@ class Graph
     DebugMarkUp;
     auto edge = m_edges.emplace(m_next_edge_id, begin, end, type);
     if (edge.second)
+    {
       ++m_next_edge_id;
+      if (type == edge_sb || 1) // FIXME: remove the '1' when we don't abuse edge_asw for red anymore
+      {
+        // sequenced_before/sequenced_after do not change the key-portion of the m_edges std::set.
+        const_cast<Node&>(*begin).sequenced_before(*end);
+        const_cast<Node&>(*end).sequenced_after(*begin);
+      }
+    }
     return edge.first;
   }
 
