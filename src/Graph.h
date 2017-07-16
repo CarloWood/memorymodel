@@ -46,16 +46,6 @@ class Graph
 
   // Add a new edge.
   void new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node);
-
-  void for_each_write_node(ast::tag tag, void (*f)(nodes_type::value_type const& node, Context& context), Context& context) const
-  {
-    for (auto&& node : m_nodes)
-    {
-      if (node.tag() != tag || !node.is_write())
-        continue;
-      f(node, context);
-    }
-  }
 };
 
 #ifdef CWDEBUG

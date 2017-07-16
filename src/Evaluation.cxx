@@ -106,24 +106,27 @@ std::ostream& operator<<(std::ostream& os, Evaluation::State state)
 }
 
 char const* increment_str(int increment)
-{ 
+{
   if (increment > 0)
     return "++";
   return "--";
 }
 
-void Evaluation::print_on(std::ostream& os, bool recursive) const
+void Evaluation::print_on(std::ostream& os) const
 {
+  // This has to be a static because we recursively get here through a call to operator<<(ostream, Node).
+  static bool print_color_codes = true;
+  os << '{';
   switch (m_state)
   {
     case Evaluation::unused:
-      if (recursive)
-        os << "<UNUSED Evaluation>";
-      else
+      if (print_color_codes)
         os << "<\e[31mUNUSED Evaluation\e[0m>";
+      else
+        os << "<UNUSED Evaluation>";
       break;
     case Evaluation::uninitialized:
-      os << "<UNINITIALIZED Evaluation>";
+      os << "<uninitialized>";
       break;
     case Evaluation::literal:
       os << m_simple.m_literal;
@@ -133,58 +136,73 @@ void Evaluation::print_on(std::ostream& os, bool recursive) const
       break;
     case Evaluation::pre:
       os << increment_str(m_simple.m_increment);
-      m_lhs->print_on(os, true);
+      m_lhs->print_on(os);
       break;
     case Evaluation::post:
-      m_lhs->print_on(os, true);
+      m_lhs->print_on(os);
       os << increment_str(m_simple.m_increment);
       break;
     case Evaluation::unary:
       os << code(m_operator.unary) << '(';
-      m_lhs->print_on(os, true);
+      m_lhs->print_on(os);
       os << ')';
       break;
     case Evaluation::binary:
       os << '(';
-      m_lhs->print_on(os, true);
+      m_lhs->print_on(os);
       os << ") " << code(m_operator.binary) << " (";
-      m_rhs->print_on(os, true);
+      m_rhs->print_on(os);
       os << ')';
       break;
     case Evaluation::condition:
       os << '(';
-      m_condition->print_on(os, true);
+      m_condition->print_on(os);
       os << ") ? (";
-      m_lhs->print_on(os, true);
+      m_lhs->print_on(os);
       os << ") : (";
-      m_rhs->print_on(os, true);
+      m_rhs->print_on(os);
       os << ')';
       break;
   }
   bool first = true;
+  bool orig_print_color_codes = print_color_codes;
   for (auto&& node : m_value_computations)
   {
-    if (recursive)
+    if (!print_color_codes)
       os << (first ? "/" : ",");
     else
+    {
       os << (first ? "\e[37m/" : ",");
+      if (first)
+        print_color_codes = false;
+    }
     os << *node;
     first = false;
   }
-  if (!first && !recursive)
+  if (orig_print_color_codes && !print_color_codes)
+  {
     os << "\e[0m";
+    print_color_codes = true;
+  }
   first = true;
   for (auto&& node : m_side_effects)
   {
-    if (recursive)
+    if (!print_color_codes)
       os << (first ? "/" : ",");
     else
+    {
       os << (first ? "\e[37m/" : ",");
+      if (first)
+        print_color_codes = false;
+    }
     os << *node;
     first = false;
   }
-  if (!first && !recursive)
+  if (orig_print_color_codes && !print_color_codes)
+  {
     os << "\e[0m";
+    print_color_codes = true;
+  }
 #ifdef TRACK_EVALUATION
   Debug(
     if (dc::tracked.is_on())
@@ -193,12 +211,13 @@ void Evaluation::print_on(std::ostream& os, bool recursive) const
     }
   );
 #endif
+  os << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
 {
-  value_computation.print_on(os << '{');
-  return os << '}';
+  value_computation.print_on(os);
+  return os;
 }
 
 //static
@@ -656,11 +675,14 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
 char const* name_Evaluation = "Evaluation";
 #endif
 
-void Evaluation::for_each_node(Node::sb_mask_type filter, std::function<void(node_iterator const&)> const& action) const
+void Evaluation::for_each_node(
+    Node::sb_mask_type filter,
+    std::function<void(node_iterator const&)> const& action
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
-  DoutEntering(dc::notice, "Evaluation::for_each_node(" << Node::Filter(filter) << ", ...) [this = " << *this << "].");
+  DoutEntering(debug_channel, "Evaluation::for_each_node(" << Node::Filter(filter) << ", ...) [this = " << *this << "].");
   ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
-  Dout(dc::notice, m_state);
+  Dout(debug_channel, m_state);
   switch (m_state)
   {
     case unused:
@@ -672,53 +694,53 @@ void Evaluation::for_each_node(Node::sb_mask_type filter, std::function<void(nod
       break;
     case variable:
     {
-      Dout(dc::notice, "Size of m_value_computations = " << m_value_computations.size());
+      Dout(debug_channel, "Size of m_value_computations = " << m_value_computations.size());
       for (auto&& node : m_value_computations)
       {
         if (node->is_head_tail_type(filter))
         {
-          Dout(dc::notice, "Calling action(" << *node << ")");
+          Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
         }
         else
         {
-          Dout(dc::notice, "Call to action(" << *node << ") was filtered.");
+          Dout(debug_channel, "Call to action(" << *node << ") was filtered.");
         }
       }
-      Dout(dc::notice, "Size of m_side_effects = " << m_side_effects.size());
+      Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
       {
         if (node->is_head_tail_type(filter))
         {
-          Dout(dc::notice, "Calling action(" << *node << ")");
+          Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
         }
         else
         {
-          Dout(dc::notice, "Call to action(" << *node << ") was filtered.");
+          Dout(debug_channel, "Call to action(" << *node << ") was filtered.");
         }
         if (node->is_write())
-          node->get_evaluation()->for_each_node(filter, action);
+          node->get_evaluation()->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       }
       break;
     }
     case pre:
-      m_lhs->for_each_node(filter, action);
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case post:
-      m_lhs->for_each_node(filter, action);
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case unary:
-      m_lhs->for_each_node(filter, action);
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case binary:
-      m_lhs->for_each_node(filter, action);
-      m_rhs->for_each_node(filter, action);
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case condition:
-      m_condition->for_each_node(filter, action);
-      m_lhs->for_each_node(filter, action);
-      m_rhs->for_each_node(filter, action);
+      m_condition->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;
   }
 }

@@ -43,9 +43,9 @@ void Context::write(ast::tag variable, Evaluation&& evaluation)
   new_node->get_evaluation()->for_each_node(Node::value_computation_tails,
       [this, &new_node](Evaluation::node_iterator const& before_node)
       {
-        m_graph.new_edge(edge_asw /*FIXME*/, before_node, new_node);
+        m_graph.new_edge(edge_sb, before_node, new_node);
       }
-  );
+  COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 }
 
 void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluation)
@@ -111,17 +111,20 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
   if (--m_full_expression_detector_depth == 0)
   {
     // full_expression is the evaluation of a full-expression.
-    Dout(dc::notice, "FULL-EXPRESSION FOUND: " << full_expression);
+    Dout(dc::notice, "Found full-expression with evaluation: " << full_expression);
     // An Evaluation is allocated iff when the expression is pointed to by a std::unique_ptr,
     // which are only used as member functions of another Evaluation; hence a full-expression
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
     if (m_last_full_expression.is_valid())
-      Dout(dc::notice, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
+      Dout(dc::sb_edge, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
 
+    // First find all new edges without actually adding new ones (that would interfere with the algorithm).
+    using node_pairs_type = std::vector<std::pair<Evaluation::node_iterator, Evaluation::node_iterator>>;
+    node_pairs_type node_pairs;
     int number_of_nodes = 0;
-    // Find all nodes in the current full_expression.
+    // Find all tail nodes in the current full_expression.
     //
     //   before_node
     //       |
@@ -129,22 +132,25 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //       v
     //   after_node
     //
-    full_expression.for_each_node(Node::heads,
-        [this, &number_of_nodes](Evaluation::node_iterator const& after_node)
+    full_expression.for_each_node(Node::tails,
+        [this, &number_of_nodes, &node_pairs](Evaluation::node_iterator const& after_node)
         {
           ++number_of_nodes;
           // Generate all sequenced-before edges between full-expressions.
           if (m_last_full_expression.is_valid())
           {
-            m_last_full_expression.for_each_node(Node::tails,
-                [this, &after_node](Evaluation::node_iterator const& before_node)
+            m_last_full_expression.for_each_node(Node::heads,
+                [this, &after_node, &node_pairs](Evaluation::node_iterator const& before_node)
                 {
-                  m_graph.new_edge(edge_sb, before_node, after_node);
+                  node_pairs.push_back(std::make_pair(before_node, after_node));
                 }
-            );
+            COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
           }
         }
-    );
+    COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    // Now actually add the new edges.
+    for (node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
+      m_graph.new_edge(edge_sb, node_pair->first, node_pair->second);
 
     // Replace m_last_full_expression with the current one if there was any node at all.
     if (number_of_nodes > 0)

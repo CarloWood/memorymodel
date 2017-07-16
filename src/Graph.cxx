@@ -60,12 +60,12 @@ void Graph::scope_end()
 
 void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node)
 {
-  DoutEntering(dc::notice, "new_edge(" << edge_type << ", " << *tail_node << ", " <<  *head_node << ").");
   DebugMarkUp;
-  Node::add_edge(edge_type, tail_node, head_node);
-  if (1)        // Successfully added a new edge.
+  bool success = Node::add_edge(edge_type, tail_node, head_node);
+  if (success)  // Successfully added a new edge.
   {
-    if (edge_type == edge_sb || 1) // FIXME: remove the '1' when we don't abuse edge_asw for red anymore
+    Dout(dc::notice, "Adding new " << edge_type << " edge from \"" << *tail_node << "\" to \"" << *head_node << "\".");
+    if (edge_type == edge_sb)
     {
       tail_node->sequenced_before(*head_node);
       head_node->sequenced_after(*tail_node);
@@ -119,10 +119,10 @@ void Graph::generate_dot_file(std::string const& filename) const
   }
   for (node_iterator node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
-    Dout(dc::notice, "LOOP: " << *node);
+    //Dout(dc::notice, "LOOP: " << *node);
     for (auto&& end_point : node->get_end_points())
     {
-      Dout(dc::notice, "END-POINT: " << end_point);
+      //Dout(dc::notice, "END-POINT: " << end_point);
 
       if (*end_point.other_node() < *node)
         continue;

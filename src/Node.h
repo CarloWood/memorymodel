@@ -124,7 +124,7 @@ class EndPoint
   EdgeType m_edge_type;
   EndPointType m_type;
   node_iterator m_other_node;
- 
+
  public:
   EndPoint(EdgeType edge_type, EndPointType type, node_iterator const& other_node) : m_edge_type(edge_type), m_type(type), m_other_node(other_node) { }
 
@@ -144,41 +144,38 @@ class Node
   using sb_mask_type = unsigned int;
   using end_points_type = std::vector<EndPoint>;
 
+  // Bits
   static constexpr sb_mask_type sequenced_before_value_computation_bit = 1;
-  static constexpr sb_mask_type sequenced_before_side_effect_bit = 2;
-  static constexpr sb_mask_type sequenced_after_value_computation_bit = 4;
-  static constexpr sb_mask_type sequenced_after_side_effect_bit = 8;
-  static constexpr sb_mask_type sb_unused_bit = 16;
-  static constexpr sb_mask_type sequenced_before_mask = sequenced_before_value_computation_bit|sequenced_before_side_effect_bit;
-  static constexpr sb_mask_type sequenced_after_mask = sequenced_after_value_computation_bit|sequenced_after_side_effect_bit;
+  static constexpr sb_mask_type sequenced_before_side_effect_bit       = 2;
+  static constexpr sb_mask_type sequenced_after_value_computation_bit  = 4;
+  static constexpr sb_mask_type sequenced_after_side_effect_bit        = 8;
+  static constexpr sb_mask_type sb_unused_bit                          = 16;
 
-  static constexpr sb_mask_type side_effect_mask = sequenced_before_side_effect_bit|sequenced_after_side_effect_bit;
-  static constexpr sb_mask_type value_computation_mask = sequenced_before_value_computation_bit|sequenced_after_value_computation_bit;
-  static constexpr sb_mask_type value_computation_tails = sequenced_before_value_computation_bit;
-  static constexpr sb_mask_type value_computation_heads = sequenced_after_value_computation_bit;
-  static constexpr sb_mask_type side_effect_tails = sequenced_before_side_effect_bit;
-  static constexpr sb_mask_type side_effect_heads = sequenced_after_side_effect_bit;
-  static constexpr sb_mask_type tails = sequenced_before_mask;
-  static constexpr sb_mask_type heads = sequenced_after_mask;
+  // Masks
+  static constexpr sb_mask_type sequenced_before_mask   = sequenced_before_value_computation_bit|sequenced_before_side_effect_bit;
+  static constexpr sb_mask_type sequenced_after_mask    =  sequenced_after_value_computation_bit|sequenced_after_side_effect_bit;
 
-  void sequenced_before(Node const& node) const
-  {
-    m_sb_mask |= (node.is_write() ? sequenced_before_side_effect_bit : sequenced_before_value_computation_bit)
-              |  (node.m_sb_mask & sequenced_before_mask);
-  }
+  // The bits set in these masks are requested bits (they should be set).
+  static constexpr sb_mask_type side_effect_mask        =       sequenced_before_side_effect_bit|sequenced_after_side_effect_bit;
+  static constexpr sb_mask_type value_computation_mask  = sequenced_before_value_computation_bit|sequenced_after_value_computation_bit;
 
-  void sequenced_after(Node const& node) const
-  {
-    m_sb_mask |= (node.is_write() ? sequenced_after_side_effect_bit : sequenced_after_value_computation_bit)
-              |  (node.m_sb_mask & sequenced_after_mask);
-  }
+  // The bits set in these masks are forbidden bits (they should be unset).
+  static constexpr sb_mask_type value_computation_tails = sequenced_after_value_computation_bit;
+  static constexpr sb_mask_type value_computation_heads = sequenced_before_value_computation_bit;
+  static constexpr sb_mask_type side_effect_tails       = sequenced_after_side_effect_bit;
+  static constexpr sb_mask_type side_effect_heads       = sequenced_before_side_effect_bit;
+  static constexpr sb_mask_type tails                   = sequenced_after_mask;
+  static constexpr sb_mask_type heads                   = sequenced_before_mask;
 
-  bool is_head_tail_type(sb_mask_type head_tail_mask) const
-  {
-    return
-      ((is_write() ? side_effect_mask : value_computation_mask) & head_tail_mask) &&    // Is itself the requested type (value-computation or side-effect)
-      !(m_sb_mask & head_tail_mask);                                                    // and is not hiding behind another node of that type.
-  }
+  // Called on the tail-node of a new edge.
+  void sequenced_before(Node const& head_node) const;
+
+  // Called on the head-node of a new edge.
+  void sequenced_after(Node const& tail_node) const;
+
+  // Returns true when this Node is of the requested type (value-computation or side-effect)
+  // and is a head or tail (as requested) for that type.
+  bool is_head_tail_type(sb_mask_type head_tail_mask) const;
 
  private:
   // A Node is stored in a std::set, but only m_id is used as sorting key.
@@ -262,8 +259,9 @@ class Node
     m_sb_mask(0),
     m_memory_order(std::memory_order_seq_cst) { }
 
-  // Mutators.
-  static void add_edge(EdgeType edge_type, EndPoint::node_iterator const& head, EndPoint::node_iterator const& tail);
+  // Add a new edge of type edge_type from tail_node to head_node.
+  // Returns true if such an edge did not already exist and a new edge was inserted.
+  static bool add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node);
 
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }
@@ -272,6 +270,7 @@ class Node
   std::string label(bool dot_file = false) const;
   ThreadPtr const thread() const { return m_thread; }
   bool is_write() const { return m_access == WriteAccess; }
+  sb_mask_type evaluation_bit() const { return m_access == WriteAccess ? side_effect_mask : value_computation_mask; }
   bool is_second_mutex_access() const { return m_access == MutexLock2 || m_access == MutexUnlock2; }
   Evaluation* get_evaluation() { return m_evaluation.get(); }
   Evaluation const* get_evaluation() const { return m_evaluation.get(); }
@@ -286,7 +285,7 @@ class Node
   friend std::ostream& operator<<(std::ostream& os, Filter filter);
 
  private:
-  void add_end_point(EdgeType edge_type, EndPointType type, EndPoint::node_iterator const& other_node) const;
+  bool add_end_point(EdgeType edge_type, EndPointType type, EndPoint::node_iterator const& other_node) const;
 };
 
 #ifdef CWDEBUG
