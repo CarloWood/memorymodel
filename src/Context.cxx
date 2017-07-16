@@ -43,7 +43,7 @@ void Context::write(ast::tag variable, Evaluation&& evaluation)
   new_node->get_evaluation()->for_each_node(Node::value_computation_tails,
       [this, &new_node](Evaluation::node_iterator const& before_node)
       {
-        m_graph.new_edge(before_node, new_node, edge_asw);
+        m_graph.new_edge(edge_asw /*FIXME*/, before_node, new_node);
       }
   );
 }
@@ -139,7 +139,7 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
             m_last_full_expression.for_each_node(Node::tails,
                 [this, &after_node](Evaluation::node_iterator const& before_node)
                 {
-                  m_graph.new_edge(before_node, after_node, edge_sb);
+                  m_graph.new_edge(edge_sb, before_node, after_node);
                 }
             );
           }

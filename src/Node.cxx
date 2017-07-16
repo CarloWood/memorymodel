@@ -4,6 +4,13 @@
 #include "utils/macros.h"
 #include <sstream>
 
+bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
+{
+  return end_point1.m_edge_type == end_point2.m_edge_type &&
+         end_point1.m_type == end_point2.m_type &&
+         *end_point1.m_other_node == *end_point2.m_other_node;
+}
+
 std::string Node::type() const
 {
   std::string type;
@@ -101,3 +108,77 @@ std::ostream& operator<<(std::ostream& os, Node::Filter filter)
   }
   return os;
 }
+
+char const* edge_str(EdgeType edge_type)
+{
+  switch (edge_type)
+  {
+    case edge_sb: return "Sequenced-Before";
+    case edge_asw: return "Additional-Synchronises-With";
+    case edge_dd: return "Data-Dependency";
+    case edge_cd: return "Control-Dependency";
+    AI_CASE_RETURN(edge_rf);
+    AI_CASE_RETURN(edge_tot);
+    AI_CASE_RETURN(edge_mo);
+    AI_CASE_RETURN(edge_sc);
+    AI_CASE_RETURN(edge_lo);
+    AI_CASE_RETURN(edge_hb);
+    AI_CASE_RETURN(edge_vse);
+    AI_CASE_RETURN(edge_vsses);
+    AI_CASE_RETURN(edge_ithb);
+    AI_CASE_RETURN(edge_dob);
+    AI_CASE_RETURN(edge_cad);
+    AI_CASE_RETURN(edge_sw);
+    AI_CASE_RETURN(edge_hrs);
+    AI_CASE_RETURN(edge_rs);
+    AI_CASE_RETURN(edge_data_races);
+    AI_CASE_RETURN(edge_unsequenced_races);
+  }
+  return "UNKNOWN edge_type";
+}
+
+std::ostream& operator<<(std::ostream& os, EdgeType edge_type)
+{
+  return os << edge_str(edge_type);
+}
+
+char const* end_point_str(EndPointType end_point_type)
+{
+  switch (end_point_type)
+  {
+    AI_CASE_RETURN(undirected);
+    AI_CASE_RETURN(tail);
+    AI_CASE_RETURN(head);
+  }
+  return "UNKNOWN EndPointType";
+}
+
+std::ostream& operator<<(std::ostream& os, EndPointType end_point_type)
+{
+  return os << end_point_str(end_point_type);
+}
+
+std::ostream& operator<<(std::ostream& os, EndPoint const& end_point)
+{
+  os << '{' << end_point.m_edge_type << ", " << end_point.m_type << ", " << *end_point.m_other_node << '}';
+  return os;
+}
+
+void Node::add_end_point(EdgeType edge_type, EndPointType type, EndPoint::node_iterator const& other_node) const
+{
+  ASSERT(std::find(m_end_points.begin(), m_end_points.end(), EndPoint(edge_type, type, other_node)) == m_end_points.end());
+  m_end_points.emplace_back(edge_type, type, other_node);
+}
+
+//static
+void Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node)
+{
+  head_node->add_end_point(edge_type, is_directed(edge_type) ? head : undirected, tail_node);
+  tail_node->add_end_point(edge_type, is_directed(edge_type) ? tail : undirected, head_node);
+}
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct sb_edge("SB_EDGE");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

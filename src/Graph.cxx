@@ -58,6 +58,21 @@ void Graph::scope_end()
   }
 }
 
+void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node)
+{
+  DoutEntering(dc::notice, "new_edge(" << edge_type << ", " << *tail_node << ", " <<  *head_node << ").");
+  DebugMarkUp;
+  Node::add_edge(edge_type, tail_node, head_node);
+  if (1)        // Successfully added a new edge.
+  {
+    if (edge_type == edge_sb || 1) // FIXME: remove the '1' when we don't abuse edge_asw for red anymore
+    {
+      tail_node->sequenced_before(*head_node);
+      head_node->sequenced_after(*tail_node);
+    }
+  }
+}
+
 void Graph::generate_dot_file(std::string const& filename) const
 {
   std::ofstream out;
@@ -102,23 +117,34 @@ void Graph::generate_dot_file(std::string const& filename) const
         " [label=\"" << node.label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
         " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"0.200000\"][width=\"0.900000\"];\n";
   }
-  for (auto&& edge : m_edges)
+  for (node_iterator node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
-    std::string color;
-    switch (edge.type())
+    Dout(dc::notice, "LOOP: " << *node);
+    for (auto&& end_point : node->get_end_points())
     {
-      case edge_sb:
-        color = "black";
-        break;
-      default:
-        color = "red";
-        break;
+      Dout(dc::notice, "END-POINT: " << end_point);
+
+      if (*end_point.other_node() < *node)
+        continue;
+
+      std::string color;
+      switch (end_point.edge_type())
+      {
+        case edge_sb:
+          color = "black";
+          break;
+        default:
+          color = "red";
+          break;
+      }
+      node_iterator tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
+      node_iterator head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
+      out << "node" << tail_node->name() << " -> "
+             "node" << head_node->name() <<
+             " [label=<<font color=\"" << color << "\">sb</font>>, "
+               "color=\"" << color << "\", fontname=\"Helvetica\", "
+               "fontsize=10, penwidth=1., arrowsize=\"0.8\"];\n";
     }
-    out << "node" << edge.begin()->name() << " -> "
-           "node" << edge.end()->name() <<
-           " [label=<<font color=\"" << color << "\">sb</font>>, "
-             "color=\"" << color << "\", fontname=\"Helvetica\", "
-             "fontsize=10, penwidth=1., arrowsize=\"0.8\"];\n";
   }
   out << "}\n";
 }
