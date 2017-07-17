@@ -29,7 +29,7 @@ struct Context {
 
   // Non-atomic read and writes.
   void read(ast::tag variable, Evaluation& evaluation);
-  void write(ast::tag variable, Evaluation&& evaluation);
+  void write(ast::tag variable, Evaluation&& evaluation, bool side_effect_sb_value_computation);
 
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
@@ -43,6 +43,9 @@ struct Context {
   // Called at sequence-points.
   void detect_full_expression_start();
   void detect_full_expression_end(Evaluation& full_expression);
+
+  // Add edge_type edges between heads of before_evaluation and tails of after_evaluation.
+  void add_edges(EdgeType edge_type, Evaluation const& before_evaluation, Evaluation const& after_evaluation COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 };
 
 // Statements that are not expressions, but contain expressions, are

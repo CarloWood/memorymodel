@@ -209,12 +209,16 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
   Evaluation result = execute_operator_list_expression(expr.m_other_expression, context);
   for (auto const& tail : expr.m_chained)
   {
+    Evaluation rhs = execute_operator_list_expression(tail, context);
     if (std::is_same<T, ast::logical_or_expression>::value ||
         std::is_same<T, ast::logical_and_expression>::value)
     {
       Dout(dc::sb_edge, "Boolean expression (operator || or &&)");
+      DebugMarkUp;
+      context.add_edges(edge_sb, result, rhs
+          COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
-    result.OP(get_operator<T>(tail), execute_operator_list_expression(tail, context));
+    result.OP(get_operator<T>(tail), std::move(rhs));
   }
   return result;
 }
@@ -297,7 +301,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
             THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", primary_expression_node));
           ast::tag const& tag{boost::get<ast::tag>(primary_expression_node)};
           result.prefix_operator(unary_operator);
-          result.write(tag, context);
+          result.write(tag, context, true);
         }
         else
           result.unary_operator(unary_operator);

@@ -514,9 +514,9 @@ void Evaluation::read(ast::tag tag, std::memory_order mo, Context& context)
   context.read(tag, *this);
 }
 
-void Evaluation::write(ast::tag tag, Context& context)
+void Evaluation::write(ast::tag tag, Context& context, bool side_effect_sb_value_computation)
 {
-  context.write(tag, std::move(*this));
+  context.write(tag, std::move(*this), side_effect_sb_value_computation);
 }
 
 void Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)

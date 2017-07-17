@@ -145,11 +145,12 @@ class Node
   using end_points_type = std::vector<EndPoint>;
 
   // Bits
-  static constexpr sb_mask_type sequenced_before_value_computation_bit = 1;
-  static constexpr sb_mask_type sequenced_before_side_effect_bit       = 2;
-  static constexpr sb_mask_type sequenced_after_value_computation_bit  = 4;
-  static constexpr sb_mask_type sequenced_after_side_effect_bit        = 8;
-  static constexpr sb_mask_type sb_unused_bit                          = 16;
+  static constexpr sb_mask_type sequenced_before_value_computation_bit        = 1;
+  static constexpr sb_mask_type sequenced_before_side_effect_bit              = 2;
+  static constexpr sb_mask_type sequenced_after_value_computation_bit         = 4;
+  static constexpr sb_mask_type sequenced_after_side_effect_bit               = 8;
+  static constexpr sb_mask_type sequenced_before_pseudo_value_computation_bit = 16;
+  static constexpr sb_mask_type sb_unused_bit                                 = 32;
 
   // Masks
   static constexpr sb_mask_type sequenced_before_mask   = sequenced_before_value_computation_bit|sequenced_before_side_effect_bit;
@@ -262,6 +263,7 @@ class Node
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
   static bool add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node);
+  void sequenced_before_value_computation(EndPoint::node_iterator const& read_node) const;
 
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }

@@ -74,6 +74,7 @@ char const* sb_mask_str(Node::sb_mask_type bit)
     AI_CASE_RETURN(Node::value_computation_heads);
     AI_CASE_RETURN(Node::side_effect_tails);
     AI_CASE_RETURN(Node::side_effect_heads);
+    AI_CASE_RETURN(Node::sequenced_before_pseudo_value_computation_bit);
   }
   return "UNKNOWN sb_mask_type";
 }
@@ -99,7 +100,7 @@ std::ostream& operator<<(std::ostream& os, Node::Filter filter)
       }
     }
   }
-  return os << " (" << std::hex << sb_mask << std::dec << ')';
+  return os;
 }
 
 char const* edge_str(EdgeType edge_type)
@@ -240,6 +241,14 @@ void Node::sequenced_after(Node const& tail_node) const
   }
 }
 
+// This is the write node of a prefix operator that read from read_node.
+void Node::sequenced_before_value_computation(EndPoint::node_iterator const& read_node) const
+{
+  Dout(dc::notice, "Marking " << *this << " sequenced before its value computation (that uses) " << *read_node);
+  read_node->m_sb_mask |= sequenced_before_value_computation_bit;
+  m_sb_mask |= sequenced_before_pseudo_value_computation_bit;
+}
+
 // Returns true when this Node is of the requested type (value-computation or side-effect)
 // and is a head or tail (as requested) for that type.
 //
@@ -271,15 +280,16 @@ bool Node::is_head_tail_type(sb_mask_type head_tail_mask) const
 {
   DoutEntering(dc::sb_edge, "is_head_tail_type(" << Filter(head_tail_mask) << ") [this = " << *this << "]");
   Dout(dc::sb_edge, "evaluation_bit() = " << Filter(evaluation_bit()) << "; m_sb_mask = " << Filter(m_sb_mask));
-  bool b = evaluation_bit() & head_tail_mask;
-  if (!b)
+  // Is itself the requested type (value-computation or side-effect)?
+  bool is_requested_type = (evaluation_bit() & head_tail_mask) ||
+      (m_sb_mask & sequenced_before_pseudo_value_computation_bit);   // The write node of a pre-increment/decrement expression fakes being both, value-computation and side-effect.
+  if (!is_requested_type)
     Dout(dc::sb_edge, "rejected because we ourselves are not the requested evaluation type.");
-  b = !(m_sb_mask & head_tail_mask);
-  if (!b)
+  // Are we hiding behind another node of that type?
+  bool hiding_behind_another = m_sb_mask & head_tail_mask;
+  if (hiding_behind_another)
     Dout(dc::sb_edge, "rejected because we are hiding behind another node that provides the requested type.");
-  return
-    (evaluation_bit() & head_tail_mask) &&    // Is itself the requested type (value-computation or side-effect)
-    !(m_sb_mask & head_tail_mask);            // and is not hiding behind another node of that type.
+  return is_requested_type && !hiding_behind_another;
 }
 
 #ifdef CWDEBUG

@@ -22,15 +22,15 @@ void Context::read(ast::tag variable, Evaluation& evaluation)
   evaluation.add_value_computation(new_node);
 }
 
-void Context::write(ast::tag variable, Evaluation&& evaluation)
+void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect_sb_value_computation)
 {
   DoutTag(dc::notice, "[NA write to", variable);
-  auto new_node = m_graph.new_node(variable, std::move(evaluation));
+  auto write_node = m_graph.new_node(variable, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
   evaluation = variable;
-  evaluation.add_side_effect(new_node);
+  evaluation.add_side_effect(write_node);
 
   // Sequence all value-computations of the right-hand-side of an assignment before the side-effect of that assignment.
   //
@@ -38,12 +38,20 @@ void Context::write(ast::tag variable, Evaluation&& evaluation)
   //     |
   //     | sb
   //     v
-  //  new_node
+  //  write_node
+  //     |
+  //     |              <-- in case of a prefix operator
+  //     v
+  //  pseudo_node       this represents the value computation of the pre-increment/decrement expression.
   //
-  new_node->get_evaluation()->for_each_node(Node::value_computation_tails,
-      [this, &new_node](Evaluation::node_iterator const& before_node)
+  write_node->get_evaluation()->for_each_node(Node::value_computation_heads,
+      [this, &write_node, &side_effect_sb_value_computation](Evaluation::node_iterator const& before_node)
       {
-        m_graph.new_edge(edge_sb, before_node, new_node);
+        m_graph.new_edge(edge_sb, before_node, write_node);
+        if (side_effect_sb_value_computation)
+          write_node->sequenced_before_value_computation(before_node); // Corrupt before_node (and change write_node) to fake a (non-existing) pseudo node
+                                                                       // representing the value-computation of the pre-increment/decrement expression
+                                                                       // that write_node must be sequenced before.
       }
   COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 }
@@ -103,6 +111,36 @@ Evaluation Context::unlock(ast::tag mutex)
 void Context::detect_full_expression_start()
 {
   ++m_full_expression_detector_depth;
+}
+
+void Context::add_edges(
+    EdgeType edge_type,
+    Evaluation const& before_evaluation,
+    Evaluation const& after_evaluation
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+{
+  Dout(debug_channel, "Generate " << edge_type << " edges between " << before_evaluation << " and " << after_evaluation << ".");
+
+  // First find all new edges without actually adding new ones (that would interfere with the algorithm).
+  using node_pairs_type = std::vector<std::pair<Evaluation::node_iterator, Evaluation::node_iterator>>;
+  node_pairs_type node_pairs;
+
+  // Find all tail nodes in after_evaluation.
+  after_evaluation.for_each_node(Node::tails,
+      [&before_evaluation, &node_pairs COMMA_DEBUG_ONLY(&debug_channel)](Evaluation::node_iterator const& after_node)
+      {
+        // Find all node pairs that need a new edge.
+        before_evaluation.for_each_node(Node::heads,
+            [&after_node, &node_pairs](Evaluation::node_iterator const& before_node)
+            {
+              node_pairs.push_back(std::make_pair(before_node, after_node));
+            }
+        COMMA_DEBUG_ONLY(debug_channel));
+      }
+  COMMA_DEBUG_ONLY(debug_channel));
+  // Now actually add the new edges.
+  for (node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
+    m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
 }
 
 void Context::detect_full_expression_end(Evaluation& full_expression)
