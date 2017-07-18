@@ -647,16 +647,36 @@ void Evaluation::unary_operator(ast::unary_operators op)
   Dout(dc::finish, *this << '.');
 }
 
-void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& false_value)
+void Evaluation::destruct(Context& context)
+{
+  std::vector<Evaluation::node_iterator> nodes;
+  for_each_node(Node::anything,
+      [&nodes](Evaluation::node_iterator const& node)
+      {
+        nodes.push_back(node);
+      }
+      COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::notice)
+  );
+  for (Evaluation::node_iterator node : nodes)
+    context.m_graph.remove_node(node);
+}
+
+void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& false_value, Context& context)
 {
   DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_value << ", " << false_value << ") [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
     Dout(dc::simplify, "Simplifying because condition is a literal...");
     if (m_simple.m_literal)
+    {
       *this = std::move(true_value);
+      false_value.destruct(context);
+    }
     else
+    {
       *this = std::move(false_value);
+      true_value.destruct(context);
+    }
   }
   else
   {
@@ -676,7 +696,7 @@ char const* name_Evaluation = "Evaluation";
 #endif
 
 void Evaluation::for_each_node(
-    Node::sb_mask_type filter,
+    Node::filter_type filter,
     std::function<void(node_iterator const&)> const& action
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
@@ -697,7 +717,7 @@ void Evaluation::for_each_node(
       Dout(debug_channel, "Size of m_value_computations = " << m_value_computations.size());
       for (auto&& node : m_value_computations)
       {
-        if (node->is_head_tail_type(filter))
+        if (node->is_filtered(filter))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
@@ -710,7 +730,7 @@ void Evaluation::for_each_node(
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
       {
-        if (node->is_head_tail_type(filter))
+        if (node->is_filtered(filter))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);

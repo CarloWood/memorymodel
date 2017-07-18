@@ -65,7 +65,7 @@ std::string Node::label(bool dot_file) const
   return ss.str();
 }
 
-char const* sb_mask_str(Node::sb_mask_type bit)
+char const* sb_mask_str(Node::filter_type bit)
 {
   ASSERT(utils::is_power_of_two(bit));
   switch (bit)
@@ -75,13 +75,14 @@ char const* sb_mask_str(Node::sb_mask_type bit)
     AI_CASE_RETURN(Node::side_effect_tails);
     AI_CASE_RETURN(Node::side_effect_heads);
     AI_CASE_RETURN(Node::sequenced_before_pseudo_value_computation_bit);
+    AI_CASE_RETURN(Node::anything);
   }
-  return "UNKNOWN sb_mask_type";
+  return "UNKNOWN filter_type";
 }
 
 std::ostream& operator<<(std::ostream& os, Node::Filter filter)
 {
-  Node::sb_mask_type sb_mask = filter.m_sb_mask;
+  Node::filter_type sb_mask = filter.m_connected;
   if (sb_mask == Node::heads)
     os << "Node::heads";
   else if (sb_mask == Node::tails)
@@ -89,7 +90,7 @@ std::ostream& operator<<(std::ostream& os, Node::Filter filter)
   else
   {
     bool first = true;
-    for (Node::sb_mask_type bit = 1; bit != Node::sb_unused_bit; bit <<= 1)
+    for (Node::filter_type bit = 1; bit != Node::sb_unused_bit; bit <<= 1)
     {
       if ((sb_mask & bit))
       {
@@ -152,22 +153,28 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type)
   return os << end_point_str(end_point_type);
 }
 
+std::ostream& operator<<(std::ostream& os, Edge const& edge)
+{
+  os << '{' << edge.m_edge_type << '}';
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, EndPoint const& end_point)
 {
-  os << '{' << end_point.m_edge_type << ", " << end_point.m_type << ", " << *end_point.m_other_node << '}';
+  os << '{' << *end_point.m_edge << ", " << end_point.m_type << ", " << *end_point.m_other_node << '}';
   return os;
 }
 
 bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
 {
-  return end_point1.m_edge_type == end_point2.m_edge_type &&
+  return *end_point1.m_edge == *end_point2.m_edge &&
          end_point1.m_type == end_point2.m_type &&
          *end_point1.m_other_node == *end_point2.m_other_node;
 }
 
-bool Node::add_end_point(EdgeType edge_type, EndPointType type, EndPoint::node_iterator const& other_node) const
+bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator const& other_node, bool edge_owner) const
 {
-  m_end_points.emplace_back(edge_type, type, other_node);
+  m_end_points.emplace_back(edge, type, other_node, edge_owner);
   end_points_type::iterator begin = m_end_points.begin();
   end_points_type::iterator last = m_end_points.end();
   end_points_type::iterator iter = --last;      // Point to just added element.
@@ -185,9 +192,12 @@ bool Node::add_end_point(EdgeType edge_type, EndPointType type, EndPoint::node_i
 //static
 bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node)
 {
-  bool success1 = head_node->add_end_point(edge_type, is_directed(edge_type) ? head : undirected, tail_node);
-  bool success2 = tail_node->add_end_point(edge_type, is_directed(edge_type) ? tail : undirected, head_node);
+  Edge* new_edge = new Edge(edge_type);
+  // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
+  bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
+  bool success2 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
   ASSERT(success1 == success2);
+  if (!success1) delete new_edge;
   return success1;
 }
 
@@ -195,9 +205,9 @@ bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node
 void Node::sequenced_before(Node const& head_node) const
 {
   DoutEntering(dc::sb_edge, "sequenced_before(" << head_node << ") [this = " << *this << "]");
-  sb_mask_type orig = m_sb_mask;
-  m_sb_mask |= (head_node.evaluation_bit() | head_node.m_sb_mask) & sequenced_before_mask;
-  Dout(dc::sb_edge, "m_sb_mask changed from " << Filter(orig) << " to " << Filter(m_sb_mask) << ".");
+  filter_type orig = m_connected;
+  m_connected |= (head_node.provided_type() | head_node.m_connected) & sequenced_before_mask;
+  Dout(dc::sb_edge, "m_connected changed from " << Filter(orig) << " to " << Filter(m_connected) << ".");
   // Propegation might be needed.
   // For example,
   //                flags
@@ -213,8 +223,8 @@ void Node::sequenced_before(Node const& head_node) const
   // sequenced_after_side_effect_bit|sequenced_before_side_effect_bit, and since it itself is not a side-effect
   // it is needed to propagate the sequenced_before_side_effect_bit upwards to a.
   //
-  sb_mask_type set_bits = m_sb_mask & ~orig;          // Did any bit(s) get set?
-  if ((set_bits & ~evaluation_bit()))                 // Are we not already of that type?
+  filter_type set_bits = m_connected & ~orig;          // Did any bit(s) get set?
+  if ((set_bits & ~provided_type()))                 // Are we not already of that type?
   {
     // Propagate bits to nodes sequenced before us.
     for (auto&& end_point : m_end_points)
@@ -227,12 +237,12 @@ void Node::sequenced_before(Node const& head_node) const
 void Node::sequenced_after(Node const& tail_node) const
 {
   DoutEntering(dc::sb_edge, "sequenced_after(" << tail_node << ") [this = " << *this << "]");
-  sb_mask_type orig = m_sb_mask;
-  m_sb_mask |= (tail_node.evaluation_bit() | tail_node.m_sb_mask) & sequenced_after_mask;
-  Dout(dc::sb_edge, "m_sb_mask changed from " << Filter(orig) << " to " << Filter(m_sb_mask) << ".");
+  filter_type orig = m_connected;
+  m_connected |= (tail_node.provided_type() | tail_node.m_connected) & sequenced_after_mask;
+  Dout(dc::sb_edge, "m_connected changed from " << Filter(orig) << " to " << Filter(m_connected) << ".");
   // Same as above.
-  sb_mask_type set_bits = m_sb_mask & ~orig;
-  if ((set_bits & ~evaluation_bit()))
+  filter_type set_bits = m_connected & ~orig;
+  if ((set_bits & ~provided_type()))
   {
     // Propagate bits to nodes sequenced after us.
     for (auto&& end_point : m_end_points)
@@ -245,12 +255,12 @@ void Node::sequenced_after(Node const& tail_node) const
 void Node::sequenced_before_value_computation(EndPoint::node_iterator const& read_node) const
 {
   Dout(dc::notice, "Marking " << *this << " sequenced before its value computation (that uses) " << *read_node);
-  read_node->m_sb_mask |= sequenced_before_value_computation_bit;
-  m_sb_mask |= sequenced_before_pseudo_value_computation_bit;
+  read_node->m_connected |= sequenced_before_value_computation_bit;
+  m_connected |= sequenced_before_pseudo_value_computation_bit;
 }
 
-// Returns true when this Node is of the requested type (value-computation or side-effect)
-// and is a head or tail (as requested) for that type.
+// Returns true when this Node is of the requested_type type (value-computation or side-effect)
+// and is a head or tail (as requested_type) for that type.
 //
 // For example,
 //                  flags
@@ -276,19 +286,25 @@ void Node::sequenced_before_value_computation(EndPoint::node_iterator const& rea
 // tails                      true    false   false   false
 // heads                      false   false   false   true
 //
-bool Node::is_head_tail_type(sb_mask_type head_tail_mask) const
+bool Node::is_filtered(filter_type requested_type) const
 {
-  DoutEntering(dc::sb_edge, "is_head_tail_type(" << Filter(head_tail_mask) << ") [this = " << *this << "]");
-  Dout(dc::sb_edge, "evaluation_bit() = " << Filter(evaluation_bit()) << "; m_sb_mask = " << Filter(m_sb_mask));
-  // Is itself the requested type (value-computation or side-effect)?
-  bool is_requested_type = (evaluation_bit() & head_tail_mask) ||
-      (m_sb_mask & sequenced_before_pseudo_value_computation_bit);   // The write node of a pre-increment/decrement expression fakes being both, value-computation and side-effect.
+  if (requested_type == anything)
+    return true;
+
+  DoutEntering(dc::sb_edge, "is_filtered(" << Filter(requested_type) << ") [this = " << *this << "]");
+  Dout(dc::sb_edge, "provided_type() = " << Filter(provided_type()) << "; m_connected = " << Filter(m_connected));
+
+  // Is itself the requested_type type (value-computation or side-effect)?
+  bool is_requested_type = (provided_type() & requested_type) ||
+      (m_connected & sequenced_before_pseudo_value_computation_bit);   // The write node of a pre-increment/decrement expression fakes
+                                                                       // being both, value-computation and side-effect.
   if (!is_requested_type)
-    Dout(dc::sb_edge, "rejected because we ourselves are not the requested evaluation type.");
+    Dout(dc::sb_edge, "rejected because we ourselves are not the requested_type evaluation type.");
   // Are we hiding behind another node of that type?
-  bool hiding_behind_another = m_sb_mask & head_tail_mask;
+  // For example, if we're looking for a head, then B hides behind C (which is the real head): A--->B--->C
+  bool hiding_behind_another = m_connected & requested_type;
   if (hiding_behind_another)
-    Dout(dc::sb_edge, "rejected because we are hiding behind another node that provides the requested type.");
+    Dout(dc::sb_edge, "rejected because we are hiding behind another node that provides the requested_type type.");
   return is_requested_type && !hiding_behind_another;
 }
 

@@ -370,7 +370,8 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
         // The second and third expression of a conditional expression ?: are unsequenced,
         // so it shouldn't matter in what order they are executed here.
         result.conditional_operator(execute_expression(expression, context),                    // Conditional true.
-                                    execute_expression(assignment_expression, context));        // Conditional false.
+                                    execute_expression(assignment_expression, context),         // Conditional false.
+                                    context);
       }
       break;
     }

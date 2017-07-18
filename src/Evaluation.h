@@ -123,13 +123,15 @@ class Evaluation
   void prefix_operator(ast::unary_operators op);          // ++*this or --*this
   void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
-                            Evaluation&& false_value);
+                            Evaluation&& false_value,
+                            Context& context);
   void read(ast::tag tag, Context& context);
   void read(ast::tag tag, std::memory_order mo, Context& context);
   void add_value_computation(node_iterator const& node);
   void write(ast::tag tag, Context& context, bool side_effect_sb_value_computation = false);
   void write(ast::tag tag, std::memory_order mo, Context& context);
   void add_side_effect(node_iterator const& node);
+  void destruct(Context& context);
   void swap_sum();
   void strip_rhs();
 

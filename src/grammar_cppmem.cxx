@@ -271,7 +271,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
     | int_
     | bool_
     | register_locations
-    | na_memory_locations
+    | lexeme[ na_memory_locations >> !(alnum | char_('_')) ]
     ) >> dummy(false);
 
   statement =

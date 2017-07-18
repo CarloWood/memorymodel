@@ -44,6 +44,12 @@ class Graph
     return node;
   }
 
+  void remove_node(node_iterator const& node)
+  {
+    Dout(dc::notice, "Removing Node " << *node);
+    m_nodes.erase(node);
+  }
+
   // Add a new edge.
   void new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node);
 };
