@@ -211,9 +211,10 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
   {
     Evaluation rhs = execute_operator_list_expression(tail, context);
     if (std::is_same<T, ast::logical_or_expression>::value ||
-        std::is_same<T, ast::logical_and_expression>::value)
+        std::is_same<T, ast::logical_and_expression>::value ||
+        std::is_same<T, ast::shift_expression>::value)                  // Only as of C++17! Rule 19 of http://en.cppreference.com/w/cpp/language/eval_order
     {
-      Dout(dc::sb_edge, "Boolean expression (operator || or &&)");
+      Dout(dc::sb_edge, "Boolean expression (operator || or &&), or shift expression (operator << || >>)");
       DebugMarkUp;
       context.add_edges(
           edge_sb,
