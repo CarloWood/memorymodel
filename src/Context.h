@@ -19,10 +19,25 @@ struct Context {
  private:
   int m_full_expression_detector_depth;
   Evaluation m_last_full_expression;
+  Thread::id_type m_next_thread_id;                     // The id to use for the next thread.
+  ThreadPtr m_current_thread;                           // The current thread.
+  std::stack<bool> m_threads;                           // Whether or not current scope is a thread.
+  std::stack<Evaluation> m_last_full_expressions;       // Last full-expressions of parent threads.
+  bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
-      m_position_handler(ph), m_graph(g), m_full_expression_detector_depth(0), m_last_full_expression(Evaluation::not_used) { }
+      m_position_handler(ph),
+      m_graph(g),
+      m_full_expression_detector_depth(0),
+      m_last_full_expression(Evaluation::not_used),
+      m_next_thread_id{1},
+      m_current_thread{Thread::create_main_thread()},
+      m_beginning_of_thread(false) { }
+
+  // Entering and leaving scopes.
+  void scope_start(bool is_thread);
+  void scope_end();
 
   // Uninitialized declaration.
   Evaluation uninitialized(ast::tag decl);
@@ -34,6 +49,9 @@ struct Context {
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
   void write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+
+  // Accessors.
+  int number_of_threads() const { return m_next_thread_id; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);

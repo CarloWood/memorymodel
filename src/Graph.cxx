@@ -32,32 +32,6 @@ std::ostream& operator<<(std::ostream& os, Access access)
   return os << access_str(access);
 }
 
-void Graph::scope_start(bool is_thread)
-{
-  DoutEntering(dc::notice, "Graph::scope_start('is_thread' = " << is_thread << ")");
-  m_threads.push(is_thread);
-  if (is_thread)
-  {
-    m_beginning_of_thread = true;
-    m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
-    DebugMarkDown;
-    Dout(dc::notice, "Created " << m_current_thread << '.');
-  }
-}
-
-void Graph::scope_end()
-{
-  bool is_thread = m_threads.top();
-  DoutEntering(dc::notice, "Graph::scope_end() [is_thread = " << is_thread << "].");
-  m_threads.pop();
-  if (is_thread)
-  {
-    DebugMarkUp;
-    Dout(dc::notice, "Joined thread " << m_current_thread << '.');
-    m_current_thread = m_current_thread->parent_thread();
-  }
-}
-
 void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node)
 {
   DebugMarkUp;
@@ -73,7 +47,7 @@ void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_it
   }
 }
 
-void Graph::generate_dot_file(std::string const& filename) const
+void Graph::generate_dot_file(std::string const& filename, Context& context) const
 {
   std::ofstream out;
   out.open(filename);
@@ -86,7 +60,7 @@ void Graph::generate_dot_file(std::string const& filename) const
   // Count number of nodes per thread.
   int max_count = 0;
   int main_thread_nodes = 0;
-  std::vector<int> number_of_nodes(number_of_threads(), 0);
+  std::vector<int> number_of_nodes(context.number_of_threads(), 0);
   for (auto&& node : m_nodes)
   {
     int n = ++number_of_nodes[node.thread()->id()];
@@ -95,7 +69,7 @@ void Graph::generate_dot_file(std::string const& filename) const
     else if (n > max_count)
       max_count = n;
   }
-  std::vector<int> depth(number_of_threads(), 0);
+  std::vector<int> depth(context.number_of_threads(), 0);
   depth[0] = main_thread_nodes;
 
   // Write a .dot file.

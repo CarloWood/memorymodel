@@ -587,10 +587,10 @@ int main(int argc, char* argv[])
 #endif
   Debug(NAMESPACE_DEBUG::init());
 
-  char const* filename;
+  char const* filepath;
   if (argc == 2)
   {
-    filename = argv[1];
+    filepath = argv[1];
   }
   else
   {
@@ -598,10 +598,10 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  std::ifstream in(filename);
+  std::ifstream in(filepath);
   if (!in.is_open())
   {
-    std::cerr << "Failed to open input file \"" << filename << "\".\n";
+    std::cerr << "Failed to open input file \"" << filepath << "\".\n";
     return 1;
   }
 
@@ -616,7 +616,7 @@ int main(int argc, char* argv[])
   ast::cppmem ast;
   iterator_type begin(source_code.begin());
   iterator_type const end(source_code.end());
-  position_handler<iterator_type> position_handler(filename, begin, end);
+  position_handler<iterator_type> position_handler(filepath, begin, end);
   try
   {
     if (!cppmem::parse(begin, end, position_handler, ast))
@@ -673,11 +673,12 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  std::string const source_filename = filename;
+  std::string const path = filepath;
+  std::string const source_filename = path.substr(path.find_last_of("/") + 1);
   std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
-  graph.generate_dot_file(dot_filename);
-  std::string command = "dot -Kdot -Tpng -o " + png_filename + " " + dot_filename;
+  graph.generate_dot_file(dot_filename, context);
+  std::string command = "dot -Kneato -Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 }

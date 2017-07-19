@@ -519,7 +519,7 @@ void Evaluation::read(ast::tag tag, Context& context)
 
 void Evaluation::read(ast::tag tag, std::memory_order mo, Context& context)
 {
-  context.read(tag, *this);
+  context.read(tag, mo, *this);
 }
 
 void Evaluation::write(ast::tag tag, Context& context, bool side_effect_sb_value_computation)

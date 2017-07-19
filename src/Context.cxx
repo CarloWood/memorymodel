@@ -7,6 +7,35 @@
 #define context (*this)
 #endif
 
+void Context::scope_start(bool is_thread)
+{
+  DoutEntering(dc::notice, "Context::scope_start('is_thread' = " << is_thread << ")");
+  m_threads.push(is_thread);
+  if (is_thread)
+  {
+    m_beginning_of_thread = true;
+    m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
+    m_last_full_expressions.emplace(std::move(m_last_full_expression));
+    DebugMarkDown;
+    Dout(dc::notice, "Created " << m_current_thread << '.');
+  }
+}
+
+void Context::scope_end()
+{
+  bool is_thread = m_threads.top();
+  DoutEntering(dc::notice, "Context::scope_end() [is_thread = " << is_thread << "].");
+  m_threads.pop();
+  if (is_thread)
+  {
+    DebugMarkUp;
+    Dout(dc::notice, "Joined thread " << m_current_thread << '.');
+    m_current_thread = m_current_thread->parent_thread();
+    m_last_full_expression = std::move(m_last_full_expressions.top());
+    m_last_full_expressions.pop();
+  }
+}
+
 Evaluation Context::uninitialized(ast::tag decl)
 {
   DoutTag(dc::notice, "[uninitialized declaration of", decl);
@@ -17,7 +46,7 @@ Evaluation Context::uninitialized(ast::tag decl)
 void Context::read(ast::tag variable, Evaluation& evaluation)
 {
   DoutTag(dc::notice, "[NA read from", variable);
-  auto new_node = m_graph.new_node(variable);
+  auto new_node = m_graph.new_node(m_current_thread, variable);
   // Should be added as side effect when variable is volatile.
   evaluation.add_value_computation(new_node);
 }
@@ -25,7 +54,7 @@ void Context::read(ast::tag variable, Evaluation& evaluation)
 void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect_sb_value_computation)
 {
   DoutTag(dc::notice, "[NA write to", variable);
-  auto write_node = m_graph.new_node(variable, std::move(evaluation));
+  auto write_node = m_graph.new_node(m_current_thread, variable, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
@@ -59,7 +88,7 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
 void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " read from", variable);
-  auto new_node = m_graph.new_node(variable, mo);
+  auto new_node = m_graph.new_node(m_current_thread, variable, mo);
   // Should be added as side effect when variable is volatile.
   evaluation.add_value_computation(new_node);
 }
@@ -67,7 +96,7 @@ void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluati
 void Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  auto new_node = m_graph.new_node(variable, mo, std::move(evaluation));
+  auto new_node = m_graph.new_node(m_current_thread, variable, mo, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
@@ -78,7 +107,7 @@ void Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evalua
 Evaluation Context::lockdecl(ast::tag mutex)
 {
   DoutTag(dc::notice, "[declaration of", mutex);
-  auto mutex_decl_node = m_graph.new_node(mutex, mutex_decl);
+  auto mutex_decl_node = m_graph.new_node(m_current_thread, mutex, mutex_decl);
   Evaluation result = mutex;
   result.add_side_effect(mutex_decl_node);
   return result;
@@ -87,10 +116,10 @@ Evaluation Context::lockdecl(ast::tag mutex)
 Evaluation Context::lock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[lock of", mutex);
-  auto mutex_node1 = m_graph.new_node(mutex, mutex_lock1);
+  auto mutex_node1 = m_graph.new_node(m_current_thread, mutex, mutex_lock1);
   Evaluation result = mutex;
   result.add_value_computation(mutex_node1);
-  auto mutex_node2 = m_graph.new_node(mutex, mutex_lock2);
+  auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_lock2);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
   return result;
@@ -99,18 +128,13 @@ Evaluation Context::lock(ast::tag mutex)
 Evaluation Context::unlock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[unlock of", mutex);
-  auto mutex_node1 = m_graph.new_node(mutex, mutex_unlock1);
+  auto mutex_node1 = m_graph.new_node(m_current_thread, mutex, mutex_unlock1);
   Evaluation result = mutex;
   result.add_value_computation(mutex_node1);
-  auto mutex_node2 = m_graph.new_node(mutex, mutex_unlock2);
+  auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_unlock2);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
   return result;
-}
-
-void Context::detect_full_expression_start()
-{
-  ++m_full_expression_detector_depth;
 }
 
 Evaluation::node_pairs_type Context::generate_node_pairs(
@@ -148,6 +172,11 @@ void Context::add_edges(EdgeType edge_type, Evaluation::node_pairs_type node_pai
   // Now actually add the new edges.
   for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
     m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
+}
+
+void Context::detect_full_expression_start()
+{
+  ++m_full_expression_detector_depth;
 }
 
 void Context::detect_full_expression_end(Evaluation& full_expression)

@@ -11,7 +11,7 @@ void Symbols::add(ast::declaration_statement const& declaration_statement)
 
 void Symbols::scope_start(bool is_thread, Context& context)
 {
-  context.m_graph.scope_start(is_thread);
+  context.scope_start(is_thread);
   Dout(dc::notice, "{");
   Debug(libcw_do.inc_indent(2));
   m_stack.push(m_symbols.size());
@@ -21,7 +21,7 @@ void Symbols::scope_end(Context& context)
 {
   Debug(libcw_do.dec_indent(2));
   Dout(dc::notice, "}");
-  context.m_graph.scope_end();
+  context.scope_end();
   m_symbols.resize(m_stack.top());
   m_stack.pop();
   context.m_locks.reset(m_stack.size(), context);
