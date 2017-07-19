@@ -408,7 +408,14 @@ Evaluation execute_expression(ast::expression const& expression, Context& contex
   FullExpressionDetector detector(result, context);
   result = execute_expression(expression.m_assignment_expression, context);
   for (auto const& assignment_expression : expression.m_chained)
-    result = execute_expression(assignment_expression, context);
+  {
+    Evaluation rhs = execute_expression(assignment_expression, context);
+    context.add_edges(
+        edge_sb,
+        context.generate_node_pairs(result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
+        COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    result.comma_operator(std::move(rhs));
+  }
   return result;
 }
 

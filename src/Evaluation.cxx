@@ -96,6 +96,7 @@ char const* state_str(Evaluation::State state)
     AI_CASE_RETURN(Evaluation::unary);
     AI_CASE_RETURN(Evaluation::binary);
     AI_CASE_RETURN(Evaluation::condition);
+    AI_CASE_RETURN(Evaluation::comma);
   }
   return "UNKNOWN Evaluation::State";
 }
@@ -160,6 +161,13 @@ void Evaluation::print_on(std::ostream& os) const
       os << ") ? (";
       m_lhs->print_on(os);
       os << ") : (";
+      m_rhs->print_on(os);
+      os << ')';
+      break;
+    case Evaluation::comma:
+      os << '(';
+      m_lhs->print_on(os);
+      os << ", ";
       m_rhs->print_on(os);
       os << ')';
       break;
@@ -700,6 +708,18 @@ void Evaluation::conditional_operator(
   Dout(dc::finish, *this << '.');
 }
 
+void Evaluation::comma_operator(Evaluation&& rhs)
+{
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::comma_operator(" << rhs << ") [this = " << *this << "] == > ");
+  m_lhs = make_unique(std::move(*this));
+#ifdef TRACK_EVALUATION
+    refresh();
+#endif
+  m_state = comma;
+  m_rhs = make_unique(std::move(rhs));
+  Dout(dc::finish, *this << '.');
+}
+
 #ifdef TRACK_EVALUATION
 char const* name_Evaluation = "Evaluation";
 #endif
@@ -768,6 +788,10 @@ void Evaluation::for_each_node(
       break;
     case condition:
       m_condition->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      break;
+    case comma:
       m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
       break;

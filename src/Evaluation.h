@@ -53,7 +53,7 @@ class Evaluation
   using node_iterator = std::set<Node>::iterator;
   using node_pairs_type = std::vector<std::pair<node_iterator, node_iterator>>;
   enum Unused { not_used };
-  enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition };  // See also is_valid.
+  enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition, comma };  // See also is_valid.
 
  private:
   State m_state;
@@ -129,6 +129,7 @@ class Evaluation
                             Evaluation&& false_value,
                             node_pairs_type false_node_pairs,
                             Context& context);
+  void comma_operator(Evaluation&& rhs);
   void read(ast::tag tag, Context& context);
   void read(ast::tag tag, std::memory_order mo, Context& context);
   void add_value_computation(node_iterator const& node);
