@@ -113,17 +113,16 @@ void Context::detect_full_expression_start()
   ++m_full_expression_detector_depth;
 }
 
-void Context::add_edges(
-    EdgeType edge_type,
+Evaluation::node_pairs_type Context::generate_node_pairs(
     Evaluation const& before_evaluation,
     Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
-  Dout(debug_channel, "Generate " << edge_type << " edges between " << before_evaluation << " and " << after_evaluation << ".");
+  Dout(debug_channel, "Generate node pairs for edges between between " << before_evaluation << " and " << after_evaluation << ".");
+  DebugMarkDownRight;
 
   // First find all new edges without actually adding new ones (that would interfere with the algorithm).
-  using node_pairs_type = std::vector<std::pair<Evaluation::node_iterator, Evaluation::node_iterator>>;
-  node_pairs_type node_pairs;
+  Evaluation::node_pairs_type node_pairs;
 
   // Find all tail nodes in after_evaluation.
   after_evaluation.for_each_node(Node::tails,
@@ -138,8 +137,16 @@ void Context::add_edges(
         COMMA_DEBUG_ONLY(debug_channel));
       }
   COMMA_DEBUG_ONLY(debug_channel));
+
+  return node_pairs;
+}
+
+void Context::add_edges(EdgeType edge_type, Evaluation::node_pairs_type node_pairs COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+{
+  Dout(debug_channel, "Generate " << edge_type << " from generated node pairs.");
+  DebugMarkUp;
   // Now actually add the new edges.
-  for (node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
+  for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
     m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
 }
 
@@ -159,8 +166,7 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
       Dout(dc::sb_edge, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
 
     // First find all new edges without actually adding new ones (that would interfere with the algorithm).
-    using node_pairs_type = std::vector<std::pair<Evaluation::node_iterator, Evaluation::node_iterator>>;
-    node_pairs_type node_pairs;
+    Evaluation::node_pairs_type node_pairs;
     int number_of_nodes = 0;
     // Find all tail nodes in the current full_expression.
     //
@@ -187,7 +193,7 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
         }
     COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     // Now actually add the new edges.
-    for (node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
+    for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
       m_graph.new_edge(edge_sb, node_pair->first, node_pair->second);
 
     // Replace m_last_full_expression with the current one if there was any node at all.

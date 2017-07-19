@@ -661,7 +661,12 @@ void Evaluation::destruct(Context& context)
     context.m_graph.remove_node(node);
 }
 
-void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& false_value, Context& context)
+void Evaluation::conditional_operator(
+    Evaluation&& true_value,
+    node_pairs_type true_node_pairs,
+    Evaluation&& false_value,
+    node_pairs_type false_node_pairs,
+    Context& context)
 {
   DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_value << ", " << false_value << ") [this = " << *this << "] ==> ");
   if (m_state == literal)
@@ -671,11 +676,13 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
     {
       *this = std::move(true_value);
       false_value.destruct(context);
+      context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     else
     {
       *this = std::move(false_value);
       true_value.destruct(context);
+      context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
   }
   else
@@ -687,6 +694,8 @@ void Evaluation::conditional_operator(Evaluation&& true_value, Evaluation&& fals
     m_state = condition;
     m_lhs = make_unique(std::move(true_value));
     m_rhs = make_unique(std::move(false_value));
+    context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
   }
   Dout(dc::finish, *this << '.');
 }

@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "debug.h"
 #include <iosfwd>
+#include <vector>
 #include <set>
 
 #ifdef TRACK_EVALUATION
@@ -50,6 +51,7 @@ class Evaluation
 
  public:
   using node_iterator = std::set<Node>::iterator;
+  using node_pairs_type = std::vector<std::pair<node_iterator, node_iterator>>;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition };  // See also is_valid.
 
@@ -123,7 +125,9 @@ class Evaluation
   void prefix_operator(ast::unary_operators op);          // ++*this or --*this
   void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
+                            node_pairs_type true_node_pairs,
                             Evaluation&& false_value,
+                            node_pairs_type false_node_pairs,
                             Context& context);
   void read(ast::tag tag, Context& context);
   void read(ast::tag tag, std::memory_order mo, Context& context);

@@ -44,8 +44,16 @@ struct Context {
   void detect_full_expression_start();
   void detect_full_expression_end(Evaluation& full_expression);
 
-  // Add edge_type edges between heads of before_evaluation and tails of after_evaluation.
-  void add_edges(EdgeType edge_type, Evaluation const& before_evaluation, Evaluation const& after_evaluation COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+  // Generate node pairs for edge_type edges between heads of before_evaluation and tails of after_evaluation.
+  // Pass the result to add_edges.
+  Evaluation::node_pairs_type generate_node_pairs(
+      Evaluation const& before_evaluation,
+      Evaluation const& after_evaluation
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  void add_edges(
+      EdgeType edge_type,
+      Evaluation::node_pairs_type node_pairs
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 };
 
 // Statements that are not expressions, but contain expressions, are

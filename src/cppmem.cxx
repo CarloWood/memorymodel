@@ -215,7 +215,9 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
     {
       Dout(dc::sb_edge, "Boolean expression (operator || or &&)");
       DebugMarkUp;
-      context.add_edges(edge_sb, result, rhs
+      context.add_edges(
+          edge_sb,
+          context.generate_node_pairs(result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
           COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     result.OP(get_operator<T>(tail), std::move(rhs));
@@ -367,11 +369,14 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       {
         ast::expression const& expression{boost::fusion::get<0>(conditional_expression.m_conditional_expression_tail.get())};
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
-        // The second and third expression of a conditional expression ?: are unsequenced,
-        // so it shouldn't matter in what order they are executed here.
-        result.conditional_operator(execute_expression(expression, context),                    // Conditional true.
-                                    execute_expression(assignment_expression, context),         // Conditional false.
-                                    context);
+        Evaluation true_evaluation = execute_expression(expression, context);
+        Evaluation false_evaluation = execute_expression(assignment_expression, context);
+        result.conditional_operator(
+            std::move(true_evaluation),
+            context.generate_node_pairs(result, true_evaluation, DEBUGCHANNELS::dc::sb_edge),
+            std::move(false_evaluation),
+            context.generate_node_pairs(result, false_evaluation, DEBUGCHANNELS::dc::sb_edge),
+            context);
       }
       break;
     }
