@@ -289,7 +289,8 @@ class Node
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
   static bool add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node);
-  void sequenced_before_value_computation(EndPoint::node_iterator const& read_node) const;
+  void sequenced_before_side_effect_sequenced_before_value_computation() const;
+  void sequenced_before_value_computation() const;
 
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }

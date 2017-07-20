@@ -73,16 +73,22 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
   //     v
   //  pseudo_node       this represents the value computation of the pre-increment/decrement expression.
   //
+  Dout(dc::notice, "Generating sb edges between the rhs of an assignment (" << *write_node->get_evaluation() << ") and the lhs variable " << *write_node << '.');
+  DebugMarkDownRight;
   write_node->get_evaluation()->for_each_node(Node::value_computation_heads,
       [this, &write_node, &side_effect_sb_value_computation](Evaluation::node_iterator const& before_node)
       {
         m_graph.new_edge(edge_sb, before_node, write_node);
         if (side_effect_sb_value_computation)
-          write_node->sequenced_before_value_computation(before_node); // Corrupt before_node (and change write_node) to fake a (non-existing) pseudo node
-                                                                       // representing the value-computation of the pre-increment/decrement expression
-                                                                       // that write_node must be sequenced before.
+          before_node->sequenced_before_side_effect_sequenced_before_value_computation(); // Corrupt before_node to fake a (non-existing) pseudo node
+                                                                                          // representing the value-computation of the pre-increment/
+                                                                                          // decrement/assignment expression that write_node must be
+                                                                                          // sequenced before.
       }
   COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+  // Fake a (non-existing) pseudo node representing the value-computation after the write_node.
+  if (side_effect_sb_value_computation)
+    write_node->sequenced_before_value_computation();
 }
 
 void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluation)
@@ -93,15 +99,16 @@ void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluati
   evaluation.add_value_computation(new_node);
 }
 
-void Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
+Evaluation::node_iterator Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  auto new_node = m_graph.new_node(m_current_thread, variable, mo, std::move(evaluation));
+  auto write_node = m_graph.new_node(m_current_thread, variable, mo, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
   evaluation = variable;
-  evaluation.add_side_effect(new_node);
+  evaluation.add_side_effect(write_node);
+  return write_node;
 }
 
 Evaluation Context::lockdecl(ast::tag mutex)
@@ -122,6 +129,7 @@ Evaluation Context::lock(ast::tag mutex)
   auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_lock2);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
+  m_graph.new_edge(edge_sb, mutex_node1, mutex_node2);
   return result;
 }
 
@@ -134,6 +142,7 @@ Evaluation Context::unlock(ast::tag mutex)
   auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_unlock2);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
+  m_graph.new_edge(edge_sb, mutex_node1, mutex_node2);
   return result;
 }
 
@@ -174,6 +183,15 @@ void Context::add_edges(EdgeType edge_type, Evaluation::node_pairs_type node_pai
     m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
 }
 
+void Context::add_edges(
+    EdgeType edge_type,
+    Evaluation const& before_evaluation,
+    Evaluation const& after_evaluation
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+{
+  add_edges(edge_type, generate_node_pairs(before_evaluation, after_evaluation COMMA_DEBUG_ONLY(debug_channel)) COMMA_DEBUG_ONLY(debug_channel));
+}
+
 void Context::detect_full_expression_start()
 {
   ++m_full_expression_detector_depth;
@@ -191,8 +209,15 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
-    if (m_last_full_expression.is_valid())
+#ifdef CWDEBUG
+    debug::Mark* marker;
+#endif
+    bool last_full_expression_is_valid = m_last_full_expression.is_valid();
+    if (last_full_expression_is_valid)
+    {
       Dout(dc::sb_edge, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
+      Debug(marker = new debug::Mark("\e[43;33;1m↳\e[0m"));    // DebugMarkDownRight
+    }
 
     // First find all new edges without actually adding new ones (that would interfere with the algorithm).
     Evaluation::node_pairs_type node_pairs;
@@ -224,6 +249,11 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     // Now actually add the new edges.
     for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
       m_graph.new_edge(edge_sb, node_pair->first, node_pair->second);
+
+#ifdef CWDEBUG
+    if (last_full_expression_is_valid)
+      delete marker;
+#endif
 
     // Replace m_last_full_expression with the current one if there was any node at all.
     if (number_of_nodes > 0)

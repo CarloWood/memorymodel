@@ -216,10 +216,7 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
     {
       Dout(dc::sb_edge, "Boolean expression (operator || or &&), or shift expression (operator << || >>)");
       DebugMarkUp;
-      context.add_edges(
-          edge_sb,
-          context.generate_node_pairs(result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
-          COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      context.add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     result.OP(get_operator<T>(tail), std::move(rhs));
   }
@@ -394,7 +391,7 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       auto const& assignment{boost::get<ast::assignment>(node)};
       result = execute_expression(assignment.rhs, context);
       Dout(dc::valuecomp, "Assignment value computation results in " << result << "; assigned to `" << assignment.lhs << "`.");
-      result.write(assignment.lhs, context);
+      result.write(assignment.lhs, context, true);
       break;
     }
   }
@@ -411,10 +408,7 @@ Evaluation execute_expression(ast::expression const& expression, Context& contex
   for (auto const& assignment_expression : expression.m_chained)
   {
     Evaluation rhs = execute_expression(assignment_expression, context);
-    context.add_edges(
-        edge_sb,
-        context.generate_node_pairs(result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
-        COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    context.add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     result.comma_operator(std::move(rhs));
   }
   return result;
@@ -438,10 +432,20 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_store_call:
     {
       auto const& store_call{boost::get<ast::store_call>(node)};
-      Evaluation value = execute_expression(store_call.m_val, context);
+      Evaluation value;
+      FullExpressionDetector detector(value, context);          // A call to store like: y.store(expr, mo); is a expression statement.
+      value = execute_expression(store_call.m_val, context);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
+      Evaluation::node_iterator write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
+      // Side-effects and value-computations of function arguments are sequenced before the side-effects and value-computations of the function body.
+      // The evaluation of the write_node is the function argument passed here (the previous value of 'value' as returned by execute_expression()).
+      write_node->get_evaluation()->for_each_node(Node::heads,
+          [&context, &write_node](Evaluation::node_iterator const& before_node)
+          {
+            context.m_graph.new_edge(edge_sb, before_node, write_node);
+          }
+      COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::SN_function_call:
@@ -460,28 +464,34 @@ void execute_statement(ast::statement const& statement, Context& context)
     {
       auto const& wait_call{boost::get<ast::wait_call>(node)};
       Dout(dc::notice, "TODO: " << wait_call);
+      //FullExpressionDetector detector(value, context);
       break;
     }
     case ast::SN_notify_all_call:
     {
       auto const& notify_all_call{boost::get<ast::notify_all_call>(node)};
       Dout(dc::notice, "TODO: " << notify_all_call);
+      //FullExpressionDetector detector(value, context);
       break;
     }
     case ast::SN_mutex_lock_call:
     {
       auto const& mutex_lock_call{boost::get<ast::mutex_lock_call>(node)};
+      Evaluation value;
+      FullExpressionDetector detector(value, context);
       Dout(dc::notice, mutex_lock_call);
       DebugMarkUp;
-      context.lock(mutex_lock_call.m_mutex);
+      value = context.lock(mutex_lock_call.m_mutex);
       break;
     }
     case ast::SN_mutex_unlock_call:
     {
       auto const& mutex_unlock_call{boost::get<ast::mutex_unlock_call>(node)};
+      Evaluation value;
+      FullExpressionDetector detector(value, context);
       Dout(dc::notice, mutex_unlock_call);
       DebugMarkUp;
-      context.unlock(mutex_unlock_call.m_mutex);
+      value = context.unlock(mutex_unlock_call.m_mutex);
       break;
     }
     case ast::SN_threads:

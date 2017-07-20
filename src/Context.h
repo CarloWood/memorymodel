@@ -48,7 +48,7 @@ struct Context {
 
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
-  void write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+  Evaluation::node_iterator write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }
@@ -71,6 +71,12 @@ struct Context {
   void add_edges(
       EdgeType edge_type,
       Evaluation::node_pairs_type node_pairs
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+  // Short circuit for the combination of the above two member functions.
+  void add_edges(
+      EdgeType edge_type,
+      Evaluation const& before_evaluation,
+      Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 };
 

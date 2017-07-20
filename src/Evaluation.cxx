@@ -527,9 +527,9 @@ void Evaluation::write(ast::tag tag, Context& context, bool side_effect_sb_value
   context.write(tag, std::move(*this), side_effect_sb_value_computation);
 }
 
-void Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
+Evaluation::node_iterator Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
 {
-  context.write(tag, mo, std::move(*this));
+  return context.write(tag, mo, std::move(*this));
 }
 
 void Evaluation::add_value_computation(node_iterator const& node)

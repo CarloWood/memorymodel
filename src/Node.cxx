@@ -251,11 +251,21 @@ void Node::sequenced_after(Node const& tail_node) const
   }
 }
 
-// This is the write node of a prefix operator that read from read_node.
-void Node::sequenced_before_value_computation(EndPoint::node_iterator const& read_node) const
+// This is a value-computation node that no longer should be marked as head,
+// because it is sequenced before a side-effect that must be sequenced before
+// it's value computation (which then becomes the new head).
+void Node::sequenced_before_side_effect_sequenced_before_value_computation() const
 {
-  Dout(dc::notice, "Marking " << *this << " sequenced before its value computation (that uses) " << *read_node);
-  read_node->m_connected |= sequenced_before_value_computation_bit;
+  Dout(dc::notice, "Marking " << *this << " as sequenced before a (pseudo) value computation.");
+  m_connected |= sequenced_before_value_computation_bit;
+}
+
+// This is the write node of a prefix operator that read from read_node,
+// or the write node of an assignment expression whose value computation
+// is used.
+void Node::sequenced_before_value_computation() const
+{
+  Dout(dc::notice, "Marking " << *this << " as sequenced before its value computation.");
   m_connected |= sequenced_before_pseudo_value_computation_bit;
 }
 

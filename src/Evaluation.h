@@ -134,7 +134,7 @@ class Evaluation
   void read(ast::tag tag, std::memory_order mo, Context& context);
   void add_value_computation(node_iterator const& node);
   void write(ast::tag tag, Context& context, bool side_effect_sb_value_computation = false);
-  void write(ast::tag tag, std::memory_order mo, Context& context);
+  node_iterator write(ast::tag tag, std::memory_order mo, Context& context);
   void add_side_effect(node_iterator const& node);
   void destruct(Context& context);
   void swap_sum();
