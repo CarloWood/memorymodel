@@ -13,7 +13,8 @@
 
 struct Context;
 
-class Symbols {
+class Symbols
+{
  public:
   using symbols_type = std::vector<std::pair<std::string, ast::declaration_statement>>;
 

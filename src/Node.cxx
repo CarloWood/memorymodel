@@ -1,7 +1,9 @@
 #include "sys.h"
 #include "Node.h"
+#include "debug_ostream_operators.h"
 #include "utils/is_power_of_two.h"
 #include "utils/macros.h"
+#include "boolexpr/boolexpr.h"
 #include <sstream>
 
 std::string Node::type() const
@@ -155,7 +157,10 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type)
 
 std::ostream& operator<<(std::ostream& os, Edge const& edge)
 {
-  os << '{' << edge.m_edge_type << '}';
+  os << '{' << edge.m_edge_type;
+  if (edge.m_branches.conditional())
+    os << "; " << edge.m_branches;
+  os << '}';
   return os;
 }
 
@@ -190,9 +195,10 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
 }
 
 //static
-bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node)
+bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node, Branches const& branches)
 {
   Edge* new_edge = new Edge(edge_type);
+  new_edge->add_branches(branches);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
   bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
   bool success2 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);

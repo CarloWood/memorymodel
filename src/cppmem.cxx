@@ -440,12 +440,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       Evaluation::node_iterator write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
       // Side-effects and value-computations of function arguments are sequenced before the side-effects and value-computations of the function body.
       // The evaluation of the write_node is the function argument passed here (the previous value of 'value' as returned by execute_expression()).
-      write_node->get_evaluation()->for_each_node(Node::heads,
-          [&context, &write_node](Evaluation::node_iterator const& before_node)
-          {
-            context.m_graph.new_edge(edge_sb, before_node, write_node);
-          }
-      COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      context.add_edges(edge_sb, *write_node->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::SN_function_call:
@@ -689,6 +684,6 @@ int main(int argc, char* argv[])
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
   graph.generate_dot_file(dot_filename, context);
-  std::string command = "dot -Kneato -Tpng -o " + png_filename + " " + dot_filename;
+  std::string command = "dot "/*-Kneato*/" -Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 }

@@ -113,7 +113,20 @@ char const* increment_str(int increment)
   return "--";
 }
 
-void Evaluation::print_on(std::ostream& os) const
+enum Colors { reset, red, lightgray };
+
+char const* color_code[3][2] = {
+  { "\e[0m", "</FONT>" },
+  { "\e[31m", "<FONT COLOR=\"red\">" },
+  { "\e[37m", "<FONT COLOR=\"gray\">" }
+};
+
+std::string color(Colors color, bool use_html_color)
+{
+  return color_code[color][use_html_color];
+}
+
+void Evaluation::print_on(std::ostream& os, bool use_html_color) const
 {
   // This has to be a static because we recursively get here through a call to operator<<(ostream, Node).
   static bool print_color_codes = true;
@@ -122,7 +135,7 @@ void Evaluation::print_on(std::ostream& os) const
   {
     case Evaluation::unused:
       if (print_color_codes)
-        os << "<\e[31mUNUSED Evaluation\e[0m>";
+        os << '<' << color(red, use_html_color) << "UNUSED Evaluation" << color(reset, use_html_color) << '>';
       else
         os << "<UNUSED Evaluation>";
       break;
@@ -180,7 +193,7 @@ void Evaluation::print_on(std::ostream& os) const
       os << (first ? "/" : ",");
     else
     {
-      os << (first ? "\e[37m/" : ",");
+      os << (first ? color(lightgray, use_html_color) + "/" : ",");
       if (first)
         print_color_codes = false;
     }
@@ -189,7 +202,7 @@ void Evaluation::print_on(std::ostream& os) const
   }
   if (orig_print_color_codes && !print_color_codes)
   {
-    os << "\e[0m";
+    os << color(reset, use_html_color);
     print_color_codes = true;
   }
   first = true;
@@ -199,7 +212,7 @@ void Evaluation::print_on(std::ostream& os) const
       os << (first ? "/" : ",");
     else
     {
-      os << (first ? "\e[37m/" : ",");
+      os << (first ? color(lightgray, use_html_color) + "/" : ",");
       if (first)
         print_color_codes = false;
     }
@@ -208,7 +221,7 @@ void Evaluation::print_on(std::ostream& os) const
   }
   if (orig_print_color_codes && !print_color_codes)
   {
-    os << "\e[0m";
+    os << color(reset, use_html_color);
     print_color_codes = true;
   }
 #ifdef TRACK_EVALUATION
@@ -702,8 +715,9 @@ void Evaluation::conditional_operator(
     m_state = condition;
     m_lhs = make_unique(std::move(true_value));
     m_rhs = make_unique(std::move(false_value));
-    context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-    context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    auto condition = context.add_condition(m_condition);
+    context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
+    context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
   }
   Dout(dc::finish, *this << '.');
 }

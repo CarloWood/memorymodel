@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "Context.h"
 #include "Graph.h"
+#include "debug_ostream_operators.h"
 
 #ifdef CWDEBUG
 // To make DoutTag work.
@@ -174,13 +175,36 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
   return node_pairs;
 }
 
-void Context::add_edges(EdgeType edge_type, Evaluation::node_pairs_type node_pairs COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+void Context::add_edges(
+    EdgeType edge_type,
+    Evaluation const& before_evaluation,
+    Evaluation::node_iterator const& after_node
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
-  Dout(debug_channel, "Generate " << edge_type << " from generated node pairs.");
+  before_evaluation.for_each_node(Node::heads,
+      [this, edge_type, &after_node](Evaluation::node_iterator const& before_node)
+      {
+        m_graph.new_edge(edge_type, before_node, after_node);
+      }
+  COMMA_DEBUG_ONLY(debug_channel));
+}
+
+void Context::add_edges(
+    EdgeType edge_type,
+    Evaluation::node_pairs_type node_pairs
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+    Branches const& branches)
+{
+#ifdef CWDEBUG
+  Dout(debug_channel|continued_cf, "Generate " << edge_type << " from generated node pairs");
+  if (branches.conditional())
+    Dout(dc::continued, " with conditional " << branches);
+  Dout(dc::finish, ".");
   DebugMarkUp;
+#endif
   // Now actually add the new edges.
   for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
-    m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
+    m_graph.new_edge(edge_type, node_pair->first, node_pair->second, branches);
 }
 
 void Context::add_edges(

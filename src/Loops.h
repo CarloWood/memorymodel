@@ -3,7 +3,8 @@
 #include "ast.h"
 #include <stack>
 
-class Loops {
+class Loops
+{
  private:
   std::stack<ast::iteration_statement> m_stack;
 

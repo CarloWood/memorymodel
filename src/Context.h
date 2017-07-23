@@ -5,11 +5,21 @@
 #include "Locks.h"
 #include "Loops.h"
 #include "Graph.h"
+#include "Branch.h"
+#include "Condition.h"
 #include <string>
 
 using iterator_type = std::string::const_iterator;
 
-struct Context {
+struct Context
+{
+  struct ConditionalBranch
+  {
+    conditions_type::iterator m_condition;
+    ConditionalBranch(conditions_type::iterator const& condition) : m_condition(condition) { }
+    Branches operator()(bool condition_true) { return Branches(Branch(m_condition, condition_true)); }
+  };
+
   position_handler<iterator_type>& m_position_handler;
   Symbols m_symbols;
   Locks m_locks;
@@ -24,6 +34,9 @@ struct Context {
   std::stack<bool> m_threads;                           // Whether or not current scope is a thread.
   std::stack<Evaluation> m_last_full_expressions;       // Last full-expressions of parent threads.
   bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
+  Condition::id_type m_next_condition_id;               // The id to use for the next condition.
+  conditions_type m_conditions;                         // Branch conditions.
+  boolexpr::Context m_boolexpr_context;                 // Context of boolexpr, keeps track of created boolexpr variables.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -33,7 +46,8 @@ struct Context {
       m_last_full_expression(Evaluation::not_used),
       m_next_thread_id{1},
       m_current_thread{Thread::create_main_thread()},
-      m_beginning_of_thread(false) { }
+      m_beginning_of_thread(false),
+      m_next_condition_id(0) { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -52,6 +66,7 @@ struct Context {
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }
+  conditions_type const& conditions() const { return  m_conditions; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);
@@ -62,22 +77,45 @@ struct Context {
   void detect_full_expression_start();
   void detect_full_expression_end(Evaluation& full_expression);
 
+  // Add edges between heads of before_evaluation and after_node.
+  void add_edges(
+      EdgeType edge_type,
+      Evaluation const& before_evaluation,
+      Evaluation::node_iterator const& after_node
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
   // Generate node pairs for edge_type edges between heads of before_evaluation and tails of after_evaluation.
-  // Pass the result to add_edges.
+  // Pass the result to the add_edges below.
   Evaluation::node_pairs_type generate_node_pairs(
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  // Add edges for each node pair in node_pairs.
   void add_edges(
       EdgeType edge_type,
       Evaluation::node_pairs_type node_pairs
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+      Branches const& branches = Branches());
   // Short circuit for the combination of the above two member functions.
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+  // Register a branch condition.
+  ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)
+  {
+    // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
+    // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
+    // to shared_ptr everywhere).
+    auto res = m_conditions.insert(Condition(m_next_condition_id, condition.get()));
+    if (!res.second)
+      --m_next_condition_id;
+    else
+      res.first->create_boolexpr_variable(*this);
+    return res.first;
+  }
+  // boolexpr variables administration.
+  boolexpr::var_t get_var(std::string const& name) { return m_boolexpr_context.get_var(name); }
 };
 
 // Statements that are not expressions, but contain expressions, are
@@ -154,7 +192,8 @@ struct Context {
 //
 // Note that constant-expression is always a full-expression (as per http://eel.is/c++draft/intro.execution#12.2)
 //
-struct FullExpressionDetector {
+struct FullExpressionDetector
+{
   Evaluation& m_full_expression;        // Potential full-expression.
   Context& m_context;
   FullExpressionDetector(Evaluation& full_expression, Context& context) :

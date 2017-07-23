@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "Evaluation.h"
+#include "Branches.h"
 #include "utils/AIRefCount.h"
 #include "utils/ulong_to_base.h"
 #include <memory>
@@ -117,10 +118,19 @@ class Edge
 {
  private:
   EdgeType m_edge_type;
+  Branches m_branches;
+#ifdef CWDEBUG
+  int m_id;             // For debugging purposes.
+  static int s_id;
+ public:
+  int id() const { return m_id; }
+#endif
 
  public:
-  Edge(EdgeType edge_type) : m_edge_type(edge_type) { }
+  Edge(EdgeType edge_type) : m_edge_type(edge_type) COMMA_DEBUG_ONLY(m_id(s_id++)) { }
   EdgeType edge_type() const { return m_edge_type; }
+  void add_branches(Branches const& branches) { m_branches &= branches; }
+  Branches const& branches() const { return m_branches; }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
@@ -155,6 +165,7 @@ class EndPoint
 
   // Accessors.
   EdgeType edge_type() const { return m_edge->edge_type(); }
+  Edge* edge() const { return m_edge; }
   EndPointType type() const { return m_type; }
   node_iterator other_node() const { return m_other_node; }
 
@@ -288,7 +299,7 @@ class Node
 
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
-  static bool add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node);
+  static bool add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node, Branches const& branches);
   void sequenced_before_side_effect_sequenced_before_value_computation() const;
   void sequenced_before_value_computation() const;
 

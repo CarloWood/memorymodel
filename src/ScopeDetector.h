@@ -8,7 +8,8 @@
 struct Context;
 
 template<typename AST>
-class ScopeDetector {
+class ScopeDetector
+{
  private:
   using m_asts_type = std::vector<std::pair<size_t, AST>>;
   m_asts_type m_asts;

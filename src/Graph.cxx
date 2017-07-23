@@ -32,13 +32,13 @@ std::ostream& operator<<(std::ostream& os, Access access)
   return os << access_str(access);
 }
 
-void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node)
+void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node, Branches const& branches)
 {
   DebugMarkUp;
-  bool success = Node::add_edge(edge_type, tail_node, head_node);
+  bool success = Node::add_edge(edge_type, tail_node, head_node, branches);
   if (success)  // Successfully added a new edge.
   {
-    Dout(dc::notice, "Adding new " << edge_type << " edge from \"" << *tail_node << "\" to \"" << *head_node << "\".");
+    Dout(dc::notice, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\".");
     if (edge_type == edge_sb)
     {
       tail_node->sequenced_before(*head_node);
@@ -72,24 +72,29 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   std::vector<int> depth(context.number_of_threads(), 0);
   depth[0] = main_thread_nodes;
 
+  int const fontsize = 14;
+  int const edge_label_fontsize = 10;
+  double const xscale = 2.0;
+  double const yscale = 1.0;
+
   // Write a .dot file.
   out << "digraph G {\n";
   out << " splines=true;\n";
   out << " overlap=false;\n";
   out << " ranksep = 0.2;\n";
   out << " nodesep = 0.25;\n";
-  out << " fontsize=10 fontname=\"Helvetica\" label=\"\";\n";
+  out << " fontsize=" << fontsize << " fontname=\"Helvetica\" label=\"\";\n";
   for (auto&& node : m_nodes)
   {
     Dout(dc::notice, '"' << node << '"');
     double posx, posy;
     int thread = node.thread()->id();
-    posx = 1.0 + 1.5 * thread;
-    posy = 1.0 + 0.7 * (max_count + --depth[thread]);
+    posx = 1.0 + xscale * thread;
+    posy = 1.0 + yscale * (max_count + --depth[thread]);
     out << "node" << node.name() <<
-        " [shape=plaintext, fontname=\"Helvetica\", fontsize=10]"
+        " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
         " [label=\"" << node.label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
-        " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"0.200000\"][width=\"0.900000\"];\n";
+        " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.2) << "\"][width=\"" << (xscale * 0.45) << "\"];\n";
   }
   for (node_iterator node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
@@ -111,14 +116,51 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
           color = "red";
           break;
       }
+      Edge* edge = end_point.edge();
       node_iterator tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
       node_iterator head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
       out << "node" << tail_node->name() << " -> "
              "node" << head_node->name() <<
-             " [label=<<font color=\"" << color << "\">sb</font>>, "
-               "color=\"" << color << "\", fontname=\"Helvetica\", "
-               "fontsize=10, penwidth=1., arrowsize=\"0.8\"];\n";
+             " [label=<<font color=\"" << color << "\">sb";
+#ifdef CWDEBUG
+      out << '[' << edge->id() << ']';
+#endif
+      if (edge->branches().conditional())
+        out << edge->branches();
+      out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
+               "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }
   }
+
+  out <<
+      "  { rank = sink;\n"
+      "     Legend [shape=none, margin=0, pos=\"1.0," << (1.0 - 1.5 * yscale) << "!\", label=<\n"
+      "     <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n"
+      "      <TR>\n"
+      "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Legend</B></FONT></TD>\n"
+      "      </TR>\n";
+
+  conditions_type const& conditions{context.conditions()};
+  for (auto&& condition : conditions)
+  {
+    out <<
+      "      <TR>\n"
+      "      <TD>" << condition.id_name() << "</TD>\n"
+      "      <TD><FONT COLOR=\"black\">";
+    condition.evaluation().print_on(out, true);
+    out <<
+      "</FONT></TD>\n"
+      "      </TR>\n";
+  }
+
+  out <<
+      "     </TABLE>\n"
+      "    >];\n"
+      "  }\n";
+
   out << "}\n";
 }
+
+#ifdef CWDEBUG
+int Edge::s_id = 1;
+#endif

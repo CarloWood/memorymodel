@@ -11,7 +11,8 @@ namespace parser {
 
 namespace qi = boost::spirit::qi;
 
-class SymbolsImpl {
+class SymbolsImpl
+{
  private:
   friend class Symbols;
   std::stack<std::map<int, std::string>> m_na_symbol_stack;

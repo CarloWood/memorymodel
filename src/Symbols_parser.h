@@ -7,7 +7,8 @@ namespace parser {
 
 class SymbolsImpl;
 
-class Symbols : public Singleton<Symbols> {
+class Symbols : public Singleton<Symbols>
+{
   friend_Instance;
  private:
   Symbols();
