@@ -229,8 +229,8 @@ void Node::sequenced_before(Node const& head_node) const
   // sequenced_after_side_effect_bit|sequenced_before_side_effect_bit, and since it itself is not a side-effect
   // it is needed to propagate the sequenced_before_side_effect_bit upwards to a.
   //
-  filter_type set_bits = m_connected & ~orig;          // Did any bit(s) get set?
-  if ((set_bits & ~provided_type()))                 // Are we not already of that type?
+  filter_type set_bits = m_connected & ~orig;           // Did any bit(s) get set?
+  if ((set_bits & ~provided_type()))                    // Are we not already of that type?
   {
     // Propagate bits to nodes sequenced before us.
     for (auto&& end_point : m_end_points)
