@@ -34,6 +34,8 @@ libcppmem_a_SOURCES = \
 		 Branches.h \
 		 Condition.cxx \
 		 Condition.h \
+		 SBNodePresence.cxx \
+		 SBNodePresence.h \
 		 debug_ostream_operators.cxx \
 		 debug_ostream_operators.h \
 		 ast.cxx \

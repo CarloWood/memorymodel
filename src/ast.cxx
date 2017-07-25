@@ -2,7 +2,7 @@
 #include "ast.h"
 #include "Symbols_parser.h"
 #include "utils/macros.h"
-#include <iostream>
+#include <ostream>
 #include <boost/variant/get.hpp>
 
 bool constexpr add_parentheses_around_operator_expressions = false;

@@ -64,11 +64,11 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
 
   // Sequence all value-computations of the right-hand-side of an assignment before the side-effect of that assignment.
   //
-  // before_node (must be a value-computation and not sequenced before another value-computation node)
+  // d:before_node (must be a value-computation and not sequenced before another value-computation node)
   //     |
   //     | sb
   //     v
-  //  write_node
+  // e:write_node
   //     |
   //     |              <-- in case of a prefix operator
   //     v
@@ -76,7 +76,7 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
   //
   Dout(dc::notice, "Generating sb edges between the rhs of an assignment (" << *write_node->get_evaluation() << ") and the lhs variable " << *write_node << '.');
   DebugMarkDownRight;
-  write_node->get_evaluation()->for_each_node(Node::value_computation_heads,
+  write_node->get_evaluation()->for_each_node(NodeRequestedType::value_computation_heads,
       [this, &write_node, &side_effect_sb_value_computation](Evaluation::node_iterator const& before_node)
       {
         m_graph.new_edge(edge_sb, before_node, write_node);
@@ -159,11 +159,11 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
   Evaluation::node_pairs_type node_pairs;
 
   // Find all tail nodes in after_evaluation.
-  after_evaluation.for_each_node(Node::tails,
+  after_evaluation.for_each_node(NodeRequestedType::tails,
       [&before_evaluation, &node_pairs COMMA_DEBUG_ONLY(&debug_channel)](Evaluation::node_iterator const& after_node)
       {
         // Find all node pairs that need a new edge.
-        before_evaluation.for_each_node(Node::heads,
+        before_evaluation.for_each_node(NodeRequestedType::heads,
             [&after_node, &node_pairs](Evaluation::node_iterator const& before_node)
             {
               node_pairs.push_back(std::make_pair(before_node, after_node));
@@ -181,7 +181,7 @@ void Context::add_edges(
     Evaluation::node_iterator const& after_node
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
-  before_evaluation.for_each_node(Node::heads,
+  before_evaluation.for_each_node(NodeRequestedType::heads,
       [this, edge_type, &after_node](Evaluation::node_iterator const& before_node)
       {
         m_graph.new_edge(edge_type, before_node, after_node);
@@ -254,14 +254,14 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //       v
     //   after_node
     //
-    full_expression.for_each_node(Node::tails,
+    full_expression.for_each_node(NodeRequestedType::tails,
         [this, &number_of_nodes, &node_pairs](Evaluation::node_iterator const& after_node)
         {
           ++number_of_nodes;
           // Generate all sequenced-before edges between full-expressions.
           if (m_last_full_expression.is_valid())
           {
-            m_last_full_expression.for_each_node(Node::heads,
+            m_last_full_expression.for_each_node(NodeRequestedType::heads,
                 [this, &after_node, &node_pairs](Evaluation::node_iterator const& before_node)
                 {
                   node_pairs.push_back(std::make_pair(before_node, after_node));

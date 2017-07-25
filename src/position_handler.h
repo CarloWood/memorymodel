@@ -3,7 +3,7 @@
 #include "debug.h"
 #include "Symbols_parser.h"
 #include <boost/range/iterator_range.hpp>
-#include <iostream>
+#include <ostream>
 #include <memory>
 #include <sstream>
 

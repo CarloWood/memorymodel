@@ -7,7 +7,7 @@
 #include "grammar_unittest.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/variant/get.hpp>
-#include <iostream>
+#include <ostream>
 
 using namespace ast;
 

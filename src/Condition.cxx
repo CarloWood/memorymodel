@@ -2,7 +2,7 @@
 #include "Condition.h"
 #include "Evaluation.h"
 #include "Context.h"
-#include <iostream>
+#include <ostream>
 
 std::string Condition::id_name() const
 {

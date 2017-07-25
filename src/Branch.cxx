@@ -1,7 +1,7 @@
 #include "sys.h"
 #include "Branch.h"
 #include "Evaluation.h"
-#include <iostream>
+#include <ostream>
 
 std::ostream& operator<<(std::ostream& os, Branch const& branch)
 {

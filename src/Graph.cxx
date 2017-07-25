@@ -41,8 +41,8 @@ void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_it
     Dout(dc::notice, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\".");
     if (edge_type == edge_sb)
     {
-      tail_node->sequenced_before(*head_node);
-      head_node->sequenced_after(*tail_node);
+      tail_node->sequenced_before();
+      head_node->sequenced_after();
     }
   }
 }

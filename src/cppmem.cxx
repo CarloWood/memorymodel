@@ -15,7 +15,7 @@
 #include <libcwd/type_info.h>
 #include <cstdlib>      // std::system
 #include <boost/variant/get.hpp>
-#include <iostream>
+#include <ostream>
 #include <fstream>
 
 std::map<ast::tag, ast::function, TagCompare> functions;

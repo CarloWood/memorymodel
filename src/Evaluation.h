@@ -12,6 +12,7 @@
 
 struct Context;
 class Node;
+class NodeRequestedType;
 
 enum binary_operators {
   multiplicative_mo_mul,
@@ -144,7 +145,7 @@ class Evaluation
   friend char const* state_str(State state);
 
   void print_on(std::ostream& os, bool use_html_color = false) const;
-  void for_each_node(unsigned int filter, std::function<void(node_iterator const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  void for_each_node(NodeRequestedType const& requested_type, std::function<void(node_iterator const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
 };
 
 #ifdef CWDEBUG

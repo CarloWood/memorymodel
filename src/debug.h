@@ -1,3 +1,5 @@
+#pragma once
+
 #include "cwds/debug.h"
 
 #ifdef CWDEBUG
@@ -12,7 +14,11 @@
 
 std::ostream& operator<<(std::ostream& os, std::memory_order);
 
-#else
+NAMESPACE_DEBUG_CHANNELS_START
+extern channel_ct sb_edge;
+NAMESPACE_DEBUG_CHANNELS_END
+
+#else // CWDEBUG
 
 #define DebugMarkUp
 #define DebugMarkUpRight
@@ -20,4 +26,4 @@ std::ostream& operator<<(std::ostream& os, std::memory_order);
 #define DebugMarkDownRight
 #define DoutTag(cntrl, data, tag)
 
-#endif
+#endif // CWDEBUG

@@ -67,45 +67,6 @@ std::string Node::label(bool dot_file) const
   return ss.str();
 }
 
-char const* sb_mask_str(Node::filter_type bit)
-{
-  ASSERT(utils::is_power_of_two(bit));
-  switch (bit)
-  {
-    AI_CASE_RETURN(Node::value_computation_tails);
-    AI_CASE_RETURN(Node::value_computation_heads);
-    AI_CASE_RETURN(Node::side_effect_tails);
-    AI_CASE_RETURN(Node::side_effect_heads);
-    AI_CASE_RETURN(Node::sequenced_before_pseudo_value_computation_bit);
-    AI_CASE_RETURN(Node::anything);
-  }
-  return "UNKNOWN filter_type";
-}
-
-std::ostream& operator<<(std::ostream& os, Node::Filter filter)
-{
-  Node::filter_type sb_mask = filter.m_connected;
-  if (sb_mask == Node::heads)
-    os << "Node::heads";
-  else if (sb_mask == Node::tails)
-    os << "Node::tails";
-  else
-  {
-    bool first = true;
-    for (Node::filter_type bit = 1; bit != Node::sb_unused_bit; bit <<= 1)
-    {
-      if ((sb_mask & bit))
-      {
-        if (!first)
-          os << '|';
-        os << sb_mask_str(bit);
-        first = false;
-      }
-    }
-  }
-  return os;
-}
-
 char const* edge_str(EdgeType edge_type)
 {
   switch (edge_type)
@@ -207,63 +168,168 @@ bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node
   return success1;
 }
 
-// Called on the tail-node of a new edge.
-void Node::sequenced_before(Node const& head_node) const
+boolexpr::bx_t Node::provides_sequenced_before_value_computation() const
 {
-  DoutEntering(dc::sb_edge, "sequenced_before(" << head_node << ") [this = " << *this << "]");
-  filter_type orig = m_connected;
-  m_connected |= (head_node.provided_type() | head_node.m_connected) & sequenced_before_mask;
-  Dout(dc::sb_edge, "m_connected changed from " << Filter(orig) << " to " << Filter(m_connected) << ".");
-  // Propegation might be needed.
-  // For example,
-  //                flags
-  //     a:W        sequenced_before_value_computation_bit
-  //      |
-  //      v
-  //     b:R        sequenced_after_side_effect_bit
-  //      .
-  //      .
-  //     c:W
-  //
-  // When b.sequenced_before(c) is called, the mask of b is updated from sequenced_after_side_effect_bit to
-  // sequenced_after_side_effect_bit|sequenced_before_side_effect_bit, and since it itself is not a side-effect
-  // it is needed to propagate the sequenced_before_side_effect_bit upwards to a.
-  //
-  filter_type set_bits = m_connected & ~orig;           // Did any bit(s) get set?
-  if ((set_bits & ~provided_type()))                    // Are we not already of that type?
+  boolexpr::bx_t result{boolexpr::one()};
+  if (provided_type().type() == NodeProvidedType::side_effect)
+    result = m_connected.provides_sequenced_before_value_computation();
+  return result;
+}
+
+boolexpr::bx_t Node::provides_sequenced_before_side_effect() const
+{
+  boolexpr::bx_t result{boolexpr::one()};
+  if (provided_type().type() == NodeProvidedType::value_computation)
+    result = m_connected.provides_sequenced_before_side_effect();
+  return result;
+}
+
+// Called on the tail-node of a new (conditional) sb edge.
+void Node::sequenced_before() const
+{
+  using namespace boolexpr;
+  DoutEntering(dc::sb_edge, "sequenced_before() [this = " << *this << "]");
+
+  bx_t sequenced_before_value_computation{zero()};
+  bx_t sequenced_before_side_effect{zero()};
+  // Run over all outgoing (tail end_points) Sequenced-Before edges.
+  for (auto&& end_point : m_end_points)
+  {
+    if (end_point.edge_type() == edge_sb && end_point.type() == tail)
+    {
+      Dout(dc::notice, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->branches() << "'.");
+      // Get condition of this edge.
+      bx_t edge_bx{end_point.edge()->branches().boolean_expression()};
+      // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
+      // OR everything.
+      sequenced_before_value_computation = sequenced_before_value_computation | (edge_bx & end_point.other_node()->provides_sequenced_before_value_computation());
+      sequenced_before_side_effect = sequenced_before_side_effect | (edge_bx & end_point.other_node()->provides_sequenced_before_side_effect());
+    }
+    else
+      Dout(dc::notice, "Skipping EndPoint " << end_point << '.');
+  }
+  sequenced_before_value_computation = sequenced_before_value_computation->simplify();
+  sequenced_before_side_effect = sequenced_before_side_effect->simplify();
+  Dout(dc::notice, "Result:");
+  DebugMarkDownRight;
+  Dout(dc::notice, "sequenced_before_value_computation = '" << sequenced_before_value_computation << "'.");
+  Dout(dc::notice, "sequenced_before_side_effect = '" << sequenced_before_side_effect << "'.");
+
+  // We don't support volatile memory accesses... otherwise a node could be a side_effect and value_computation at the same time :/
+  bool node_provides_side_effect_not_value_computation = provided_type().type() == NodeProvidedType::side_effect;
+  bool sequenced_before_value_computation_changed =
+      m_connected.update_sequenced_before_value_computation(!node_provides_side_effect_not_value_computation, sequenced_before_value_computation);
+  bool sequenced_before_side_effect_changed =
+      m_connected.update_sequenced_before_side_effect(node_provides_side_effect_not_value_computation, sequenced_before_side_effect);
+
+  if (sequenced_before_value_computation_changed || sequenced_before_side_effect_changed)
   {
     // Propagate bits to nodes sequenced before us.
     for (auto&& end_point : m_end_points)
       if (end_point.edge_type() == edge_sb && end_point.type() == head)
-        end_point.other_node()->sequenced_before(head_node);
+        end_point.other_node()->sequenced_before();
   }
 }
 
-// Called on the head-node of a new edge.
-void Node::sequenced_after(Node const& tail_node) const
+boolexpr::bx_t Node::provides_sequenced_after_value_computation() const
 {
-  DoutEntering(dc::sb_edge, "sequenced_after(" << tail_node << ") [this = " << *this << "]");
-  filter_type orig = m_connected;
-  m_connected |= (tail_node.provided_type() | tail_node.m_connected) & sequenced_after_mask;
-  Dout(dc::sb_edge, "m_connected changed from " << Filter(orig) << " to " << Filter(m_connected) << ".");
-  // Same as above.
-  filter_type set_bits = m_connected & ~orig;
-  if ((set_bits & ~provided_type()))
+  boolexpr::bx_t result{boolexpr::one()};
+  if (provided_type().type() == NodeProvidedType::side_effect)
+    result = m_connected.provides_sequenced_after_value_computation();
+  return result;
+}
+
+boolexpr::bx_t Node::provides_sequenced_after_side_effect() const
+{
+  boolexpr::bx_t result{boolexpr::one()};
+  if (provided_type().type() == NodeProvidedType::value_computation)
+    result = m_connected.provides_sequenced_after_side_effect();
+  return result;
+}
+
+// Called on the head-node of a new (conditional) sb edge.
+void Node::sequenced_after() const
+{
+  using namespace boolexpr;
+  DoutEntering(dc::sb_edge, "sequenced_after() [this = " << *this << "]");
+
+  bx_t sequenced_after_value_computation{zero()};
+  bx_t sequenced_after_side_effect{zero()};
+  // Run over all outgoing (head end_points) Sequenced-Before edges.
+  for (auto&& end_point : m_end_points)
+  {
+    if (end_point.edge_type() == edge_sb && end_point.type() == head)
+    {
+      Dout(dc::notice, "Found head EndPoint " << end_point << " with condition '" << end_point.edge()->branches() << "'.");
+      // Get condition of this edge.
+      bx_t edge_bx{end_point.edge()->branches().boolean_expression()};
+      // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
+      // OR everything.
+      sequenced_after_value_computation = sequenced_after_value_computation | (edge_bx & end_point.other_node()->provides_sequenced_after_value_computation());
+      sequenced_after_side_effect = sequenced_after_side_effect | (edge_bx & end_point.other_node()->provides_sequenced_after_side_effect());
+    }
+    else
+      Dout(dc::notice, "Skipping EndPoint " << end_point << '.');
+  }
+  sequenced_after_value_computation = sequenced_after_value_computation->simplify();
+  sequenced_after_side_effect = sequenced_after_side_effect->simplify();
+  Dout(dc::notice, "Result:");
+  DebugMarkDownRight;
+  Dout(dc::notice, "sequenced_after_value_computation = '" << sequenced_after_value_computation << "'.");
+  Dout(dc::notice, "sequenced_after_side_effect = '" << sequenced_after_side_effect << "'.");
+
+  // We don't support volatile memory accesses... otherwise a node could be a side_effect and value_computation at the same time :/
+  bool node_provides_side_effect_not_value_computation = provided_type().type() == NodeProvidedType::side_effect;
+  bool sequenced_after_value_computation_changed =
+      m_connected.update_sequenced_after_value_computation(!node_provides_side_effect_not_value_computation, sequenced_after_value_computation);
+  bool sequenced_after_side_effect_changed =
+      m_connected.update_sequenced_after_side_effect(node_provides_side_effect_not_value_computation, sequenced_after_side_effect);
+
+  if (sequenced_after_value_computation_changed || sequenced_after_side_effect_changed)
   {
     // Propagate bits to nodes sequenced after us.
     for (auto&& end_point : m_end_points)
       if (end_point.edge_type() == edge_sb && end_point.type() == tail)
-        end_point.other_node()->sequenced_after(tail_node);
+        end_point.other_node()->sequenced_after();
   }
 }
 
-// This is a value-computation node that no longer should be marked as head,
-// because it is sequenced before a side-effect that must be sequenced before
-// it's value computation (which then becomes the new head).
+// This is a value-computation node that no longer should be marked as value-computation
+// head, because it is sequenced before a side-effect that must be sequenced before
+// it's value computation (which then becomes the new value-computation head).
 void Node::sequenced_before_side_effect_sequenced_before_value_computation() const
 {
   Dout(dc::notice, "Marking " << *this << " as sequenced before a (pseudo) value computation.");
-  m_connected |= sequenced_before_value_computation_bit;
+  // Passing one() as boolean expression because we are unconditionally sequenced before
+  // a related side-effect that is unconditionally sequenced before the value computation
+  // of the expression that this node is currently a tail of.
+  //
+  // For example, the expression ++x has a Read node of x sequenced before
+  // the Write node that writes to x:
+  //
+  //     Rna x=
+  //       |
+  //       v
+  //     Wna x=
+  //       |
+  //       v
+  //     Pseudo value computation Node
+  //
+  // Both edges have no condition of their own, and we are not linked to
+  // any other node yet, so their condition is 1.
+  //
+  // Bottom line, we NEVER want to add a tail to the "Rna x=".
+  m_connected.update_sequenced_before_value_computation(true, boolexpr::one());
+#ifdef CWDEBUG
+  for (auto&& end_point : m_end_points)
+    if (end_point.edge_type() == edge_sb && end_point.type() == head)
+    {
+      Dout(dc::debug, "Node " << *this << " has head end_point " << end_point << '!');
+      // If the found head isn't already marked as being sequenced before a value computation
+      // then we need to update it! I don't expect this to ever happen.
+      ASSERT(IS_ONE(end_point.other_node()->m_connected.provides_sequenced_before_value_computation()));
+    }
+#endif
 }
 
 // This is the write node of a prefix operator that read from read_node,
@@ -272,7 +338,7 @@ void Node::sequenced_before_side_effect_sequenced_before_value_computation() con
 void Node::sequenced_before_value_computation() const
 {
   Dout(dc::notice, "Marking " << *this << " as sequenced before its value computation.");
-  m_connected |= sequenced_before_pseudo_value_computation_bit;
+  m_connected.set_sequenced_before_pseudo_value_computation();
 }
 
 // Returns true when this Node is of the requested_type type (value-computation or side-effect)
@@ -302,26 +368,33 @@ void Node::sequenced_before_value_computation() const
 // tails                      true    false   false   false
 // heads                      false   false   false   true
 //
-bool Node::is_filtered(filter_type requested_type) const
+bool Node::matches(NodeRequestedType const& requested_type, boolexpr::bx_t& matches) const
 {
-  if (requested_type == anything)
+  if (requested_type.any())
     return true;
 
-  DoutEntering(dc::sb_edge, "is_filtered(" << Filter(requested_type) << ") [this = " << *this << "]");
-  Dout(dc::sb_edge, "provided_type() = " << Filter(provided_type()) << "; m_connected = " << Filter(m_connected));
+  DoutEntering(dc::sb_edge, "matches(" << requested_type << ") [this = " << *this << "]");
+  Dout(dc::sb_edge, "provided_type() = " << provided_type() << "; m_connected = " << m_connected);
 
   // Is itself the requested_type type (value-computation or side-effect)?
-  bool is_requested_type = (provided_type() & requested_type) ||
-      (m_connected & sequenced_before_pseudo_value_computation_bit);   // The write node of a pre-increment/decrement expression fakes
-                                                                       // being both, value-computation and side-effect.
+  bool is_requested_type =
+      m_connected.sequenced_before_pseudo_value_computation() ||        // The write node of a pre-increment/decrement expression
+      requested_type.matches(provided_type());                          //   fakes being both, value-computation and side-effect.
+
   if (!is_requested_type)
+  {
     Dout(dc::sb_edge, "rejected because we ourselves are not the requested_type evaluation type.");
-  // Are we hiding behind another node of that type?
-  // For example, if we're looking for a head, then B hides behind C (which is the real head): A--->B--->C
-  bool hiding_behind_another = m_connected & requested_type;
-  if (hiding_behind_another)
+    return false;
+  }
+
+  matches = ~m_connected.hiding_behind_another(requested_type);
+  if (IS_ZERO(matches))
+  {
     Dout(dc::sb_edge, "rejected because we are hiding behind another node that provides the requested_type type.");
-  return is_requested_type && !hiding_behind_another;
+    return false;
+  }
+
+  return true;
 }
 
 #ifdef CWDEBUG

@@ -20,6 +20,7 @@ class Branches
 
   void operator&=(Branches const& branch);
   bool conditional() const { return !m_boolean_expression->equiv(s_one); }
+  boolexpr::bx_t boolean_expression() const { return m_boolean_expression; }
 
   friend std::ostream& operator<<(std::ostream& os, Branches const& branches);
 };

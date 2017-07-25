@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "Branches.h"
-#include <iostream>
+#include <ostream>
 
 Branches::Branches(Branch const& branch)
 {

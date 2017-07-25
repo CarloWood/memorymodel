@@ -20,6 +20,11 @@ int main()
   bx_t XyZ = and_({~A1[0], A1[1], ~A1[2]});
   bx_t XY = and_({~A1[0], ~A1[1]});
 
+  array_t array{new boolexpr::Array({xy, xYZ, XyZ, zero})};
+  std::cout << "array =\n";
+  for (auto&& item : *array)
+    std::cout << "= " << item->to_string() << std::endl;
+
   bx_t combined = or_({xy, XY, XyZ, xYZ, A1[2]});
 
   soln_t sol0 = combined->sat();

@@ -6,7 +6,7 @@
 #include "TagCompare.h"
 #include "utils/macros.h"
 #include "utils/AIAlert.h"
-#include <iostream>
+#include <ostream>
 
 char const* code(binary_operators op)
 {
@@ -671,7 +671,7 @@ void Evaluation::unary_operator(ast::unary_operators op)
 void Evaluation::destruct(Context& context)
 {
   std::vector<Evaluation::node_iterator> nodes;
-  for_each_node(Node::anything,
+  for_each_node(NodeRequestedType::all,
       [&nodes](Evaluation::node_iterator const& node)
       {
         nodes.push_back(node);
@@ -739,11 +739,11 @@ char const* name_Evaluation = "Evaluation";
 #endif
 
 void Evaluation::for_each_node(
-    Node::filter_type filter,
+    NodeRequestedType const& requested_type,
     std::function<void(node_iterator const&)> const& action
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
-  DoutEntering(debug_channel, "Evaluation::for_each_node(" << Node::Filter(filter) << ", ...) [this = " << *this << "].");
+  DoutEntering(debug_channel, "Evaluation::for_each_node(" << requested_type << ", ...) [this = " << *this << "].");
   ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
   Dout(debug_channel, m_state);
   switch (m_state)
@@ -760,54 +760,56 @@ void Evaluation::for_each_node(
       Dout(debug_channel, "Size of m_value_computations = " << m_value_computations.size());
       for (auto&& node : m_value_computations)
       {
-        if (node->is_filtered(filter))
+        boolexpr::bx_t bx;
+        if (node->matches(requested_type, bx))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
         }
         else
         {
-          Dout(debug_channel, "Call to action(" << *node << ") was filtered.");
+          Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
       }
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
       {
-        if (node->is_filtered(filter))
+        boolexpr::bx_t bx;
+        if (node->matches(requested_type, bx))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
         }
         else
         {
-          Dout(debug_channel, "Call to action(" << *node << ") was filtered.");
+          Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
         if (node->is_write())
-          node->get_evaluation()->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+          node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       }
       break;
     }
     case pre:
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case post:
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case unary:
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case binary:
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case condition:
-      m_condition->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_condition->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
     case comma:
-      m_lhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(filter, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       break;
   }
 }
