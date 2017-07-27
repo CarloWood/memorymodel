@@ -120,6 +120,8 @@ class Edge
  private:
   EdgeType m_edge_type;
   Branches m_branches;
+  boolexpr::bx_t m_tail_node_exists;
+  bool m_tail_node_exists_set;
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -128,10 +130,29 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type) : m_edge_type(edge_type) COMMA_DEBUG_ONLY(m_id(s_id++)) { }
+  Edge(EdgeType edge_type) :
+      m_edge_type(edge_type),
+      m_tail_node_exists(boolexpr::one()),
+      m_tail_node_exists_set(false)
+      COMMA_DEBUG_ONLY(m_id(s_id++))
+      { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
+
   EdgeType edge_type() const { return m_edge_type; }
   void add_branches(Branches const& branches) { m_branches &= branches; }
   Branches const& branches() const { return m_branches; }
+
+  void update_tail_node_exists(boolexpr::bx_t const& tail_node_exists)
+  {
+    // First time, set m_tail_node_exists - then update.
+    if (!m_tail_node_exists_set)
+    {
+      m_tail_node_exists_set = true;
+      m_tail_node_exists = tail_node_exists;
+    }
+    else
+      m_tail_node_exists = boolexpr::or_s({m_tail_node_exists, tail_node_exists});
+  }
+  boolexpr::bx_t exists() const { return boolexpr::and_s({m_tail_node_exists, m_branches.boolean_expression()}); }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
@@ -192,8 +213,7 @@ class Node
 
   boolexpr::bx_t provides_sequenced_before_value_computation() const;
   boolexpr::bx_t provides_sequenced_before_side_effect() const;
-  boolexpr::bx_t provides_sequenced_after_value_computation() const;
-  boolexpr::bx_t provides_sequenced_after_side_effect() const;
+  bool provides_sequenced_after_something() const;
 
  private:
   // A Node is stored in a std::set, but only m_id is used as sorting key.

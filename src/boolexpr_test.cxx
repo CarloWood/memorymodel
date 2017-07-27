@@ -10,7 +10,7 @@ int main()
   zero_t zero{boolexpr::zero()};
 
   std::vector<var_t> A1;
- 
+
   char const* vars[] = { "x", "y", "z" };
   for (int i = 0; i < 3; ++i)
     A1.push_back(context.get_var(vars[i]));

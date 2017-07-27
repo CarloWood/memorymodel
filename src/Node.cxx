@@ -118,7 +118,7 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type)
 
 std::ostream& operator<<(std::ostream& os, Edge const& edge)
 {
-  os << '{' << edge.m_edge_type;
+  os << '{' << edge.m_edge_type << "; " << (edge.m_tail_node_exists_set ? edge.m_tail_node_exists->to_string() : std::string("unset"));
   if (edge.m_branches.conditional())
     os << "; " << edge.m_branches;
   os << '}';
@@ -140,6 +140,7 @@ bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
 
 bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator const& other_node, bool edge_owner) const
 {
+  DoutEntering(dc::sb_edge, "Node::add_end_point(" << *edge << ", " << type << ", " << *other_node << ", " << edge_owner << ") [this = " << *this << "]");
   m_end_points.emplace_back(edge, type, other_node, edge_owner);
   end_points_type::iterator begin = m_end_points.begin();
   end_points_type::iterator last = m_end_points.end();
@@ -151,6 +152,45 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
       m_end_points.pop_back();
       return false;
     }
+  if (type == tail)     // Update m_tail_node_exists on the new edge.
+  {
+    boolexpr::bx_t tail_node_exists{boolexpr::zero()};  // When does this tail node exist?
+    int tail_node_heads = 0;
+    for (auto&& end_point : m_end_points)
+    {
+      if (end_point.edge_type() == edge_sb && end_point.type() == head)
+      {
+        ++tail_node_heads;
+        tail_node_exists = boolexpr::or_s({tail_node_exists, end_point.edge()->branches().boolean_expression()});
+        Dout(dc::sb_edge, "Found on this node (" << *this << ") edge to " << *end_point.other_node() <<
+            " with boolean expression " << end_point.edge()->branches().boolean_expression()->to_string() <<
+            " tail_node_exists of this node is now " << tail_node_exists->to_string());
+      }
+    }
+    // If there were no heads found then assume this node exists; therefore leave m_tail_node_exists on the new edge alone.
+    if (tail_node_heads)
+    {
+      // We found one or more heads; update m_tail_node_exists on the new edge with the boolean expression that we exist.
+      Dout(dc::sb_edge|continued_cf, "Updating new edge with tail_node_exists... ");
+      edge->update_tail_node_exists(tail_node_exists);
+      Dout(dc::finish, " edge now " << *edge);
+    }
+  }
+  if (type == head)
+  {
+    boolexpr::bx_t edge_exists = edge->exists();
+    Dout(dc::sb_edge, "edge_exists for this node (" << *this << ") is " << edge_exists->to_string());
+    for (auto&& end_point : m_end_points)
+    {
+      if (end_point.edge_type() == edge_sb && end_point.type() == tail)
+      {
+        Dout(dc::sb_edge|continued_cf, "Updating edge of end_point " << end_point << " with edge_exists... ");
+        end_point.edge()->update_tail_node_exists(edge_exists);
+        Dout(dc::finish, " edge now " << *end_point.edge());
+      }
+    }
+  }
+
   // End point did not already exist.
   return true;
 }
@@ -158,11 +198,13 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
 //static
 bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node, Branches const& branches)
 {
+  DoutEntering(dc::sb_edge, "Node::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << branches << ")");
   Edge* new_edge = new Edge(edge_type);
   new_edge->add_branches(branches);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
-  bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
+  // Call tail first!
   bool success2 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
+  bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
   ASSERT(success1 == success2);
   if (!success1) delete new_edge;
   return success1;
@@ -231,67 +273,19 @@ void Node::sequenced_before() const
   }
 }
 
-boolexpr::bx_t Node::provides_sequenced_after_value_computation() const
+bool Node::provides_sequenced_after_something() const
 {
-  boolexpr::bx_t result{boolexpr::one()};
+  bool result = true;
   if (provided_type().type() == NodeProvidedType::side_effect)
-    result = m_connected.provides_sequenced_after_value_computation();
-  return result;
-}
-
-boolexpr::bx_t Node::provides_sequenced_after_side_effect() const
-{
-  boolexpr::bx_t result{boolexpr::one()};
-  if (provided_type().type() == NodeProvidedType::value_computation)
-    result = m_connected.provides_sequenced_after_side_effect();
+    result = m_connected.provides_sequenced_after_something();
   return result;
 }
 
 // Called on the head-node of a new (conditional) sb edge.
 void Node::sequenced_after() const
 {
-  using namespace boolexpr;
   DoutEntering(dc::sb_edge, "sequenced_after() [this = " << *this << "]");
-
-  bx_t sequenced_after_value_computation{zero()};
-  bx_t sequenced_after_side_effect{zero()};
-  // Run over all outgoing (head end_points) Sequenced-Before edges.
-  for (auto&& end_point : m_end_points)
-  {
-    if (end_point.edge_type() == edge_sb && end_point.type() == head)
-    {
-      Dout(dc::notice, "Found head EndPoint " << end_point << " with condition '" << end_point.edge()->branches() << "'.");
-      // Get condition of this edge.
-      bx_t edge_bx{end_point.edge()->branches().boolean_expression()};
-      // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
-      // OR everything.
-      sequenced_after_value_computation = sequenced_after_value_computation | (edge_bx & end_point.other_node()->provides_sequenced_after_value_computation());
-      sequenced_after_side_effect = sequenced_after_side_effect | (edge_bx & end_point.other_node()->provides_sequenced_after_side_effect());
-    }
-    else
-      Dout(dc::notice, "Skipping EndPoint " << end_point << '.');
-  }
-  sequenced_after_value_computation = sequenced_after_value_computation->simplify();
-  sequenced_after_side_effect = sequenced_after_side_effect->simplify();
-  Dout(dc::notice, "Result:");
-  DebugMarkDownRight;
-  Dout(dc::notice, "sequenced_after_value_computation = '" << sequenced_after_value_computation << "'.");
-  Dout(dc::notice, "sequenced_after_side_effect = '" << sequenced_after_side_effect << "'.");
-
-  // We don't support volatile memory accesses... otherwise a node could be a side_effect and value_computation at the same time :/
-  bool node_provides_side_effect_not_value_computation = provided_type().type() == NodeProvidedType::side_effect;
-  bool sequenced_after_value_computation_changed =
-      m_connected.update_sequenced_after_value_computation(!node_provides_side_effect_not_value_computation, sequenced_after_value_computation);
-  bool sequenced_after_side_effect_changed =
-      m_connected.update_sequenced_after_side_effect(node_provides_side_effect_not_value_computation, sequenced_after_side_effect);
-
-  if (sequenced_after_value_computation_changed || sequenced_after_side_effect_changed)
-  {
-    // Propagate bits to nodes sequenced after us.
-    for (auto&& end_point : m_end_points)
-      if (end_point.edge_type() == edge_sb && end_point.type() == tail)
-        end_point.other_node()->sequenced_after();
-  }
+  m_connected.set_sequenced_after_something();
 }
 
 // This is a value-computation node that no longer should be marked as value-computation

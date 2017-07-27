@@ -11,10 +11,8 @@
   heads_
   tails_
 
-  static int const sequenced_after_value_computation_         = 0;       // We are sequenced after a value-computation Node.
-  static int const sequenced_before_value_computation_        = 1;       // We are sequenced before a value-computation Node.
-  static int const sequenced_after_side_effect_               = 2;       // We are sequenced after a side-effect Node.
-  static int const sequenced_before_side_effect_              = 3;       // We are sequenced before a side-effect Node.
+  static int const sequenced_before_value_computation_        = 0;       // We are sequenced before a value-computation Node.
+  static int const sequenced_before_side_effect_              = 1;       // We are sequenced before a side-effect Node.
 #endif
 
 bool SBNodePresence::update_sequenced_before_value_computation(bool node_provides, boolexpr::bx_t sequenced_before_value_computation)
@@ -43,30 +41,11 @@ bool SBNodePresence::update_sequenced_before_side_effect(bool node_provides, boo
   return !node_provides && changed;
 }
 
-bool SBNodePresence::update_sequenced_after_value_computation(bool node_provides, boolexpr::bx_t sequenced_after_value_computation)
+void SBNodePresence::set_sequenced_after_something()
 {
-  bool changed = !(*m_bxs)[sequenced_after_value_computation_]->equiv(sequenced_after_value_computation);
-  if (changed)
-  {
-    Dout(dc::sb_edge, "m_connected[sequenced_after_value_computation] changed from " <<
-        (*m_bxs)[sequenced_after_value_computation_]->to_string() <<
-        " to " << sequenced_after_value_computation->to_string() << ".");
-    (*m_bxs)[sequenced_after_value_computation_] = sequenced_after_value_computation;
-  }
-  return !node_provides && changed;
-}
-
-bool SBNodePresence::update_sequenced_after_side_effect(bool node_provides, boolexpr::bx_t sequenced_after_side_effect)
-{
-  bool changed = !(*m_bxs)[sequenced_after_side_effect_]->equiv(sequenced_after_side_effect);
-  if (changed)
-  {
-    Dout(dc::sb_edge, "m_connected[sequenced_after_side_effect] changed from " <<
-        (*m_bxs)[sequenced_after_side_effect_]->to_string() <<
-        " to " << sequenced_after_side_effect->to_string() << ".");
-    (*m_bxs)[sequenced_after_side_effect_] = sequenced_after_side_effect;
-  }
-  return !node_provides && changed;
+  if (!m_sequenced_after_something)
+    Dout(dc::sb_edge, "m_connected[sequenced_after_something] set to 1.");
+  m_sequenced_after_something = true;
 }
 
 boolexpr::bx_t SBNodePresence::hiding_behind_another(NodeRequestedType const& requested_type)
@@ -78,11 +57,12 @@ boolexpr::bx_t SBNodePresence::hiding_behind_another(NodeRequestedType const& re
     case NodeRequestedType::heads_:
       return boolexpr::or_s({(*m_bxs)[sequenced_before_value_computation_], (*m_bxs)[sequenced_before_side_effect_]});
     case NodeRequestedType::tails_:
-      return boolexpr::or_s({(*m_bxs)[sequenced_after_value_computation_], (*m_bxs)[sequenced_after_side_effect_]});
-    case NodeRequestedType::all_:
-      ;
+      if (m_sequenced_after_something)
+        return boolexpr::one();
+      /*fall-through*/
+    case NodeRequestedType::all_: ;     // Avoid compiler warning.
+      /*fall-through*/
   }
-  // Avoid compiler warning...
   return boolexpr::zero();
 }
 
@@ -154,9 +134,7 @@ void SBNodePresence::print_on(std::ostream& os) const
 
 //static
 char const* const SBNodePresence::s_name[SBNodePresence::array_size] = {
-  "sequenced_after_value_computation",
   "sequenced_before_value_computation",
-  "sequenced_after_side_effect",
   "sequenced_before_side_effect",
 };
 
