@@ -121,7 +121,6 @@ class Edge
   EdgeType m_edge_type;
   Branches m_branches;
   boolexpr::bx_t m_tail_node_exists;
-  bool m_tail_node_exists_set;
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -132,8 +131,7 @@ class Edge
  public:
   Edge(EdgeType edge_type) :
       m_edge_type(edge_type),
-      m_tail_node_exists(boolexpr::one()),
-      m_tail_node_exists_set(false)
+      m_tail_node_exists(boolexpr::one())
       COMMA_DEBUG_ONLY(m_id(s_id++))
       { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
 
@@ -141,17 +139,7 @@ class Edge
   void add_branches(Branches const& branches) { m_branches &= branches; }
   Branches const& branches() const { return m_branches; }
 
-  void update_tail_node_exists(boolexpr::bx_t const& tail_node_exists)
-  {
-    // First time, set m_tail_node_exists - then update.
-    if (!m_tail_node_exists_set)
-    {
-      m_tail_node_exists_set = true;
-      m_tail_node_exists = tail_node_exists;
-    }
-    else
-      m_tail_node_exists = boolexpr::or_s({m_tail_node_exists, tail_node_exists});
-  }
+  void set_tail_node_exists(boolexpr::bx_t const& tail_node_exists) { m_tail_node_exists = tail_node_exists; }
   boolexpr::bx_t exists() const { return boolexpr::and_s({m_tail_node_exists, m_branches.boolean_expression()}); }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
@@ -319,4 +307,5 @@ class Node
 
  private:
   bool add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator const& other_node, bool edge_owner) const;
+  void update_tail_node_exists(Edge* edge, EndPointType type) const;
 };

@@ -118,7 +118,9 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type)
 
 std::ostream& operator<<(std::ostream& os, Edge const& edge)
 {
-  os << '{' << edge.m_edge_type << "; " << (edge.m_tail_node_exists_set ? edge.m_tail_node_exists->to_string() : std::string("unset"));
+  os << '{';
+  Debug(os << edge.m_id << "; ");
+  os << edge.m_edge_type << "; " << edge.m_tail_node_exists->to_string();
   if (edge.m_branches.conditional())
     os << "; " << edge.m_branches;
   os << '}';
@@ -152,47 +154,54 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
       m_end_points.pop_back();
       return false;
     }
+  update_tail_node_exists(edge, type);  // edge is only used when type == tail
+  // End point did not already exist.
+  return true;
+}
+
+void Node::update_tail_node_exists(Edge* edge, EndPointType type) const
+{
+  DoutEntering(dc::sb_edge, "Node::update_tail_node_exists(" << *edge << ", " << type << ") [this = " << *this << "]");
+  boolexpr::bx_t node_exists{boolexpr::zero()};  // When does this node exist?
+  int node_heads = 0;
+  for (auto&& end_point : m_end_points)
+  {
+    if (end_point.edge_type() == edge_sb && end_point.type() == head)
+    {
+      ++node_heads;
+      node_exists = boolexpr::or_s({node_exists, end_point.edge()->exists()});
+      Dout(dc::sb_edge, "Found on this node (" << *this << ") an edge (from " << *end_point.other_node() <<
+          ") which exists when " << end_point.edge()->exists()->to_string() <<
+          "; node_exists of this node is now " << node_exists->to_string());
+    }
+  }
+  if (node_heads > 2)
+  {
+    // Try hard to simplify the expression.
+
+  }
   if (type == tail)     // Update m_tail_node_exists on the new edge.
   {
-    boolexpr::bx_t tail_node_exists{boolexpr::zero()};  // When does this tail node exist?
-    int tail_node_heads = 0;
-    for (auto&& end_point : m_end_points)
-    {
-      if (end_point.edge_type() == edge_sb && end_point.type() == head)
-      {
-        ++tail_node_heads;
-        tail_node_exists = boolexpr::or_s({tail_node_exists, end_point.edge()->branches().boolean_expression()});
-        Dout(dc::sb_edge, "Found on this node (" << *this << ") edge to " << *end_point.other_node() <<
-            " with boolean expression " << end_point.edge()->branches().boolean_expression()->to_string() <<
-            " tail_node_exists of this node is now " << tail_node_exists->to_string());
-      }
-    }
     // If there were no heads found then assume this node exists; therefore leave m_tail_node_exists on the new edge alone.
-    if (tail_node_heads)
+    if (node_heads)
     {
-      // We found one or more heads; update m_tail_node_exists on the new edge with the boolean expression that we exist.
-      Dout(dc::sb_edge|continued_cf, "Updating new edge with tail_node_exists... ");
-      edge->update_tail_node_exists(tail_node_exists);
-      Dout(dc::finish, " edge now " << *edge);
+      // We found one or more heads; set m_tail_node_exists on the new edge with the boolean expression that we found.
+      edge->set_tail_node_exists(node_exists);
+      Dout(dc::sb_edge, "Set tail_node_exists on new edge to " << node_exists->to_string());
     }
   }
   if (type == head)
   {
-    boolexpr::bx_t edge_exists = edge->exists();
-    Dout(dc::sb_edge, "edge_exists for this node (" << *this << ") is " << edge_exists->to_string());
     for (auto&& end_point : m_end_points)
     {
       if (end_point.edge_type() == edge_sb && end_point.type() == tail)
       {
-        Dout(dc::sb_edge|continued_cf, "Updating edge of end_point " << end_point << " with edge_exists... ");
-        end_point.edge()->update_tail_node_exists(edge_exists);
-        Dout(dc::finish, " edge now " << *end_point.edge());
+        end_point.edge()->set_tail_node_exists(node_exists);
+        Dout(dc::sb_edge, "Set tail_node_exists on edge " << *end_point.edge() << " to " << node_exists->to_string());
+        end_point.other_node()->update_tail_node_exists(edge, head);    // edge is not used.
       }
     }
   }
-
-  // End point did not already exist.
-  return true;
 }
 
 //static
@@ -207,6 +216,8 @@ bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node
   bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
   ASSERT(success1 == success2);
   if (!success1) delete new_edge;
+  if (success1)
+    Dout(dc::sb_edge, "ADDED EDGE " << *new_edge);
   return success1;
 }
 

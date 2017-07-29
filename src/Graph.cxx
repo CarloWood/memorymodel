@@ -123,10 +123,10 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
              "node" << head_node->name() <<
              " [label=<<font color=\"" << color << "\">sb";
 #ifdef CWDEBUG
-      out << '[' << edge->id() << ']';
+      out << edge->id();
 #endif
       if (!IS_ONE(edge->exists()))
-        out << edge->exists();
+        out << ':' << edge->exists();
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
                "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }
