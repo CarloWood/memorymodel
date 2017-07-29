@@ -36,6 +36,8 @@ libcppmem_a_SOURCES = \
 		 Condition.h \
 		 SBNodePresence.cxx \
 		 SBNodePresence.h \
+		 BooleanExpression.cxx \
+		 BooleanExpression.h \
 		 debug_ostream_operators.cxx \
 		 debug_ostream_operators.h \
 		 ast.cxx \
@@ -62,8 +64,8 @@ cppmem_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwd
 cppmem_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
 cppmem_LDADD = libcppmem.a ../boolexpr/libboolexpr.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-boolexpr_test_CXXFLAGS = -fmax-errors=1
-boolexpr_test_LDADD = ../boolexpr/libboolexpr.a
+boolexpr_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
+boolexpr_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 # --------------- Maintainer's Section
 

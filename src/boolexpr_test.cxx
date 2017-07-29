@@ -1,58 +1,97 @@
+#include "sys.h"
+#include "debug.h"
+#include "BooleanExpression.h"
+#include "utils/MultiLoop.h"
 #include <iostream>
-#include "boolexpr/boolexpr.h"
 
 int main()
 {
-  using namespace boolexpr;
+#ifdef DEBUGGLOBAL
+  GlobalObjectManager::main_entered();
+#endif
+  Debug(NAMESPACE_DEBUG::init());
 
-  boolexpr::Context context;
-  one_t one{boolexpr::one()};
-  zero_t zero{boolexpr::zero()};
+  using namespace boolean_expression;
 
-  std::vector<var_t> A1;
+  int const number_of_variables = 3;
+  Product v[number_of_variables];
+  char const* const names[] = { "w", "x", "y", "z" };
+  for (int i = 0; i < number_of_variables; ++i)
+    v[i] = Context::instance().make_variable(i * i, names[i]);
 
-  char const* vars[] = { "x", "y", "z" };
-  for (int i = 0; i < 3; ++i)
-    A1.push_back(context.get_var(vars[i]));
+  std::vector<Product> products;
+  //products.push_back(0);
+  //products.push_back(1);
 
-  bx_t xy = and_({A1[0], A1[1]});
-  bx_t xYZ = and_({A1[0], ~A1[1], ~A1[2]});
-  bx_t XyZ = and_({~A1[0], A1[1], ~A1[2]});
-  bx_t XY = and_({~A1[0], ~A1[1]});
-
-  array_t array{new boolexpr::Array({xy, xYZ, XyZ, zero})};
-  std::cout << "array =\n";
-  for (auto&& item : *array)
-    std::cout << "= " << item->to_string() << std::endl;
-
-  bx_t combined = or_({xy, XY, XyZ, xYZ, A1[2]});
-
-  soln_t sol0 = combined->sat();
-  std::cout << "The expression is " << (sol0.first ? "" : "not ") << "solvable." << std::endl;
-  soln_t sol1 = (~combined)->sat();
-  std::cout << "The inverse is " << (sol1.first ? "" : "not ") << "solvable." << std::endl;
-
-  bool is_zero = combined->equiv(zero);
-  if (is_zero)
-    std::cout << "The expression equals zero!" << std::endl;
-  bool is_one = combined->equiv(one);
-  if (is_one)
-    std::cout << "The expression equals one!" << std::endl;
-  assert(!is_zero || !sol0.first);
-  assert(!is_one || !sol1.first);
-
-  for (int i = 0; i < 3; ++i)
+  for (int n = 1; n <= number_of_variables; ++n)
   {
-    point_t r;
-    r[A1[i]] = zero;
-    bx_t x0 = combined->restrict_(r)->simplify();
-    std::cout << combined->to_string() << " with " << A1[i]->to_string() << "==0 is " << x0->to_string() << std::endl;
+    for (MultiLoop variable(n); !variable.finished(); variable.next_loop())
+      for(; variable() < number_of_variables; ++variable)
+      {
+        if (*variable > 0 && variable() <= variable[*variable - 1])
+        {
+          variable.breaks(0);
+          break;
+        }
+        if (variable.inner_loop())
+        {
+          for (MultiLoop inverted(n); !inverted.finished(); inverted.next_loop())
+            for(; inverted() < 2; ++inverted)
+            {
+              if (inverted.inner_loop())
+              {
+                Product product{v[variable[0]]};
+                if (inverted[0])
+                  product.invert();
+                for (int i = 1; i < n; ++i)
+                {
+                  if (inverted[i])
+                    product *= ~v[variable[i]];
+                  else
+                    product *= v[variable[i]];
+                }
+                products.push_back(product);
+              }
+            }
+        }
+      }
+  }
 
-    r[A1[i]] = one;
-    bx_t x1 = combined->restrict_(r)->simplify();
-    std::cout << combined->to_string() << " with " << A1[i]->to_string() << "==1 is " << x1->to_string() << std::endl;
+  Dout(dc::notice, "Products:");
+  for (auto&& p : products)
+    Dout(dc::notice, p);
 
-    if (x0->equiv(x1))
-      std::cout << "The expression does not depend on " << A1[i]->to_string() << "." << std::endl;
+  int const number_of_products = products.size();
+
+  std::vector<Expression> expressions;
+
+  Dout(dc::notice, "Expressions:");
+  for (int n = 1; n <= number_of_products; ++n)
+  {
+    for (MultiLoop term(n); !term.finished(); term.next_loop())
+      for(; term() < number_of_products; ++term)
+      {
+        if (*term > 0 && term() <= term[*term - 1])
+        {
+          term.breaks(0);
+          break;
+        }
+        if (term.inner_loop())
+        {
+          Expression original(products[term[0]]);
+          expressions.emplace_back(products[term[0]]);
+          for (int i = 1; i < n; ++i)
+          {
+            expressions.back() += products[term[i]];
+            original += products[term[i]];
+          }
+          expressions.back().simplify();
+          if (original != expressions.back())
+          {
+            Dout(dc::notice, original << " == " << expressions.back());
+            ASSERT(expressions.back().equivalent(original));
+          }
+        }
+      }
   }
 }
