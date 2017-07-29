@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds -iquote $(top_srcdir)/boolexpr/include -iquote $(top_srcdir)/boolexpr/third_party/glucosamine/src
+AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
 noinst_LIBRARIES = libcppmem.a
 bin_PROGRAMS = cppmem_test cppmem boolexpr_test
@@ -62,7 +62,7 @@ cppmem_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
 cppmem_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la @BOOST_UNIT_TEST_FRAMEWORK_LIB@
 
 cppmem_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
-cppmem_LDADD = libcppmem.a ../boolexpr/libboolexpr.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
+cppmem_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 boolexpr_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
 boolexpr_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la

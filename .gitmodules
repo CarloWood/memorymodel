@@ -10,6 +10,3 @@
 	path = utils
 	url = https://github.com/CarloWood/ai-utils.git
 	branch = master
-[submodule "boolexpr"]
-	path = boolexpr
-	url = https://github.com/cjdrake/boolexpr
