@@ -186,6 +186,7 @@ class Expression
   Expression(Expression&& expression) : m_sum_of_products(std::move(expression.m_sum_of_products)) { }
   Expression& operator=(Expression&& expression) { m_sum_of_products = std::move(expression.m_sum_of_products); return *this; }
   explicit Expression(Product const& product) : m_sum_of_products(1, product) { }
+  Expression(bool literal) : m_sum_of_products(1, Product(literal)) { }
   Expression copy() const { Expression result; result.m_sum_of_products = m_sum_of_products; return result; }
   static Expression zero() { Expression result(Product{false}); return result; }
   static Expression one() { Expression result(Product{true}); return result; }

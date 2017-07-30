@@ -161,7 +161,7 @@ class Edge
  private:
   EdgeType m_edge_type;
   Branches m_branches;
-  boolean_expression::Expression m_tail_node_exists;
+  node_iterator m_tail_node;    // The Node from where the edge starts:  tail_node ---> head_node.
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -170,9 +170,9 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type) :
+  Edge(EdgeType edge_type, node_iterator const& tail_node) :
       m_edge_type(edge_type),
-      m_tail_node_exists(1)
+      m_tail_node(tail_node)
       COMMA_DEBUG_ONLY(m_id(s_id++))
       { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
 
@@ -180,9 +180,8 @@ class Edge
   void add_branches(Branches const& branches) { m_branches &= branches; }
   Branches const& branches() const { return m_branches; }
 
-  void set_tail_node_exists(boolean_expression::Expression&& tail_node_exists) { m_tail_node_exists = std::move(tail_node_exists); }
-  bool is_conditional() const { return !m_tail_node_exists.is_one() || !m_branches.boolean_product().is_one(); }
-  boolean_expression::Expression exists() const { return m_tail_node_exists * m_branches.boolean_product(); }
+  inline bool is_conditional() const;
+  inline boolean_expression::Expression exists() const;
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
@@ -227,6 +226,7 @@ class Node
   std::memory_order m_memory_order;             // Memory order, only valid if m_atomic is true;
   std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_variable -- only valid when m_access == WriteAccess.
   mutable end_points_type m_end_points;         // End points of all connected edges.
+  mutable boolean_expression::Expression m_exists; // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
   static boolean_expression::Expression const s_one;
 
  public:
@@ -239,7 +239,8 @@ class Node
     m_variable(variable),
     m_access(ReadAccess),
     m_atomic(false),
-    m_memory_order(std::memory_order_seq_cst) { }
+    m_memory_order(std::memory_order_seq_cst),
+    m_exists(true) { }
 
   // Non-Atomic Write.
   Node(id_type next_node_id,
@@ -252,7 +253,8 @@ class Node
     m_access(WriteAccess),
     m_atomic(false),
     m_memory_order(std::memory_order_seq_cst),
-    m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
+    m_evaluation(Evaluation::make_unique(std::move(evaluation))),
+    m_exists(true) { }
 
   // Atomic Read.
   Node(id_type next_node_id,
@@ -264,7 +266,8 @@ class Node
     m_variable(variable),
     m_access(ReadAccess),
     m_atomic(true),
-    m_memory_order(memory_order) { }
+    m_memory_order(memory_order),
+    m_exists(true) { }
 
   // Atomic Write.
   Node(id_type next_node_id,
@@ -278,7 +281,8 @@ class Node
     m_access(WriteAccess),
     m_atomic(true),
     m_memory_order(memory_order),
-    m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
+    m_evaluation(Evaluation::make_unique(std::move(evaluation))),
+    m_exists(true) { }
 
   // Other Node.
   Node(id_type next_node_id,
@@ -290,7 +294,8 @@ class Node
     m_variable(mutex),
     m_access(convert(access_type)),
     m_atomic(false),
-    m_memory_order(std::memory_order_seq_cst) { }
+    m_memory_order(std::memory_order_seq_cst),
+    m_exists(true) { }
 
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
@@ -310,6 +315,7 @@ class Node
   Evaluation* get_evaluation() { return m_evaluation.get(); }
   Evaluation const* get_evaluation() const { return m_evaluation.get(); }
   end_points_type const& get_end_points() const { return m_end_points; }
+  boolean_expression::Expression const& exists() const { return m_exists; }
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Node const& node1, Node const& node2) { return node1.m_id < node2.m_id; }
@@ -319,5 +325,9 @@ class Node
 
  private:
   bool add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator const& other_node, bool edge_owner) const;
-  void update_tail_node_exists(Edge* edge, EndPointType type) const;
+  void update_exists() const;
 };
+
+//inline
+bool Edge::is_conditional() const { return !m_tail_node->exists().is_one() || !m_branches.boolean_product().is_one(); }
+boolean_expression::Expression Edge::exists() const { return m_tail_node->exists() * m_branches.boolean_product(); }
