@@ -11,6 +11,7 @@
 #include <iosfwd>
 #include <string>
 
+class Edge;
 class Node;
 class Thread;
 using ThreadPtr = boost::intrusive_ptr<Thread>;
@@ -115,8 +116,48 @@ enum EndPointType {
 char const* end_point_str(EndPointType end_point_type);
 std::ostream& operator<<(std::ostream& os, EndPointType end_point_type);
 
+// One side of a given edge.
+class EndPoint
+{
+ public:
+  using nodes_type = std::set<Node>;            // The container type used in Graph to store Nodes.
+  using node_iterator = nodes_type::iterator;   // Used as pointers to other Nodes.
+
+ private:
+  Edge* m_edge;
+  EndPointType m_type;
+  node_iterator m_other_node;
+  bool m_edge_owner;            // Owns the allocation of m_edge.
+
+ public:
+  EndPoint(Edge* edge, EndPointType type, node_iterator const& other_node, bool edge_owner) :
+      m_edge(edge), m_type(type), m_other_node(other_node), m_edge_owner(edge_owner) { }
+  // Move constructor; needed because memory of a std::vector might need reallocation.
+  EndPoint(EndPoint&& end_point) :
+    m_edge(end_point.m_edge),
+    m_type(end_point.m_type),
+    m_other_node(end_point.m_other_node),
+    m_edge_owner(end_point.m_edge_owner)
+  {
+    end_point.m_edge_owner = false;
+  }
+  inline ~EndPoint();
+
+  // Accessors.
+  inline EdgeType edge_type() const;
+  Edge* edge() const { return m_edge; }
+  EndPointType type() const { return m_type; }
+  node_iterator other_node() const { return m_other_node; }
+
+  friend bool operator==(EndPoint const& end_point1, EndPoint const& end_point2);
+  friend std::ostream& operator<<(std::ostream& os, EndPoint const& end_point);
+};
+
 class Edge
 {
+ public:
+  using node_iterator = EndPoint::node_iterator;
+
  private:
   EdgeType m_edge_type;
   Branches m_branches;
@@ -147,42 +188,9 @@ class Edge
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
 };
 
-// One side of a given edge.
-class EndPoint
-{
- public:
-  using nodes_type = std::set<Node>;            // The container type used in Graph to store Nodes.
-  using node_iterator = nodes_type::iterator;   // Used as pointers to other Nodes.
-
- private:
-  Edge* m_edge;
-  EndPointType m_type;
-  node_iterator m_other_node;
-  bool m_edge_owner;            // Owns the allocation of m_edge.
-
- public:
-  EndPoint(Edge* edge, EndPointType type, node_iterator const& other_node, bool edge_owner) :
-      m_edge(edge), m_type(type), m_other_node(other_node), m_edge_owner(edge_owner) { }
-  // Move constructor; needed because memory of a std::vector might need reallocation.
-  EndPoint(EndPoint&& end_point) :
-    m_edge(end_point.m_edge),
-    m_type(end_point.m_type),
-    m_other_node(end_point.m_other_node),
-    m_edge_owner(end_point.m_edge_owner)
-  {
-    end_point.m_edge_owner = false;
-  }
-  ~EndPoint() { if (m_edge_owner) delete m_edge; }
-
-  // Accessors.
-  EdgeType edge_type() const { return m_edge->edge_type(); }
-  Edge* edge() const { return m_edge; }
-  EndPointType type() const { return m_type; }
-  node_iterator other_node() const { return m_other_node; }
-
-  friend bool operator==(EndPoint const& end_point1, EndPoint const& end_point2);
-  friend std::ostream& operator<<(std::ostream& os, EndPoint const& end_point);
-};
+//inline -- now that Edge is defined we can define this.
+EdgeType EndPoint::edge_type() const { return m_edge->edge_type(); }
+EndPoint::~EndPoint() { if (m_edge_owner) delete m_edge; }
 
 class Node
 {
