@@ -4,19 +4,16 @@
 
 Branches::Branches(Branch const& branch)
 {
-  m_boolean_expression = branch.boolean_expression();
+  m_boolean_product = branch.boolean_product(); // Really just X or ~X (but the latter is stored in a 'Product').
 }
 
 void Branches::operator&=(Branches const& branches)
 {
-  m_boolean_expression = boolexpr::and_s({m_boolean_expression, branches.m_boolean_expression});
+  m_boolean_product *= branches.m_boolean_product;
 }
 
 std::ostream& operator<<(std::ostream& os, Branches const& branches)
 {
-  os << branches.m_boolean_expression->to_string();
+  os << branches.m_boolean_product;
   return os;
 }
-
-//static
-boolexpr::one_t Branches::s_one{boolexpr::one()};

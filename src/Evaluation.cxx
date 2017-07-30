@@ -760,8 +760,8 @@ void Evaluation::for_each_node(
       Dout(debug_channel, "Size of m_value_computations = " << m_value_computations.size());
       for (auto&& node : m_value_computations)
       {
-        boolexpr::bx_t bx;
-        if (node->matches(requested_type, bx))
+        boolean_expression::Expression hiding;      // FIXME (!) hiding is not used?!
+        if (node->matches(requested_type, hiding))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);
@@ -774,8 +774,8 @@ void Evaluation::for_each_node(
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
       {
-        boolexpr::bx_t bx;
-        if (node->matches(requested_type, bx))
+        boolean_expression::Expression hiding;      // FIXME (!) hiding is not used?!
+        if (node->matches(requested_type, hiding))
         {
           Dout(debug_channel, "Calling action(" << *node << ")");
           action(node);

@@ -115,7 +115,7 @@ Expression operator+(Expression const& expression0, Expression const& expression
       merged.m_sum_of_products.push_back((*expressions[remaining])[index[remaining]++]);
     }
     while (index[remaining] < size[remaining]);
-    //merged.simplify();
+    merged.simplify();
   }
 
   return merged;
@@ -261,6 +261,35 @@ void Expression::simplify()
     // ZD  + ZD'Y + Z'Y + ZY' + Z'Y' = ZDY' + (ZY + Z'Y + ZY' + Z'Y') = 1
 }
 
+bool Product::is_sane() const
+{
+  ASSERT(m_variables != 0);
+  if ((m_variables & zero_mask))
+  {
+    ASSERT(m_variables == zero_mask);
+    ASSERT((m_inverted & ~zero_mask) == 0);
+  }
+  ASSERT((m_inverted & ~m_variables) == 0);
+  return true;
+}
+
+void Expression::sanity_check() const
+{
+  ASSERT(!m_sum_of_products.empty());
+  ASSERT(m_sum_of_products[0].is_sane());
+  ASSERT(!m_sum_of_products[0].is_literal() || m_sum_of_products.size() == 1);
+  for (auto&& term : m_sum_of_products)
+    ASSERT(term.is_sane());
+  for (auto iter = m_sum_of_products.begin(); iter != m_sum_of_products.end(); ++iter)
+  {
+    auto next = iter + 1;
+    if (next == m_sum_of_products.end())
+      break;
+    ASSERT(*next != *iter);
+    ASSERT(less(*next, *iter));
+  }
+}
+
 // Brute force comparison of two boolean expressions.
 bool Expression::equivalent(Expression const& expression) const
 {
@@ -314,6 +343,14 @@ bool Expression::equivalent(Expression const& expression) const
       return false;
   }
   return true;
+}
+
+Expression Expression::operator*(Product const& product) const
+{
+  Expression result(0);
+  for (auto&& term : m_sum_of_products)
+    result += term * product;
+  return result;
 }
 
 //static

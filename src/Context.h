@@ -36,7 +36,6 @@ struct Context
   bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
   Condition::id_type m_next_condition_id;               // The id to use for the next condition.
   conditions_type m_conditions;                         // Branch conditions.
-  boolexpr::Context m_boolexpr_context;                 // Context of boolexpr, keeps track of created boolexpr variables.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -111,11 +110,9 @@ struct Context
     if (!res.second)
       --m_next_condition_id;
     else
-      res.first->create_boolexpr_variable(*this);
+      res.first->create_boolexpr_variable();
     return res.first;
   }
-  // boolexpr variables administration.
-  boolexpr::var_t get_var(std::string const& name) { return m_boolexpr_context.get_var(name); }
 };
 
 // Statements that are not expressions, but contain expressions, are

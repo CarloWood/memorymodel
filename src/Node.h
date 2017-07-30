@@ -120,7 +120,7 @@ class Edge
  private:
   EdgeType m_edge_type;
   Branches m_branches;
-  boolexpr::bx_t m_tail_node_exists;
+  boolean_expression::Expression m_tail_node_exists;
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -131,7 +131,7 @@ class Edge
  public:
   Edge(EdgeType edge_type) :
       m_edge_type(edge_type),
-      m_tail_node_exists(boolexpr::one())
+      m_tail_node_exists(1)
       COMMA_DEBUG_ONLY(m_id(s_id++))
       { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
 
@@ -139,8 +139,9 @@ class Edge
   void add_branches(Branches const& branches) { m_branches &= branches; }
   Branches const& branches() const { return m_branches; }
 
-  void set_tail_node_exists(boolexpr::bx_t const& tail_node_exists) { m_tail_node_exists = tail_node_exists; }
-  boolexpr::bx_t exists() const { return boolexpr::and_s({m_tail_node_exists, m_branches.boolean_expression()}); }
+  void set_tail_node_exists(boolean_expression::Expression&& tail_node_exists) { m_tail_node_exists = std::move(tail_node_exists); }
+  bool is_conditional() const { return !m_tail_node_exists.is_one() || !m_branches.boolean_product().is_one(); }
+  boolean_expression::Expression exists() const { return m_tail_node_exists * m_branches.boolean_product(); }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
@@ -195,12 +196,14 @@ class Node
   // Called on the head-node of a new (conditional) sb edge.
   void sequenced_after() const;
 
-  // Returns false when this Node is of the requested type (ie, any, value-computation or side-effect)
-  // and is for example a head or tail (as requested) for that type, etc.
-  bool matches(NodeRequestedType const& requested_type, boolexpr::bx_t& matches) const;
+  // Returns true when this Node is not of the requested type (ie, any, value-computation or side-effect)
+  // or is not a head or tail (if requested) for that type, and is neither hiding behind another
+  // node of such type. However, hiding might be set to a boolean expression that is not TRUE (1),
+  // if this Node is hiding conditionally behind the requested type.
+  bool matches(NodeRequestedType const& requested_type, boolean_expression::Expression& hiding) const;
 
-  boolexpr::bx_t provides_sequenced_before_value_computation() const;
-  boolexpr::bx_t provides_sequenced_before_side_effect() const;
+  boolean_expression::Expression const& provides_sequenced_before_value_computation() const;
+  boolean_expression::Expression const& provides_sequenced_before_side_effect() const;
   bool provides_sequenced_after_something() const;
 
  private:
@@ -216,6 +219,7 @@ class Node
   std::memory_order m_memory_order;             // Memory order, only valid if m_atomic is true;
   std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_variable -- only valid when m_access == WriteAccess.
   mutable end_points_type m_end_points;         // End points of all connected edges.
+  static boolean_expression::Expression const s_one;
 
  public:
   // Non-Atomic Read.
