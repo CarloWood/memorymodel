@@ -76,6 +76,14 @@ Product Variable::operator~() const
   return inverted_variable;
 }
 
+Expression& Expression::operator+=(Product const& product)
+{
+  // FIXME - this can be optimized.
+  Expression expr(product);
+  *this += expr;
+  return *this;
+}
+
 Expression operator+(Expression const& expression0, Expression const& expression1)
 {
   size_t size[2] = { expression0.m_sum_of_products.size(), expression1.m_sum_of_products.size() };
@@ -215,7 +223,9 @@ void Expression::simplify()
           remaining.m_inverted = term_n->m_inverted & ~changed_NOT_operators;
           if (remaining.m_variables == 0)
           {
-            *this = std::move(Product(1));
+            // Set outselves to 1.
+            m_sum_of_products.resize(1);
+            m_sum_of_products[0] = true;
             return;
           }
           term_n = m_sum_of_products.erase(term_n, term_n_plus_one + 1);

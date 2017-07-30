@@ -185,11 +185,14 @@ class Expression
   Expression() { }
   Expression(Expression&& expression) : m_sum_of_products(std::move(expression.m_sum_of_products)) { }
   Expression& operator=(Expression&& expression) { m_sum_of_products = std::move(expression.m_sum_of_products); return *this; }
-  Expression(Product const& product) : m_sum_of_products(1, product) { }
+  explicit Expression(Product const& product) : m_sum_of_products(1, product) { }
   Expression copy() const { Expression result; result.m_sum_of_products = m_sum_of_products; return result; }
+  static Expression zero() { Expression result(Product{false}); return result; }
+  static Expression one() { Expression result(Product{true}); return result; }
 
   friend Expression operator+(Expression const& expression0, Expression const& expression1);
   Expression& operator+=(Expression const& expression) { *this = std::move(*this + expression); return *this; }
+  Expression& operator+=(Product const& product);
   Expression operator*(Product const& product) const;
   void simplify();
   void sanity_check() const;

@@ -323,7 +323,7 @@ void Node::sequenced_before_side_effect_sequenced_before_value_computation() con
   // any other node yet, so their condition is 1.
   //
   // Bottom line, we NEVER want to add a tail to the "Rna x=".
-  m_connected.update_sequenced_before_value_computation(true, boolean_expression::Product(true));
+  m_connected.update_sequenced_before_value_computation(true, boolean_expression::Expression::one());
 #ifdef CWDEBUG
   for (auto&& end_point : m_end_points)
     if (end_point.edge_type() == edge_sb && end_point.type() == head)
