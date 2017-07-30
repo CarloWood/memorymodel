@@ -198,7 +198,7 @@ void Node::update_tail_node_exists(Edge* edge, EndPointType type) const
       {
         Dout(dc::sb_edge, "Setting tail_node_exists on edge " << *end_point.edge() << " to " << node_exists);
         end_point.edge()->set_tail_node_exists(node_exists.copy());     // This copy() proves that m_tail_node_exists should be stored on the Node, not the edges...
-        end_point.other_node()->update_tail_node_exists(edge, head);    // edge is not used.
+        end_point.other_node()->update_tail_node_exists(nullptr, head); // nullptr is not used.
       }
     }
   }
