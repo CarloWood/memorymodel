@@ -17,7 +17,7 @@ int main()
   Product v[number_of_variables];
   char const* const names[] = { "w", "x", "y", "z" };
   for (int i = 0; i < number_of_variables; ++i)
-    v[i] = Context::instance().make_variable(i * i, names[i]);
+    v[i] = Context::instance().create_variable(names[i], i * i);
 
   std::vector<Product> products;
   //products.push_back(0);

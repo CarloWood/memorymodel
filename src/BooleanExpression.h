@@ -11,21 +11,23 @@ class Context;
 class Product;
 class Expression;
 
+// Data associated with a boolean variable.
 class VariableData
 {
  private:
-  int m_user_id;
-  std::string m_name;
+  std::string m_name;           // Human readable (user provided) name; the name does not have to be unique.
+  int m_user_id;                // A user provided id to allow the program to recognize what this variable represents.
 
  public:
-  VariableData(int user_id, std::string const& name) : m_user_id(user_id), m_name(name) { }
+  VariableData(std::string const& name, int user_id = 0) : m_name(name), m_user_id(user_id) { }
 
-  int user_id() const { return m_user_id; }
   std::string const& name() const { return m_name; }
+  int user_id() const { return m_user_id; }
 
   friend std::ostream& operator<<(std::ostream& os, VariableData const& variable_data);
 };
 
+// An indeterminate boolean variable.
 class Variable
 {
  public:
@@ -33,23 +35,25 @@ class Variable
 
  private:
   friend class Product;
-  id_type m_id;
-  static id_type s_next_id;
+  id_type m_id;                 // A unique identifier for this variable.
+  static id_type s_next_id;     // The id to use for the next Variable that is created (this code is not thread-safe).
 
- public:
+ public: // FIXME - make these two constructs private: all Variables must be obtained from Context::create_variable.
+  // Construct an uninitialized Variable object; this object may not be used afterwards until it is assigned a value.
   Variable() { }
-  Variable(id_type id) : m_id(id) {}
-  Variable(Variable const& variable) : m_id(variable.m_id) {}
-  Variable& operator=(Variable const& variable)
-  {
-    m_id = variable.m_id;
-    return *this;
-  }
+
+  // Construct a Variable from id. The id must be one formerly created by create_variable(), we must be called by that function.
+  Variable(id_type id) : m_id(id) { }
+
+  // Return the inverse.
   Product operator~() const;
+
+  // Accessor.
+  id_type id() const { return m_id; }
 
  private:
   friend class Context;
-  static Variable create_variable() { return s_next_id++; }
+  static Variable create_variable() { return Variable(s_next_id++); }
 
   friend bool operator<(Variable const& variable1, Variable const& variable2) { return variable1.m_id < variable2.m_id; }
   friend std::ostream& operator<<(std::ostream& os, Variable const& variable);
@@ -71,7 +75,7 @@ class Context : public Singleton<Context>
   Context(Context const&) = delete;
 
  public:
-  Variable make_variable(int user_id, std::string const& name);
+  Variable create_variable(std::string const& name, int user_id = 0);
   VariableData const& operator()(Variable variable) const;
 };
 

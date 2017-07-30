@@ -74,17 +74,16 @@ std::string Expression::as_html_string() const
   return result;
 }
 
-Variable Context::make_variable(int user_id, std::string const& name)
+Variable Context::create_variable(std::string const& name, int user_id)
 {
-  Variable variable = Variable::create_variable();
-  m_variables.insert(variables_type::value_type(variable, VariableData(user_id, name)));
-  return variable;
+  auto res = m_variables.emplace(Variable::create_variable(), VariableData(name, user_id));
+  return res.first->first;
 }
 
 VariableData const& Context::operator()(Variable variable) const
 {
   variables_type::const_iterator res = m_variables.find(variable);
-  // Don't call this for Variable's that weren't created with Context::make_variable.
+  // Don't call this for Variable's that weren't created with Context::create_variable.
   ASSERT(res != m_variables.end());
   return res->second;
 }
@@ -102,6 +101,14 @@ Expression& Expression::operator+=(Product const& product)
   Expression expr(product);
   *this += expr;
   return *this;
+}
+
+Expression Expression::operator*(Product const& product) const
+{
+  Expression result(0);
+  for (auto&& term : m_sum_of_products)
+    result += term * product;
+  return result;
 }
 
 Expression operator+(Expression const& expression0, Expression const& expression1)
@@ -373,14 +380,6 @@ bool Expression::equivalent(Expression const& expression) const
       return false;
   }
   return true;
-}
-
-Expression Expression::operator*(Product const& product) const
-{
-  Expression result(0);
-  for (auto&& term : m_sum_of_products)
-    result += term * product;
-  return result;
 }
 
 //static

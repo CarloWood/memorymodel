@@ -34,7 +34,6 @@ struct Context
   std::stack<bool> m_threads;                           // Whether or not current scope is a thread.
   std::stack<Evaluation> m_last_full_expressions;       // Last full-expressions of parent threads.
   bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
-  Condition::id_type m_next_condition_id;               // The id to use for the next condition.
   conditions_type m_conditions;                         // Branch conditions.
 
  public:
@@ -45,8 +44,7 @@ struct Context
       m_last_full_expression(Evaluation::not_used),
       m_next_thread_id{1},
       m_current_thread{Thread::create_main_thread()},
-      m_beginning_of_thread(false),
-      m_next_condition_id(0) { }
+      m_beginning_of_thread(false) { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -105,12 +103,16 @@ struct Context
   {
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
-    // to shared_ptr everywhere).
-    auto res = m_conditions.insert(Condition(m_next_condition_id, condition.get()));
-    if (!res.second)
-      --m_next_condition_id;
-    else
-      res.first->create_boolexpr_variable();
+    // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::set<Condition> that the
+    // new Condition is stored in.
+    //
+    // Is this a new condition?
+    auto existing_entry = m_conditions.find(Condition(condition.get(), foo));
+    if (existing_entry != m_conditions.end())
+      return existing_entry;
+    auto res = m_conditions.emplace(condition.get());
+    // This created a new boolean variable, so the insertion has to be new.
+    ASSERT(res.second);
     return res.first;
   }
 };
