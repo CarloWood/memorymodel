@@ -19,26 +19,32 @@ std::ostream& operator<<(std::ostream& os, Variable const& variable)
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, Product const& product)
+std::string Product::to_string(bool html) const
 {
+  std::string result;
   int variable = 1;
   for (Variable::id_type id = Variable::id_type(-1); id + 1 < Product::mask_size; ++id)
   {
-    if ((product.m_variables & variable))
+    if ((m_variables & variable))
     {
-      bool inverted = (product.m_inverted & variable);
+      bool inverted = (m_inverted & variable);
       if (id + 1 == 0)
-        os << (inverted ? "1" : "0");
+        result += (inverted ? "1" : "0");
       else
       {
-        if (inverted)
-          os << "\u0305";
-        os << Context::instance()(id).name();
+        for (char c : Context::instance()(id).name())
+        {
+          if (!html && inverted)
+            result += "\u0305";
+          result += c;
+          if (html && inverted)
+            result += "&#x305;";
+        }
       }
     }
     variable <<= 1;
   }
-  return os;
+  return result;
 }
 
 std::ostream& operator<<(std::ostream& os, Expression const& expression)
@@ -52,6 +58,20 @@ std::ostream& operator<<(std::ostream& os, Expression const& expression)
     first = false;
   }
   return os;
+}
+
+std::string Expression::as_html_string() const
+{
+  std::string result;
+  bool first = true;
+  for (auto&& product : m_sum_of_products)
+  {
+    if (!first)
+      result += '+';
+    result += product.to_string(true);
+    first = false;
+  }
+  return result;
 }
 
 Variable Context::make_variable(int user_id, std::string const& name)

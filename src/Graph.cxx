@@ -126,7 +126,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
       out << edge->id();
 #endif
       if (edge->is_conditional())
-        out << ':' << edge->exists();
+        out << ':' << edge->exists().as_html_string();
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
                "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }

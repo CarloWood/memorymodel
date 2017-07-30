@@ -2,6 +2,7 @@
 
 #include "utils/Singleton.h"
 #include <iosfwd>
+#include <string>
 #include <map>
 
 namespace boolean_expression {
@@ -141,8 +142,9 @@ struct Product
   bool is_literal() const { return m_variables & zero_mask; }
   bool is_zero() const { return m_variables & ~m_inverted & zero_mask; }
   bool is_one() const { return m_variables & m_inverted & zero_mask; }
+  std::string to_string(bool html = false) const;
 
-  friend std::ostream& operator<<(std::ostream& os, Product const& product);
+  friend std::ostream& operator<<(std::ostream& os, Product const& product) { return os << product.to_string(); }
   friend bool operator==(Product const& product1, Product const& product2)
       { return product1.m_variables == product2.m_variables && product1.m_inverted == product2.m_inverted; }
   friend bool operator!=(Product const& product1, Product const& product2)
@@ -203,6 +205,7 @@ class Expression
   bool is_zero() const { return m_sum_of_products[0].is_zero(); }
   bool is_one() const { return m_sum_of_products[0].is_one(); }
   bool equivalent(Expression const& expression) const;
+  std::string as_html_string() const;
 
   friend std::ostream& operator<<(std::ostream& os, Expression const& expression);
   friend bool operator==(Expression const& expression1, Expression const& expression2) { return expression1.m_sum_of_products == expression2.m_sum_of_products; }
