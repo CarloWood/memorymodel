@@ -11,7 +11,7 @@ std::string Condition::id_name() const
 
 std::ostream& operator<<(std::ostream& os, Condition const& condition)
 {
-  os << '[' << condition.m_id << "] " << *condition.m_condition;
+  os << '[' << condition.m_id << "] " << condition.m_boolexpr_variable;
   return os;
 }
 

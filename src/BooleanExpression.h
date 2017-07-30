@@ -38,22 +38,16 @@ class Variable
   id_type m_id;                 // A unique identifier for this variable.
   static id_type s_next_id;     // The id to use for the next Variable that is created (this code is not thread-safe).
 
- public: // FIXME - make these two constructs private: all Variables must be obtained from Context::create_variable.
-  // Construct an uninitialized Variable object; this object may not be used afterwards until it is assigned a value.
-  Variable() { }
-
-  // Construct a Variable from id. The id must be one formerly created by create_variable(), we must be called by that function.
-  Variable(id_type id) : m_id(id) { }
-
+ public:
   // Return the inverse.
   Product operator~() const;
 
-  // Accessor.
-  id_type id() const { return m_id; }
-
  private:
   friend class Context;
-  static Variable create_variable() { return Variable(s_next_id++); }
+  // Create a NEW Variable.
+  Variable() : m_id(s_next_id++) { }
+  // Create a Variable from id for use a key when looking up a variable in Context::m_variables.
+  Variable(id_type id) : m_id(id) { }
 
   friend bool operator<(Variable const& variable1, Variable const& variable2) { return variable1.m_id < variable2.m_id; }
   friend std::ostream& operator<<(std::ostream& os, Variable const& variable);
@@ -76,7 +70,7 @@ class Context : public Singleton<Context>
 
  public:
   Variable create_variable(std::string const& name, int user_id = 0);
-  VariableData const& operator()(Variable variable) const;
+  VariableData const& operator()(Variable::id_type id) const;
 };
 
 struct Product

@@ -145,9 +145,9 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   {
     out <<
       "      <TR>\n"
-      "      <TD>" << condition.id_name() << "</TD>\n"
+      "      <TD>" << condition.second.id_name() << "</TD>\n"
       "      <TD><FONT COLOR=\"black\">";
-    condition.evaluation().print_on(out, true);
+    condition.first->print_on(out, true);
     out <<
       "</FONT></TD>\n"
       "      </TR>\n";

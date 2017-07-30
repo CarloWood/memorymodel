@@ -15,7 +15,7 @@ std::ostream& operator<<(std::ostream& os, VariableData const& variable_data)
 
 std::ostream& operator<<(std::ostream& os, Variable const& variable)
 {
-  os << Context::instance()(variable);
+  os << Context::instance()(variable.m_id);
   return os;
 }
 
@@ -76,13 +76,13 @@ std::string Expression::as_html_string() const
 
 Variable Context::create_variable(std::string const& name, int user_id)
 {
-  auto res = m_variables.emplace(Variable::create_variable(), VariableData(name, user_id));
+  auto res = m_variables.emplace(Variable(), VariableData(name, user_id));
   return res.first->first;
 }
 
-VariableData const& Context::operator()(Variable variable) const
+VariableData const& Context::operator()(Variable::id_type id) const
 {
-  variables_type::const_iterator res = m_variables.find(variable);
+  variables_type::const_iterator res = m_variables.find(id);
   // Don't call this for Variable's that weren't created with Context::create_variable.
   ASSERT(res != m_variables.end());
   return res->second;

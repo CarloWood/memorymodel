@@ -103,14 +103,14 @@ struct Context
   {
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
-    // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::set<Condition> that the
-    // new Condition is stored in.
+    // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::map<Evaluation*, Condition>
+    // that the new Condition is stored in.
     //
     // Is this a new condition?
-    auto existing_entry = m_conditions.find(Condition(condition.get(), foo));
+    auto existing_entry = m_conditions.find(condition.get());
     if (existing_entry != m_conditions.end())
       return existing_entry;
-    auto res = m_conditions.emplace(condition.get());
+    auto res = m_conditions.emplace(condition.get(), Condition());      // Calling Condition() creates 'irreversible' a new boolean variable.
     // This created a new boolean variable, so the insertion has to be new.
     ASSERT(res.second);
     return res.first;
