@@ -5,7 +5,7 @@
 #include <ostream>
 #include <bitset>
 
-namespace boolean_expression {
+namespace boolean {
 
 std::ostream& operator<<(std::ostream& os, VariableData const& variable_data)
 {
@@ -390,4 +390,4 @@ Variable::id_type Variable::s_next_id;
 // The Context singleton.
 static SingletonInstance<Context> dummy __attribute__ ((__unused__));
 
-} // namespace boolean_expression
+} // namespace boolean

@@ -181,7 +181,7 @@ class Edge
   Branches const& branches() const { return m_branches; }
 
   inline bool is_conditional() const;
-  inline boolean_expression::Expression exists() const;
+  inline boolean::Expression exists() const;
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }
@@ -207,10 +207,10 @@ class Node
   // or is not a head or tail (if requested) for that type, and is neither hiding behind another
   // node of such type. However, hiding might be set to a boolean expression that is not TRUE (1),
   // if this Node is hiding conditionally behind the requested type.
-  bool matches(NodeRequestedType const& requested_type, boolean_expression::Expression& hiding) const;
+  bool matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const;
 
-  boolean_expression::Expression const& provides_sequenced_before_value_computation() const;
-  boolean_expression::Expression const& provides_sequenced_before_side_effect() const;
+  boolean::Expression const& provides_sequenced_before_value_computation() const;
+  boolean::Expression const& provides_sequenced_before_side_effect() const;
   bool provides_sequenced_after_something() const;
 
  private:
@@ -226,8 +226,8 @@ class Node
   std::memory_order m_memory_order;             // Memory order, only valid if m_atomic is true;
   std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_variable -- only valid when m_access == WriteAccess.
   mutable end_points_type m_end_points;         // End points of all connected edges.
-  mutable boolean_expression::Expression m_exists; // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
-  static boolean_expression::Expression const s_one;
+  mutable boolean::Expression m_exists; // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
+  static boolean::Expression const s_one;
 
  public:
   // Non-Atomic Read.
@@ -315,7 +315,7 @@ class Node
   Evaluation* get_evaluation() { return m_evaluation.get(); }
   Evaluation const* get_evaluation() const { return m_evaluation.get(); }
   end_points_type const& get_end_points() const { return m_end_points; }
-  boolean_expression::Expression const& exists() const { return m_exists; }
+  boolean::Expression const& exists() const { return m_exists; }
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Node const& node1, Node const& node2) { return node1.m_id < node2.m_id; }
@@ -330,4 +330,4 @@ class Node
 
 //inline
 bool Edge::is_conditional() const { return !m_tail_node->exists().is_one() || !m_branches.boolean_product().is_one(); }
-boolean_expression::Expression Edge::exists() const { return m_tail_node->exists() * m_branches.boolean_product(); }
+boolean::Expression Edge::exists() const { return m_tail_node->exists() * m_branches.boolean_product(); }

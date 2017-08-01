@@ -5,7 +5,7 @@
 #include <string>
 #include <map>
 
-namespace boolean_expression {
+namespace boolean {
 
 class Context;
 class Product;
@@ -280,4 +280,4 @@ class Expression
   friend bool operator!=(Expression const& expression1, Expression const& expression2) { return !(expression1.m_sum_of_products == expression2.m_sum_of_products); }
 };
 
-} // namespace boolean_expression
+} // namespace boolean

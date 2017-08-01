@@ -7,7 +7,7 @@
 class Branches
 {
  private:
-  boolean_expression::Product m_boolean_product;
+  boolean::Product m_boolean_product;
 
  public:
   Branches() : m_boolean_product(1) { }
@@ -19,7 +19,7 @@ class Branches
 
   void operator&=(Branches const& branch);
   bool conditional() const { return !m_boolean_product.is_one(); }
-  boolean_expression::Product const& boolean_product() const { return m_boolean_product; }
+  boolean::Product const& boolean_product() const { return m_boolean_product; }
 
   friend std::ostream& operator<<(std::ostream& os, Branches const& branches);
 };

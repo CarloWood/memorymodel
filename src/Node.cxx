@@ -162,7 +162,7 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
 void Node::update_exists() const
 {
   DoutEntering(dc::sb_edge, "Node::update_exists() [this = " << *this << "]");
-  boolean_expression::Expression node_exists(0);  // When does this node exist?
+  boolean::Expression node_exists(0);  // When does this node exist?
   int node_heads = 0;
   for (auto&& end_point : m_end_points)
   {
@@ -204,16 +204,16 @@ bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node
 }
 
 //static
-boolean_expression::Expression const Node::s_one(1);
+boolean::Expression const Node::s_one(1);
 
-boolean_expression::Expression const& Node::provides_sequenced_before_value_computation() const
+boolean::Expression const& Node::provides_sequenced_before_value_computation() const
 {
   if (provided_type().type() == NodeProvidedType::side_effect)
     return m_connected.provides_sequenced_before_value_computation();
   return s_one;
 }
 
-boolean_expression::Expression const& Node::provides_sequenced_before_side_effect() const
+boolean::Expression const& Node::provides_sequenced_before_side_effect() const
 {
   if (provided_type().type() == NodeProvidedType::value_computation)
     return m_connected.provides_sequenced_before_side_effect();
@@ -223,11 +223,11 @@ boolean_expression::Expression const& Node::provides_sequenced_before_side_effec
 // Called on the tail-node of a new (conditional) sb edge.
 void Node::sequenced_before() const
 {
-  using namespace boolean_expression;
+  using namespace boolean;
   DoutEntering(dc::sb_edge, "sequenced_before() [this = " << *this << "]");
 
-  boolean_expression::Expression sequenced_before_value_computation(0);
-  boolean_expression::Expression sequenced_before_side_effect(0);
+  boolean::Expression sequenced_before_value_computation(0);
+  boolean::Expression sequenced_before_side_effect(0);
   // Run over all outgoing (tail end_points) Sequenced-Before edges.
   for (auto&& end_point : m_end_points)
   {
@@ -235,7 +235,7 @@ void Node::sequenced_before() const
     {
       Dout(dc::notice, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->branches() << "'.");
       // Get condition of this edge.
-      boolean_expression::Product edge_conditional(end_point.edge()->branches().boolean_product());
+      boolean::Product edge_conditional(end_point.edge()->branches().boolean_product());
       // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
       // OR everything.
       sequenced_before_value_computation += end_point.other_node()->provides_sequenced_before_value_computation() * edge_conditional;
@@ -305,7 +305,7 @@ void Node::sequenced_before_side_effect_sequenced_before_value_computation() con
   // any other node yet, so their condition is 1.
   //
   // Bottom line, we NEVER want to add a tail to the "Rna x=".
-  m_connected.update_sequenced_before_value_computation(true, boolean_expression::Expression::one());
+  m_connected.update_sequenced_before_value_computation(true, boolean::Expression::one());
 #ifdef CWDEBUG
   for (auto&& end_point : m_end_points)
     if (end_point.edge_type() == edge_sb && end_point.type() == head)
@@ -327,7 +327,7 @@ void Node::sequenced_before_value_computation() const
   m_connected.set_sequenced_before_pseudo_value_computation();
 }
 
-bool Node::matches(NodeRequestedType const& requested_type, boolean_expression::Expression& hiding) const
+bool Node::matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const
 {
   if (requested_type.any())
     return true;

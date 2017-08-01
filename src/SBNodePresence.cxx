@@ -15,7 +15,7 @@
   static int const sequenced_before_side_effect_              = 1;       // We are sequenced before a side-effect Node.
 #endif
 
-bool SBNodePresence::update_sequenced_before_value_computation(bool node_provides, boolean_expression::Expression&& sequenced_before_value_computation)
+bool SBNodePresence::update_sequenced_before_value_computation(bool node_provides, boolean::Expression&& sequenced_before_value_computation)
 {
   bool changed = !m_sequenced_before_value_computation.equivalent(sequenced_before_value_computation);
   if (changed)
@@ -27,7 +27,7 @@ bool SBNodePresence::update_sequenced_before_value_computation(bool node_provide
   return !node_provides && changed;
 }
 
-bool SBNodePresence::update_sequenced_before_side_effect(bool node_provides, boolean_expression::Expression&& sequenced_before_side_effect)
+bool SBNodePresence::update_sequenced_before_side_effect(bool node_provides, boolean::Expression&& sequenced_before_side_effect)
 {
   bool changed = !m_sequenced_before_side_effect.equivalent(sequenced_before_side_effect);
   if (changed)
@@ -46,7 +46,7 @@ void SBNodePresence::set_sequenced_after_something()
   m_sequenced_after_something = true;
 }
 
-boolean_expression::Expression SBNodePresence::hiding_behind_another(NodeRequestedType const& requested_type)
+boolean::Expression SBNodePresence::hiding_behind_another(NodeRequestedType const& requested_type)
 {
   switch (requested_type.type())
   {
@@ -56,12 +56,12 @@ boolean_expression::Expression SBNodePresence::hiding_behind_another(NodeRequest
       return m_sequenced_before_value_computation + m_sequenced_before_side_effect;
     case NodeRequestedType::tails_:
       if (m_sequenced_after_something)
-        return boolean_expression::Expression::one();
+        return boolean::Expression::one();
       /*fall-through*/
     case NodeRequestedType::all_: ;     // Avoid compiler warning.
       /*fall-through*/
   }
-  return boolean_expression::Expression::zero();
+  return boolean::Expression::zero();
 }
 
 bool NodeRequestedType::matches(NodeProvidedType const& provided_type) const

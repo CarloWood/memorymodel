@@ -53,8 +53,8 @@ class NodeRequestedType
 class SBNodePresence
 {
  private:
-  boolean_expression::Expression m_sequenced_before_value_computation;  // We are sequenced before a value-computation Node.
-  boolean_expression::Expression m_sequenced_before_side_effect;        // We are sequenced before a side-effect Node.
+  boolean::Expression m_sequenced_before_value_computation;  // We are sequenced before a value-computation Node.
+  boolean::Expression m_sequenced_before_side_effect;        // We are sequenced before a side-effect Node.
   bool m_sequenced_after_something;                                     // Hence, not a tail.
   bool m_sequenced_before_pseudo_value_computation;                     // We pretend to be sequenced before a value-computation Node.
 
@@ -67,12 +67,12 @@ class SBNodePresence
 
   bool sequenced_before_pseudo_value_computation() const { return m_sequenced_before_pseudo_value_computation; }
   void set_sequenced_before_pseudo_value_computation() { m_sequenced_before_pseudo_value_computation = true; }
-  boolean_expression::Expression hiding_behind_another(NodeRequestedType const& requested_type);
-  boolean_expression::Expression const& provides_sequenced_before_value_computation() const { return m_sequenced_before_value_computation; }
-  boolean_expression::Expression const& provides_sequenced_before_side_effect() const { return m_sequenced_before_side_effect; }
+  boolean::Expression hiding_behind_another(NodeRequestedType const& requested_type);
+  boolean::Expression const& provides_sequenced_before_value_computation() const { return m_sequenced_before_value_computation; }
+  boolean::Expression const& provides_sequenced_before_side_effect() const { return m_sequenced_before_side_effect; }
   bool provides_sequenced_after_something() const { return m_sequenced_after_something; }
-  bool update_sequenced_before_value_computation(bool node_provides, boolean_expression::Expression&& sequenced_before_value_computation);
-  bool update_sequenced_before_side_effect(bool node_provides, boolean_expression::Expression&& sequenced_before_side_effect);
+  bool update_sequenced_before_value_computation(bool node_provides, boolean::Expression&& sequenced_before_value_computation);
+  bool update_sequenced_before_side_effect(bool node_provides, boolean::Expression&& sequenced_before_side_effect);
   void set_sequenced_after_something();
 
   void print_on(std::ostream& os) const;

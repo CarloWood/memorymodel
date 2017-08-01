@@ -11,7 +11,7 @@ int main()
 #endif
   Debug(NAMESPACE_DEBUG::init());
 
-  using namespace boolean_expression;
+  using namespace boolean;
 
   int const number_of_variables = 3;
   std::vector<Variable> v;
