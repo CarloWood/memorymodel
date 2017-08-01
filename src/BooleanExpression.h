@@ -116,7 +116,7 @@ class Context : public Singleton<Context>
 // which is represented in the same way as B AND C AND D but with a second
 // bitmask to mark the negation of B and C (a set bit meaning its negation).
 //
-struct Product
+class Product
 {
  public:
   using mask_type = uint64_t;
@@ -258,8 +258,8 @@ class Expression
   explicit Expression(Product const& product) : m_sum_of_products(1, product) { }
   Expression(bool literal) : m_sum_of_products(1, Product(literal)) { }
   Expression copy() const { Expression result; result.m_sum_of_products = m_sum_of_products; return result; }
-  static Expression zero() { Expression result(Product{0}); return result; }
-  static Expression one() { Expression result(Product{1}); return result; }
+  static Expression zero() { Expression result(false); return result; }
+  static Expression one() { Expression result(true); return result; }
 
   friend Expression operator+(Expression const& expression0, Expression const& expression1);
   Expression& operator+=(Expression const& expression) { *this = std::move(*this + expression); return *this; }

@@ -95,6 +95,7 @@ Expression& Expression::operator+=(Product const& product)
 
 Expression Expression::operator*(Product const& product) const
 {
+  // FIXME - this can be optimized.
   Expression result(0);
   for (auto&& term : m_sum_of_products)
     result += term * product;
@@ -108,42 +109,54 @@ Expression operator+(Expression const& expression0, Expression const& expression
   // An empty vector means the Expression is undefined!
   ASSERT(size[0] > 0 && size[1] > 0);
 
-  // Merge the two ordered vectors.
-  Expression merged;
-  merged.m_sum_of_products.reserve(size[0] + size[1]);
+  // Merge the two ordered input vectors into a new (ordered) vector output.
+  Expression output;
+  output.m_sum_of_products.reserve(size[0] + size[1]);
+  Expression::sum_of_products_type const* input[2] = { &expression0.m_sum_of_products, &expression1.m_sum_of_products };
 
-  Expression::sum_of_products_type const* expressions[2] = { &expression0.m_sum_of_products, &expression1.m_sum_of_products };
-
-  if (expression0.is_literal() || expression1.is_literal())
+  if (expression0.is_literal() || expression1.is_literal())     // Is either side a literal?
   {
-    // If either side is a literal then simplify immediately.
-    int ret = expression0.is_one() || expression1.is_zero() ? 0 : 1;
-    for (auto&& product : *expressions[ret])
-      merged.m_sum_of_products.push_back(product);
+    // Truth table: (E = non-literal Expression; F=is zero, T=is one)
+    // --------------------------------------------------------------
+    // input[0],F,T  | input[1],F,T  | output | input to be copied
+    //    E     0 0  |    1     0 1  |    1   |       1
+    //    E     0 0  |    0     1 0  |    E   |       0
+    //    1     0 1  |    E     0 0  |    1   |       0
+    //    1     0 1  |    1     0 1  |    1   |       either
+    //    1     0 1  |    0     1 0  |    1   |       0
+    //    0     1 0  |    E     0 0  |    E   |       1
+    //    0     1 0  |    1     0 1  |    1   |       1
+    //    0     1 0  |    0     1 0  |    0   |       either
+    //          ^ ^             ^ ^                   ^
+    //          A B             C D                   Y
+    //
+    // From which we can see that (see http://www.32x8.com/circuits4---A-B-C-D----m-1-8-9-----d-0-3-5-7-10-11-12-13-14-15):
+    //   Y = D + A
+    output.m_sum_of_products = *input[expression1.is_one() || expression0.is_zero()];
   }
   else
   {
     // Zip the two vectors into eachother so the result is still ordered.
-    size_t index[2] = { 0, 0 };
-    int largest;
+    size_t term_of_input[2] = { 0, 0 }; // The current indices into the vector m_sum_of_products of both inputs.
+    int largest_input;                        // Which input has currently the "largest_input" term of m_sum_of_products.
     do
     {
-      // Sort large to small (many variables to few), so that when simplify removes variables from a term we
-      // get something that might still combine with a term that it still has to process.
-      largest = Expression::less(expression0.m_sum_of_products[index[0]], expression1.m_sum_of_products[index[1]]) ? 1 : 0;
-      merged.m_sum_of_products.push_back((*expressions[largest])[index[largest]++]);
+      // Sort large to small (many variables to few), so that when simplify() removes variables from
+      // a term we get something that might still combine with a term that it still has to process.
+      largest_input = Expression::less(expression0.m_sum_of_products[term_of_input[0]], expression1.m_sum_of_products[term_of_input[1]]) ? 1 : 0;
+      output.m_sum_of_products.push_back((*input[largest_input])[term_of_input[largest_input]]);
     }
-    while (index[largest] < size[largest]);
-    int remaining = 1 - largest;
+    while (++term_of_input[largest_input] < size[largest_input]);
+    int remaining_input = 1 - largest_input;        // Only one input left (largest_input is consumed).
     do
     {
-      merged.m_sum_of_products.push_back((*expressions[remaining])[index[remaining]++]);
+      output.m_sum_of_products.push_back((*input[remaining_input])[term_of_input[remaining_input]]);
     }
-    while (index[remaining] < size[remaining]);
-    //merged.simplify();
+    while (++term_of_input[remaining_input] < size[remaining_input]);
+    output.simplify();
   }
 
-  return merged;
+  return output;
 }
 
 void Expression::simplify()
@@ -324,6 +337,7 @@ void Expression::sanity_check() const
       break;
     ASSERT(*next != *iter);
     ASSERT(less(*next, *iter));
+    ASSERT(!less(*iter, *next));
   }
 }
 
