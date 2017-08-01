@@ -21,28 +21,25 @@ std::ostream& operator<<(std::ostream& os, Variable const& variable)
 
 std::string Product::to_string(bool html) const
 {
+  if (is_literal())
+    return is_one() ? "1" : "0";
+
   std::string result;
-  int variable = 1;
-  for (Variable::id_type id = Variable::id_type(-1); id + 1 < Product::mask_size; ++id)
+  for (Variable::id_type id = 0; id < Product::max_number_of_variables; ++id)
   {
-    if ((m_variables & variable))
+    mask_type variable = to_mask(id);
+    if (!(m_variables & variable))      // Is this variable used?
     {
-      bool inverted = (m_inverted & variable);
-      if (id + 1 == 0)
-        result += (inverted ? "1" : "0");
-      else
+      bool inverted = m_negation & variable;
+      for (char c : Context::instance()(id).name())
       {
-        for (char c : Context::instance()(id).name())
-        {
-          if (!html && inverted)
-            result += "\u0305";
-          result += c;
-          if (html && inverted)
-            result += "&#x305;";
-        }
+        if (!html && inverted)
+          result += "\u0305";
+        result += c;
+        if (html && inverted)
+          result += "&#x305;";
       }
     }
-    variable <<= 1;
   }
   return result;
 }
@@ -86,13 +83,6 @@ VariableData const& Context::operator()(Variable::id_type id) const
   // Don't call this for Variable's that weren't created with Context::create_variable.
   ASSERT(res != m_variables.end());
   return res->second;
-}
-
-Product Variable::operator~() const
-{
-  Product inverted_variable(*this);
-  inverted_variable.invert();
-  return inverted_variable;
 }
 
 Expression& Expression::operator+=(Product const& product)
@@ -150,7 +140,7 @@ Expression operator+(Expression const& expression0, Expression const& expression
       merged.m_sum_of_products.push_back((*expressions[remaining])[index[remaining]++]);
     }
     while (index[remaining] < size[remaining]);
-    merged.simplify();
+    //merged.simplify();
   }
 
   return merged;
@@ -242,15 +232,15 @@ void Expression::simplify()
     {
       if (term_n->m_variables == term_n_plus_one->m_variables)
       {
-        mask_type changed_NOT_operators = term_n->m_inverted ^ term_n_plus_one->m_inverted;
+        mask_type changed_NOT_operators = term_n->m_negation ^ term_n_plus_one->m_negation;
         if (utils::is_power_of_two(changed_NOT_operators))     // Only a single NOT operator changed?
         {
           Product remaining;
-          remaining.m_variables = term_n->m_variables & ~changed_NOT_operators;
-          remaining.m_inverted = term_n->m_inverted & ~changed_NOT_operators;
-          if (remaining.m_variables == 0)
+          remaining.m_variables = term_n->m_variables | changed_NOT_operators;
+          remaining.m_negation = term_n->m_negation | changed_NOT_operators;
+          if (remaining.m_variables == Product::full_mask)
           {
-            // Set outselves to 1.
+            // Set outselves to one.
             m_sum_of_products.resize(1);
             m_sum_of_products[0] = true;
             return;
@@ -300,13 +290,23 @@ void Expression::simplify()
 
 bool Product::is_sane() const
 {
-  ASSERT(m_variables != 0);
-  if ((m_variables & zero_mask))
+  if (m_variables == empty_mask && m_negation == full_mask)
   {
-    ASSERT(m_variables == zero_mask);
-    ASSERT((m_inverted & ~zero_mask) == 0);
+    ASSERT(is_literal() && is_zero());
+    return true;
   }
-  ASSERT((m_inverted & ~m_variables) == 0);
+  if (m_variables == full_mask && m_negation == empty_mask)
+  {
+    ASSERT(is_literal() && is_one());
+    return true;
+  }
+  ASSERT(!is_literal());
+  mask_type not_used = ~all_variables;
+  // Unused variables have their bit set.
+  ASSERT((m_variables & not_used) == not_used);
+  // Also in m_negation.
+  ASSERT((m_negation & not_used) == not_used);
+  ASSERT((m_negation & m_variables) == m_variables);
   return true;
 }
 
@@ -332,18 +332,20 @@ bool Expression::equivalent(Expression const& expression) const
 {
   mask_type all_variables = 0;
   for (auto&& product : m_sum_of_products)
-    all_variables |= product.m_variables;    
+    if (!product.is_literal())
+      all_variables |= ~product.m_variables;
   for (auto&& product : expression.m_sum_of_products)
-    all_variables |= product.m_variables;    
+    if (!product.is_literal())
+      all_variables |= ~product.m_variables;
   int number_of_variables = 0;
-  int variable_shift[Product::mask_size];
-  for (size_t shift = 1; shift < Product::mask_size; ++shift)
+  int variable_id[Product::max_number_of_variables];
+  for (Variable::id_type id = 0; id < Product::max_number_of_variables; ++id)
   {
-    mask_type bit = mask_type{1} << shift;
+    mask_type bit = Product::to_mask(id);
     if ((all_variables & bit))
-      variable_shift[number_of_variables++] = shift;
+      variable_id[number_of_variables++] = id;
   }
-  // Now we can find back the bit(mask) of variable variable with: mask_type{1} << variable_shift[variable].
+  // Now we can find back the bit(mask) of a variable with: Product::to_mask(variable_id[variable]).
   int number_of_permutations = 1 << number_of_variables;
   for (int permutation = 0; permutation < number_of_permutations; ++permutation)
   {
@@ -352,14 +354,14 @@ bool Expression::equivalent(Expression const& expression) const
     {
       int permbit = 1 << variable;
       if ((permutation & permbit))
-        set_variables |= mask_type{1} << variable_shift[variable];
+        set_variables |= Product::to_mask(variable_id[variable]);
     }
     bool result1 = is_one();
     if (!is_literal())
     {
       result1 = false;
       for (auto&& product : m_sum_of_products)
-        if ((product.m_variables & (set_variables ^ product.m_inverted)) == product.m_variables)
+        if ((~product.m_variables & (set_variables ^ product.m_negation)) == ~product.m_variables)
         {
           result1 = true;
           break;
@@ -370,7 +372,7 @@ bool Expression::equivalent(Expression const& expression) const
     {
       result2 = false;
       for (auto&& product : expression.m_sum_of_products)
-        if ((product.m_variables & (set_variables ^ product.m_inverted)) == product.m_variables)
+        if ((~product.m_variables & (set_variables ^ product.m_negation)) == ~product.m_variables)
         {
           result2 = true;
           break;

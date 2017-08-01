@@ -14,10 +14,10 @@ int main()
   using namespace boolean_expression;
 
   int const number_of_variables = 3;
-  Product v[number_of_variables];
+  std::vector<Variable> v;
   char const* const names[] = { "w", "x", "y", "z" };
   for (int i = 0; i < number_of_variables; ++i)
-    v[i] = Context::instance().create_variable(names[i], i * i);
+    v.emplace_back(Context::instance().create_variable(names[i], i * i));
 
   std::vector<Product> products;
   //products.push_back(0);
@@ -40,15 +40,11 @@ int main()
             {
               if (inverted.inner_loop())
               {
-                Product product{v[variable[0]]};
-                if (inverted[0])
-                  product.invert();
+                Product product(v[variable[0]], inverted[0]);
                 for (int i = 1; i < n; ++i)
                 {
-                  if (inverted[i])
-                    product *= ~v[variable[i]];
-                  else
-                    product *= v[variable[i]];
+                  Product next_factor(v[variable[i]], inverted[i]);
+                  product *= next_factor;
                 }
                 products.push_back(product);
               }

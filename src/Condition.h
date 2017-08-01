@@ -24,7 +24,7 @@ struct Condition
 
   id_type id() const { return m_id; }
   std::string id_name() const;
-  boolean_expression::Product boolexpr_variable() const { return m_boolexpr_variable; }
+  boolean_expression::Variable boolexpr_variable() const { return m_boolexpr_variable; }
   friend std::ostream& operator<<(std::ostream& os, Condition const& condition);
 };
 

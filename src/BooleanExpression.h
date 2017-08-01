@@ -38,15 +38,11 @@ class Variable
   id_type m_id;                 // A unique identifier for this variable.
   static id_type s_next_id;     // The id to use for the next Variable that is created (this code is not thread-safe).
 
- public:
-  // Return the inverse.
-  Product operator~() const;
-
  private:
-  friend class Context;
+  friend class Context;         // Needs access to the two constructors below.
   // Create a NEW Variable.
   Variable() : m_id(s_next_id++) { }
-  // Create a Variable from id for use a key when looking up a variable in Context::m_variables.
+  // Create a Variable from id for use as key when looking up a variable in Context::m_variables.
   Variable(id_type id) : m_id(id) { }
 
   friend bool operator<(Variable const& variable1, Variable const& variable2) { return variable1.m_id < variable2.m_id; }
@@ -73,80 +69,150 @@ class Context : public Singleton<Context>
   VariableData const& operator()(Variable::id_type id) const;
 };
 
+// A product is a catenation of logical AND-ed boolean variables, ie
+//
+// D AND E AND F AND G AND Z ...
+//
+// where each uppercase letter stands for an indeterminate boolean variable (a Variable).
+//
+// The Product stores these "products" as a bit mask: one bit per variable,
+// in a mask with 64-bit; hence we can deal with at most 64 variables.
+//
+// Consider the case where we have only four variables (four bits).
+// Say, A, B, C and D at respectively the least significant to most
+// significant bit (DCBA).
+//
+// A variable is present in the product when its corresponding bit is NOT set;
+// so, A AND C = 1010, and so on.
+// We can think of this as: T AND C AND T AND A == A AND C, where a 'T' stands
+// for True (so in a way the bitset 1010 represents "TCTA").
+//
+// Let X be one of A, B, C or D.
+// Note that X AND F = F (where 'F' stands for False) for any variable X.
+// Also note that X AND X = X. So for a single bit (variable) we have the table:
+//
+//     X AND X = X    and thus the bit (for X):  0 AND 0 = 0
+//     X AND T = X                               0 AND 1 = 0
+//     T AND X = X                               1 AND 0 = 0
+//     T AND T = T                               1 AND 1 = 1
+//
+// So that AND-ing two indeterminate variables is implemented with a bit-wise AND.
+// From which we can conclude that the boolean literal True must be represented by 1111,
+// so that AND-ing something with True has no effect.
+// On the other hand we want False to be represented by 0000, so that AND-ing with
+// False results in False.
+//
+// The above means that we may not use a product that includes all variables,
+// because that is reserved for True.
+//
+// For our purpose we talk about multiplication when AND-ing and addition
+// when OR-ing. Aka, X * X = X, X * T = T, T * X = T and T * T = T.
+// Therefore we also speak of One instead of True and Zero instead of False.
+//
+// On top of in the product the negation of single variables may be used, for example
+//
+//     !B AND !C AND D
+//
+// which is represented in the same way as B AND C AND D but with a second
+// bitmask to mark the negation of B and C (a set bit meaning its negation).
+//
 struct Product
 {
  public:
   using mask_type = uint64_t;
-  static size_t constexpr mask_size = sizeof(mask_type) * 8;    // Size of mask_type in bits.
-  static mask_type constexpr empty_mask = 0;
-  static mask_type constexpr full_mask = empty_mask - 1;
-  static mask_type constexpr zero_mask = 1;                     // The variable bit representing zero.
+
+  static constexpr mask_type empty_mask = 0;                    // A mask with all bits unset.
+  static constexpr mask_type full_mask = empty_mask - 1;        // A mask with all bits set.
+  static constexpr size_t mask_size = sizeof(mask_type) * 8;    // Size of mask_type in bits.
+  static constexpr Variable::id_type max_number_of_variables = mask_size - 1; // Disallow products of all mask_size variables whose value is reserved for One.
+  static constexpr mask_type all_variables = full_mask >> (mask_size - max_number_of_variables);
+ private:
+  // Encode a Variable id to a mask representing its bit.
+  static mask_type to_mask(Variable::id_type id) { ASSERT(id < max_number_of_variables); return mask_type{1} << id; }
  
  private:
   friend class Expression;
-  mask_type m_variables;        // Variables in use have their bit set.
-  mask_type m_inverted;         // Variables in use that are inverted.
-
-  static mask_type to_mask(Variable variable) { ASSERT(variable.m_id < mask_size - 1); return mask_type{2} << variable.m_id; }
+  mask_type m_variables;        // Set iff for variables in use have their bit unset.
+  mask_type m_negation;         // Set iff for variables in use whose negation is used or unused variables.
 
  public:
+  // Construct an uninitialized Product.
   Product() { }
-  Product(bool literal) : m_variables(zero_mask), m_inverted(literal ? zero_mask : empty_mask) { }
-  Product(Variable variable) : m_variables(to_mask(variable)), m_inverted(empty_mask) { }
 
-  void invert() { m_inverted ^= full_mask; m_inverted &= m_variables; }
+  // Construct a Product that represents a literal.
+  // Zero = { empty_mask, full_mask }
+  // One = { full_mask, empty_mask }
+  Product(bool literal) : m_variables(literal ? full_mask : empty_mask), m_negation(~m_variables) { }
+
+  // Construct a Product that represents just one variable.
+  Product(Variable variable, bool negated = false) : m_variables(~to_mask(variable.m_id)), m_negation(negated ? full_mask : m_variables) { }
+
+  //void negate() { m_negation ^= full_mask; m_negation &= m_variables; }
   bool is_sane() const;
 
   Product& operator*=(Product const& product)
   {
-    // If either side (this or product) is 0 or 1 then we have a special case.
-    // If product (and/or this) is a special case then product.m_variables == 0 and the first condition is always true.
-    if (((m_inverted ^ product.m_inverted) & (m_variables & product.m_variables)) == 0)
-    {
-      m_inverted = (m_variables & m_inverted) | (product.m_variables & product.m_inverted);
-      m_variables |= product.m_variables;
-      // Is one side a literal (not both sides, because then the above already works)?
-      if ((m_variables & zero_mask) && (m_variables & ~zero_mask))
-      {
-        // Is the literal a one?
-        if ((m_inverted & zero_mask))
-        {
-          // Erase the one from the product.
-          m_variables &= ~zero_mask;
-          m_inverted &= ~zero_mask;
-        }
-        else
-        {
-          // The result is zero.
-          m_variables = zero_mask;
-          m_inverted = empty_mask;
-        }
-      }
-    }
-    else
-    {
-      // If we get here then this is NOT a special case.
-      // We get here when we AND an X with a NOT X, which is always false.
-      // Set the product to represent False:
-      m_variables = zero_mask;
-      m_inverted = empty_mask;
-    }
+    // 00 = A
+    // 01 = !A or part of F
+    // 10 = part of T
+    // 11 = - (no variable A, but also not a literal).
+    //
+    //       this object              product                                     desired result
+    // -----------------------  -----------------------                       -----------------------
+    // m_variables  m_negation  m_variables  m_negation                       m_variables  m_negation
+    //      0            0           0            0           A  *  A =  A         0           0
+    //      0            0           0            1           A  * !A =  F         0           1
+    //                                                    or  A  *  F =  F         0           1
+    //      0            0           1            0           A  *  T =  A         0           0
+    //      0            0           1            1           A  *  - =  A         0           0
+    //      0            1           0            0          !A  *  A =  F         0           1
+    //                                                    or  F  *  A =  F         0           1
+    //      0            1           0            1          !A  * !A = !A         0           1
+    //                                                    or !A  *  F =  F         0           1
+    //                                                    or  F  * !A =  F         0           1
+    //                                                    or  F  *  F =  F         0           1
+    //      0            1           1            0          !A  *  T = !A         0           1
+    //                                                    or  F  *  T =  F         0           1
+    //      0            1           1            1          !A  *  - = !A         0           1
+    //                                                    or  F  *  - =  F         0           1
+    //      1            0           0            0           T  *  A =  A         0           0
+    //      1            0           0            1           T  * !A = !A         0           1
+    //                                                    or  T  *  F =  F         0           1
+    //      1            0           1            0           T  *  T =  T         1           0
+    //      1            0           1            1           T  *  - =  -         1           1
+    //      1            1           0            0           -  *  A =  A         0           0
+    //      1            1           0            1           -  * !A = !A         0           1
+    //                                                    or  -  *  F =  F         0           1
+    //      1            1           1            0           -  *  T =  -         1           1
+    //      1            1           1            1           -  *  - =  -         1           1
+    //
+    m_negation = (~m_variables & m_negation) | (~product.m_variables & product.m_negation) | (product.m_variables & m_negation) | (m_variables & product.m_negation);
+    m_variables &= product.m_variables;
     return *this;
   }
 
   Product operator*(Product const& rhs) const { Product result(*this); result *= rhs; return result; }
-  Product operator~() const { Product result(*this); result.invert(); return result; }
+  //Product operator~() const { Product result(*this); result.negate(); return result; }
 
-  bool is_literal() const { return m_variables & zero_mask; }
-  bool is_zero() const { return m_variables & ~m_inverted & zero_mask; }
-  bool is_one() const { return m_variables & m_inverted & zero_mask; }
+  // Zero = { empty_mask, full_mask }
+  // One = { full_mask, empty_mask }
+  bool is_literal() const { return (m_variables ^ m_negation) == full_mask; }
+  bool is_zero() const { return m_variables == empty_mask; }
+  bool is_one() const { return m_variables == full_mask; }
+  int number_of_variables() const
+  {
+    int count = 0;
+    mask_type value = ~m_variables;
+    while (value != 0) { ++count; value &= value - 1; }
+    return count;
+  }
   std::string to_string(bool html = false) const;
 
   friend std::ostream& operator<<(std::ostream& os, Product const& product) { return os << product.to_string(); }
   friend bool operator==(Product const& product1, Product const& product2)
-      { return product1.m_variables == product2.m_variables && product1.m_inverted == product2.m_inverted; }
+      { return product1.m_variables == product2.m_variables && product1.m_negation == product2.m_negation; }
   friend bool operator!=(Product const& product1, Product const& product2)
-      { return product1.m_variables != product2.m_variables || product1.m_inverted != product2.m_inverted; }
+      { return product1.m_variables != product2.m_variables || product1.m_negation != product2.m_negation; }
 };
 
 class Expression
@@ -172,13 +238,17 @@ class Expression
   // Used for ordering m_sum_of_products.
   static bool less(Product const& product1, Product const& product2)
   {
-    // Note: we need to sort on inverted too for the sake of simplify(),
+    // Note: we need to sort on negation too for the sake of simplify(),
     // even though after simplifying that compare becomes irrelevant.
     // Moreover this ordering needs to according to Gray code for the
     // benefit of simplify().
-    return product1.m_variables < product2.m_variables ||
-           (product1.m_variables == product2.m_variables &&
-            grayToBinary64(product1.m_inverted) < grayToBinary64(product2.m_inverted)); // mask_type must be unsigned for this to work.
+    int number_of_variables1 = product1.number_of_variables();
+    int number_of_variables2 = product2.number_of_variables();
+    return number_of_variables1 < number_of_variables2 ||
+           (number_of_variables1 == number_of_variables2 &&
+            (product1.m_variables < product2.m_variables ||
+             (product1.m_variables == product2.m_variables &&
+              grayToBinary64(product1.m_negation) < grayToBinary64(product2.m_negation)))); // mask_type must be unsigned for this to work.
   }
 
  public:
@@ -188,8 +258,8 @@ class Expression
   explicit Expression(Product const& product) : m_sum_of_products(1, product) { }
   Expression(bool literal) : m_sum_of_products(1, Product(literal)) { }
   Expression copy() const { Expression result; result.m_sum_of_products = m_sum_of_products; return result; }
-  static Expression zero() { Expression result(Product{false}); return result; }
-  static Expression one() { Expression result(Product{true}); return result; }
+  static Expression zero() { Expression result(Product{0}); return result; }
+  static Expression one() { Expression result(Product{1}); return result; }
 
   friend Expression operator+(Expression const& expression0, Expression const& expression1);
   Expression& operator+=(Expression const& expression) { *this = std::move(*this + expression); return *this; }
