@@ -1,4 +1,5 @@
 #include "sys.h"
+#include "debug.h"
 #include "BooleanExpression.h"
 #include "utils/is_power_of_two.h"
 #include "utils/MultiLoop.h"
@@ -24,20 +25,23 @@ std::string Product::to_string(bool html) const
   if (is_literal())
     return is_one() ? "1" : "0";
 
+  // Set to true to use quote instead of an overline.
+  bool constexpr use_quote = false;
+
   std::string result;
   for (Variable::id_type id = 0; id < Product::max_number_of_variables; ++id)
   {
     mask_type variable = to_mask(id);
     if (!(m_variables & variable))      // Is this variable used?
     {
-      bool inverted = m_negation & variable;
+      bool negated = m_negation & variable;
       for (char c : Context::instance()(id).name())
       {
-        if (!html && inverted)
+        if (negated && !(html || use_quote))
           result += "\u0305";
         result += c;
-        if (html && inverted)
-          result += "&#x305;";
+        if (negated && (html || use_quote))
+          result += use_quote ? "'" : "&#x305;";
       }
     }
   }
@@ -159,146 +163,144 @@ Expression operator+(Expression const& expression0, Expression const& expression
   return output;
 }
 
+bool Product::is_single_negation_different_from(Product const& product)
+{
+  mask_type negation_difference = m_negation ^ product.m_negation;
+  return m_variables == product.m_variables &&                          // The same variables are used in both products.
+         negation_difference &&                                         // There is at least one negation difference.
+         (((negation_difference - 1) & negation_difference) == 0);      // There is exactly one negation difference (also true when there are none).
+}
+
+bool Product::includes_all_of(Product const& product)
+{
+  mask_type negation_difference = m_negation ^ product.m_negation;
+  return (m_variables | product.m_variables) == product.m_variables &&  // Common variables are equal to variables in product, aka all
+                                                                        //   variables use in product also occur in this Product.
+         !(negation_difference & ~product.m_variables);                 // None of those variables have a different negation.
+}
+
+//static
+Product Product::common_factor(Product const& product1, Product const& product2)
+{
+  Product result;
+  mask_type negation_difference = product1.m_negation ^ product2.m_negation;
+  result.m_variables = product1.m_variables | product2.m_variables | negation_difference;       // Common variables without negation difference.
+  result.m_negation = product1.m_negation | result.m_variables;                                 // The negation of only those variables.
+  if (result.m_variables == full_mask)  // No common factors?
+    result.m_negation = empty_mask;     // Return 'one'.
+  return result;
+}
+
 void Expression::simplify()
 {
+  DoutEntering(dc::boolean_simplify, "Expression::simplify() [this = " << *this << "]");
   int size = m_sum_of_products.size();
-
   // An empty vector means the Expression is undefined!
   ASSERT(size > 0);
-
   if (size == 1)
+  {
+    Dout(dc::boolean_simplify, "No simplification possible.");
     return;
-
-  //--------------------------------------------------------------------------
-  // Remove duplicated entries.
-
-  int tail = 0, head = 1;
-  // D
-  // D                          <-- head
-  // C
-  // C           <-- head
-  // C           <-- tail       <-- tail
-  // B <-- head     ^              ^
-  // A <-- tail      \__ point A.   \__ point B.
-
-  // Find the first two entries that are equal.
-  do
-  {
-    if (m_sum_of_products[tail] == m_sum_of_products[head])
-      break;
-  }
-  while (++tail, ++head < size);
-  // Did we find two equal terms?
-  if (head < size)
-  {
-    // Point A, see above.
-    // Find the first head that is not equal to tail.
-    while (++head < size)
-      if (m_sum_of_products[tail] != m_sum_of_products[head])
-        break;
-    if (head < size)
-    {
-      // Point B, see above.
-      // Start writing from head to tail.
-      do
-      {
-        m_sum_of_products[++tail] = m_sum_of_products[head];
-        // Skip terms that we already have.
-        while (++head < size && m_sum_of_products[tail] == m_sum_of_products[head]);
-      }
-      while (head < size);
-    }
-    // Truncate the vector to its final size.
-    size = tail + 1;
-    m_sum_of_products.resize(size);
   }
 
-  //-----------------------------------------------------------------------------------------------------
-  // Simplify PX + PX' = P, where P is any product (not containing X) and X is a single boolean variable.
+  // Comparing the logical OR (+) between pair of boolean products can lead to the following simplifications,
+  //
+  // ABCD   + ABCD'    = ABC    Both terms must be removed and replaced with ABC.
+  // A      + A'       = True   Special case: the whole sum becomes true.
+  // ABCXYZ + ABC      = ABC    First term must be removed.
+  // ABC    + ABC      = ABC    (Same as above (first term can be removed))
+  //
+  // Here ABC and XYZ stand for 'any boolean product', while just A and D stand for a single indeterminate boolean Variable.
+  //
+  // Simplification for the following still fails:
+  //
+  //  A     +    A'
+  //
+  //   B' + B  + A'
+  //
+  //   B  + B'A + A'  <--
+  //   B' + B A + A'  <--
+  //
+  //   D' + DC + C'B + B'A + A' = 1
+  //
 
-  if (size > 1)
+  int const max_size = 256; // Not sure how large the vector can theoretically grow...
+  int first_removed = -1;
+  std::vector<bool> removed(max_size, false);
+  for (int i = 0; i < size - 1; ++i)
   {
-    // Find two adjacent terms comprised of the same variables.
-    //
-    // Product terms that have the same variables are ordered
-    // according to the Gray code encoding the NOT operator.
-    // For example,
-    //
-    // 0  0  0  0  1  1  1  1   <-- variable A
-    // 0  0  1  1  1  1  0  0   <-- variable B
-    // 0  1  1  0  0  1  1  0   <-- variable C
-    //
-    // shows that the following sum of three products would be ordered as
-    //
-    // A              A'    A'
-    // B  +           B' +  B
-    // C              C'    C
-    //
-    // This already has the property that although no
-    // two terms are adjacent that have only a single NOT
-    // operator change, two such terms exist (the first
-    // and the last).
-
-    sum_of_products_type::iterator term_n = m_sum_of_products.begin();
-    sum_of_products_type::iterator term_n_plus_one = term_n + 1;
-    while (term_n_plus_one != m_sum_of_products.end())
+    if (removed[i])
+      continue;
+    for (int j = i + 1; j < size; ++j)
     {
-      if (term_n->m_variables == term_n_plus_one->m_variables)
+      if (removed[j])
+        continue;
+      Dout(dc::boolean_simplify, "Comparing " << m_sum_of_products[i] << " with " << m_sum_of_products[j]);
+      //DebugMarkDownRight;
+      if (m_sum_of_products[i].is_single_negation_different_from(m_sum_of_products[j])) // Ie, i = A'BCD' and j = A'BC'D' (only negation of C is different).
       {
-        mask_type changed_NOT_operators = term_n->m_negation ^ term_n_plus_one->m_negation;
-        if (utils::is_power_of_two(changed_NOT_operators))     // Only a single NOT operator changed?
+        Dout(dc::boolean_simplify, DebugMarkDownRightStr " Removing both because only the negation of a single variable is different.");
+        // Replace both terms with one that has the common factor.
+        removed[i] = true;
+        removed[j] = true;
+        if (first_removed < 0) first_removed = i;
+        Product common_factor = Product::common_factor(m_sum_of_products[i], m_sum_of_products[j]);
+        if (common_factor.is_one())
         {
-          Product remaining;
-          remaining.m_variables = term_n->m_variables | changed_NOT_operators;
-          remaining.m_negation = term_n->m_negation | changed_NOT_operators;
-          if (remaining.m_variables == Product::full_mask)
+          // A + A' is true;
+          *this = true;
+          Dout(dc::boolean_simplify, "result: " << *this);
+          return;
+        }
+        Dout(dc::boolean_simplify, DebugMarkDownRightStr " ... and inserting " << common_factor);
+        sum_of_products_type::iterator iter = m_sum_of_products.begin() + (j + 1);
+        for (int k = j + 1; k <= size; ++k)
+        {
+          if (k < size && removed[k])
+            continue;
+          if (k == size || less(*iter, common_factor))
           {
-            // Set outselves to one.
-            m_sum_of_products.resize(1);
-            m_sum_of_products[0] = true;
-            return;
-          }
-          term_n = m_sum_of_products.erase(term_n, term_n_plus_one + 1);
-          if (term_n == m_sum_of_products.end())
-          {
-            m_sum_of_products.push_back(remaining);
+            // Insert common_factor before the first element that is less than common_factor.
+            m_sum_of_products.insert(iter, common_factor);
+            ++size;
+            ASSERT(size <= max_size);
             break;
           }
-          int skipped = 0;
-          // When for example inserting remaining == x̅y in the list
-          //            .-- end
-          //            v
-          //  x̅z xz x y
-          //  ^
-          //  |
-          // term_n
-          //
-          // then this will find first_smaller_term pointing to x:
-          sum_of_products_type::iterator first_smaller_term(term_n);
-          while (first_smaller_term != m_sum_of_products.end() &&
-                 less(remaining, *first_smaller_term))    // Is remaining still less than first_smaller_term?
-          {                                               // advance to an even simpler term.
-            ++first_smaller_term;
-            ++skipped;
-          }
-          // Then insert remaining before first_smaller_term (reassign term_n because the insert might invalidate it),
-          // provided they aren't the same of course!
-          if (first_smaller_term == m_sum_of_products.end() ||
-              *first_smaller_term != remaining)
-          {
-            term_n = m_sum_of_products.insert(first_smaller_term, remaining) - skipped;
-            term_n_plus_one = term_n + 1;
-          }
-          continue;
+          ++iter;
         }
+#ifdef CWDEBUG
+        Dout(dc::boolean_simplify|continued_cf, DebugMarkDownRightStr " ... with result ");
+        int i1 = 0;
+        for (auto&& term : m_sum_of_products)
+        {
+          if (!removed[i1])
+            Dout(dc::continued, (i1 > 0 ? " + " : "") << term);
+          ++i1;
+        }
+        Dout(dc::finish, "");
+#endif
+        break;
       }
-      ++term_n;
-      ++term_n_plus_one;
+      if (m_sum_of_products[i].includes_all_of(m_sum_of_products[j]))  // Ie, i = AB'C'XY'Z and j = AB'C' (same negation!).
+      {
+        Dout(dc::boolean_simplify, DebugMarkDownRightStr " Removing the first because it includes all of the second.");
+        // Term i is guaranteed to be the one with the most variables (i < j).
+        removed[i] = true;
+        if (first_removed < 0) first_removed = i;
+        break;
+      }
     }
   }
-
-    // ZD  + ZD'Y = Z (D + D'Y) = ZDY' + ZY -->
-    // ZD  + ZD'Y + Z'Y + ZY' + Z'Y' = ZDY' + (ZY + Z'Y + ZY' + Z'Y') = 1
+  // If any elements were removed, move rest into place.
+  if (first_removed >= 0)
+  {
+    int sz = first_removed;
+    for (int i = first_removed + 1; i < size; ++i)
+      if (!removed[i])
+        m_sum_of_products[sz++] = m_sum_of_products[i];
+    m_sum_of_products.resize(sz);
+  }
+  Dout(dc::boolean_simplify, "result: " << *this);
 }
 
 bool Product::is_sane() const
@@ -405,3 +407,9 @@ Variable::id_type Variable::s_next_id;
 static SingletonInstance<Context> dummy __attribute__ ((__unused__));
 
 } // namespace boolean
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct boolean_simplify("BOOLEAN");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

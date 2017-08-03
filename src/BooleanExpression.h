@@ -54,7 +54,7 @@ class Context : public Singleton<Context>
   friend_Instance;
  public:
   using VariableKey = Variable;
-  using variables_type = std::map<VariableKey, VariableData>;  
+  using variables_type = std::map<VariableKey, VariableData>;
 
  private:
   variables_type m_variables;
@@ -129,7 +129,7 @@ class Product
  private:
   // Encode a Variable id to a mask representing its bit.
   static mask_type to_mask(Variable::id_type id) { ASSERT(id < max_number_of_variables); return mask_type{1} << id; }
- 
+
  private:
   friend class Expression;
   mask_type m_variables;        // Set iff for variables in use have their bit unset.
@@ -206,6 +206,9 @@ class Product
     while (value != 0) { ++count; value &= value - 1; }
     return count;
   }
+  bool is_single_negation_different_from(Product const& product);
+  bool includes_all_of(Product const& product);
+  static Product common_factor(Product const& product1, Product const& product2);
   std::string to_string(bool html = false) const;
 
   friend std::ostream& operator<<(std::ostream& os, Product const& product) { return os << product.to_string(); }
@@ -281,3 +284,9 @@ class Expression
 };
 
 } // namespace boolean
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+extern channel_ct boolean_simplify;
+NAMESPACE_DEBUG_CHANNELS_END
+#endif
