@@ -94,7 +94,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     out << "node" << node.name() <<
         " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
         " [label=\"" << node.label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
-        " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.2) << "\"][width=\"" << (xscale * 0.45) << "\"];\n";
+        " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.25) << "\"][width=\"" << (xscale * 0.6) << "\"];\n";
   }
   for (node_iterator node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
