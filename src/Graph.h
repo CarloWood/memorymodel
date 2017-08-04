@@ -8,7 +8,7 @@
 class Graph
 {
  public:
-  using nodes_type = std::set<Node>;
+  using nodes_type = std::set<std::unique_ptr<Node>>;
   using node_iterator = nodes_type::iterator;
 
  private:
@@ -27,7 +27,7 @@ class Graph
   node_iterator new_node(Args&&... args)
   {
     DebugMarkUp;
-    auto node = m_nodes.emplace_hint(m_nodes.end(), m_next_node_id++, std::forward<Args>(args)...);
+    auto node = m_nodes.emplace_hint(m_nodes.end(), new Node(m_next_node_id++, std::forward<Args>(args)...));
     Dout(dc::notice, "Created node " << *node << '.');
     return node;
   }

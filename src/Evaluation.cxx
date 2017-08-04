@@ -545,6 +545,17 @@ Evaluation::node_iterator Evaluation::write(ast::tag tag, std::memory_order mo, 
   return context.write(tag, mo, std::move(*this));
 }
 
+Evaluation::node_iterator Evaluation::RMW(ast::tag tag, std::memory_order mo, Context& context)
+{
+  return context.RMW(tag, mo, std::move(*this));
+}
+
+Evaluation::node_iterator Evaluation::compare_exchange_weak(
+    ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context)
+{
+  return context.compare_exchange_weak(tag, expected, desired, success, fail, std::move(*this));
+}
+
 void Evaluation::add_value_computation(node_iterator const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
@@ -770,6 +781,8 @@ void Evaluation::for_each_node(
         {
           Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
+        if (node->is_write())   // RMW's are stored in m_value_computations and are writes!
+          node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       }
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)

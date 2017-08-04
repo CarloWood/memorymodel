@@ -407,7 +407,7 @@ struct atomic_fetch_sub_explicit
 struct atomic_compare_exchange_weak_explicit
 {
   tag m_memory_location_id;
-  int m_expected;
+  tag m_expected;
   int m_desired;
   std::memory_order m_succeed;
   std::memory_order m_fail;

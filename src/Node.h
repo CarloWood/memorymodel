@@ -57,6 +57,8 @@ enum Access
 {
   ReadAccess,
   WriteAccess,
+  RMWAccess,
+  CompareExchangeWeak,
   MutexDeclaration,
   MutexLock1,
   MutexLock2,
@@ -120,8 +122,8 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type);
 class EndPoint
 {
  public:
-  using nodes_type = std::set<Node>;            // The container type used in Graph to store Nodes.
-  using node_iterator = nodes_type::iterator;   // Used as pointers to other Nodes.
+  using nodes_type = std::set<std::unique_ptr<Node>>;   // The container type used in Graph to store Nodes.
+  using node_iterator = nodes_type::iterator;           // Used as pointers to other Nodes.
 
  private:
   Edge* m_edge;
@@ -191,7 +193,16 @@ class Edge
 EdgeType EndPoint::edge_type() const { return m_edge->edge_type(); }
 EndPoint::~EndPoint() { if (m_edge_owner) delete m_edge; }
 
-class Node
+class NodeBase
+{
+ protected:
+  NodeBase() = default;
+  NodeBase(Node const&) = delete;
+  NodeBase(Node&&) = delete;
+  virtual ~NodeBase() = default;
+};
+
+class Node : public NodeBase
 {
  public:
   using id_type = int;
@@ -269,20 +280,21 @@ class Node
     m_memory_order(memory_order),
     m_exists(true) { }
 
-  // Atomic Write.
+  // Atomic Write or Read-Modify-Write.
   Node(id_type next_node_id,
        ThreadPtr const& thread,
+       Access access,
        ast::tag const& variable,
        std::memory_order memory_order,
        Evaluation&& evaluation) :
     m_id(next_node_id),
     m_thread(thread),
     m_variable(variable),
-    m_access(WriteAccess),
+    m_access(access),
     m_atomic(true),
     m_memory_order(memory_order),
     m_evaluation(Evaluation::make_unique(std::move(evaluation))),
-    m_exists(true) { }
+    m_exists(true) { ASSERT(access == WriteAccess || access == RMWAccess || access == CompareExchangeWeak); }
 
   // Other Node.
   Node(id_type next_node_id,
@@ -309,7 +321,7 @@ class Node
   ast::tag tag() const { return m_variable; }
   std::string label(bool dot_file = false) const;
   ThreadPtr const thread() const { return m_thread; }
-  bool is_write() const { return m_access == WriteAccess; }
+  bool is_write() const { return m_access == WriteAccess || m_access == RMWAccess; }
   NodeProvidedType provided_type() const { return m_access == WriteAccess ? NodeProvidedType::side_effect : NodeProvidedType::value_computation; }
   bool is_second_mutex_access() const { return m_access == MutexLock2 || m_access == MutexUnlock2; }
   Evaluation* get_evaluation() { return m_evaluation.get(); }

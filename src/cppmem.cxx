@@ -311,29 +311,34 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
     case ast::PE_atomic_fetch_add_explicit:
     {
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
-      // FIXME TODO
-      //result = execute_expression(atomic_fetch_add_explicit.m_expression, context);
-      //context.read(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
-      //context.write(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, std::move(result));
       result = atomic_fetch_add_explicit.m_memory_location_id;
+      result.OP(additive_ado_add, execute_expression(atomic_fetch_add_explicit.m_expression, context));
+      Evaluation::node_iterator rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
+      context.add_edges(edge_sb, *rmw_node->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
     {
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
-      // FIXME TODO
-      //result = execute_expression(atomic_fetch_sub_explicit.m_expression, context);
-      //context.read(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
-      //context.write(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, std::move(result));
       result = atomic_fetch_sub_explicit.m_memory_location_id;
+      result.OP(additive_ado_sub, execute_expression(atomic_fetch_sub_explicit.m_expression, context));
+      Evaluation::node_iterator rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
+      context.add_edges(edge_sb, *rmw_node->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
     {
       auto const& atomic_compare_exchange_weak_explicit{boost::get<ast::atomic_compare_exchange_weak_explicit>(node)};
-      DoutTag(dc::notice, "TODO: [load/(store) of", atomic_compare_exchange_weak_explicit.m_memory_location_id);
-      // FIXME TODO
-      //result =
+      result = atomic_compare_exchange_weak_explicit.m_memory_location_id;
+      Evaluation::node_iterator cew_node =
+          result.compare_exchange_weak(
+              atomic_compare_exchange_weak_explicit.m_memory_location_id,
+              atomic_compare_exchange_weak_explicit.m_expected,
+              atomic_compare_exchange_weak_explicit.m_desired,
+              atomic_compare_exchange_weak_explicit.m_succeed,
+              atomic_compare_exchange_weak_explicit.m_fail,
+              context);
+      context.add_edges(edge_sb, *cew_node->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_load_call:

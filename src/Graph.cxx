@@ -18,6 +18,8 @@ char const* access_str(Access access)
   {
     AI_CASE_RETURN(ReadAccess);
     AI_CASE_RETURN(WriteAccess);
+    AI_CASE_RETURN(RMWAccess);
+    AI_CASE_RETURN(CompareExchangeWeak);
     AI_CASE_RETURN(MutexDeclaration);
     AI_CASE_RETURN(MutexLock1);
     AI_CASE_RETURN(MutexLock2);

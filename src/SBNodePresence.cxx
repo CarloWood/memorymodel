@@ -3,18 +3,6 @@
 #include "SBNodePresence.h"
 #include <ostream>
 
-#if 0
-  NodeProvidedType::value_computation
-  NodeProvidedType::side_effect
-
-  value_computation_heads_
-  heads_
-  tails_
-
-  static int const sequenced_before_value_computation_        = 0;       // We are sequenced before a value-computation Node.
-  static int const sequenced_before_side_effect_              = 1;       // We are sequenced before a side-effect Node.
-#endif
-
 bool SBNodePresence::update_sequenced_before_value_computation(bool node_provides, boolean::Expression&& sequenced_before_value_computation)
 {
   bool changed = !m_sequenced_before_value_computation.equivalent(sequenced_before_value_computation);

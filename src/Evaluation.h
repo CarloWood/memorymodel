@@ -51,7 +51,7 @@ class Evaluation
 #endif
 
  public:
-  using node_iterator = std::set<Node>::iterator;
+  using node_iterator = std::set<std::unique_ptr<Node>>::iterator;
   using node_pairs_type = std::vector<std::pair<node_iterator, node_iterator>>;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition, comma };  // See also is_valid.
@@ -76,8 +76,8 @@ class Evaluation
   std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == pre, post, unary, binary or condition.
   std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
   std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
-  std::vector<node_iterator> m_value_computations;
-  std::vector<node_iterator> m_side_effects;
+  std::vector<node_iterator> m_value_computations; // And RMW nodes, because we never look for nodes that are JUST side-effect.
+  std::vector<node_iterator> m_side_effects;    // Nodes that are not value_computations.
 
  public:
   Evaluation() : m_state(uninitialized), m_allocated(false) { }
@@ -136,6 +136,8 @@ class Evaluation
   void add_value_computation(node_iterator const& node);
   void write(ast::tag tag, Context& context, bool side_effect_sb_value_computation = false);
   node_iterator write(ast::tag tag, std::memory_order mo, Context& context);
+  node_iterator RMW(ast::tag tag, std::memory_order mo, Context& context);
+  node_iterator compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context);
   void add_side_effect(node_iterator const& node);
   void destruct(Context& context);
   void swap_sum();

@@ -103,13 +103,43 @@ void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluati
 Evaluation::node_iterator Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  auto write_node = m_graph.new_node(m_current_thread, variable, mo, std::move(evaluation));
+  auto write_node = m_graph.new_node(m_current_thread, WriteAccess, variable, mo, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
   evaluation = variable;
   evaluation.add_side_effect(write_node);
   return write_node;
+}
+
+Evaluation::node_iterator Context::RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
+{
+  DoutTag(dc::notice, "[" << mo << " RMW of", variable);
+  auto rmw_node = m_graph.new_node(m_current_thread, RMWAccess, variable, mo, std::move(evaluation));
+#ifdef TRACK_EVALUATION
+  evaluation.refresh(); // Allow re-use of moved object.
+#endif
+  evaluation = variable;
+  evaluation.add_value_computation(rmw_node);   // RMW nodes are added as value computation.
+  return rmw_node;
+}
+
+Evaluation::node_iterator Context::compare_exchange_weak(
+    ast::tag variable, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Evaluation&& evaluation)
+{
+  DoutTag(dc::notice, "[" << success << '/' << fail << " compare_exchange_weak of", variable);
+  // FIXME -- implement this function
+#if 1
+  Evaluation::node_iterator cew_node;
+#else
+  auto cew_node = m_graph.new_node(m_current_thread, CompareExchangeWeak, variable, expected, desired, success, fail, std::move(evaluation));
+#ifdef TRACK_EVALUATION
+  evaluation.refresh(); // Allow re-use of moved object.
+#endif
+  evaluation = variable;
+  evaluation.add_value_computation(cew_node);   // RMW/CEW nodes are added as value computation.
+#endif
+  return cew_node;
 }
 
 Evaluation Context::lockdecl(ast::tag mutex)

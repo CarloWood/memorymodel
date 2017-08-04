@@ -157,7 +157,7 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
 
   atomic_compare_exchange_weak_explicit =
       -lit("std::") >> "atomic_compare_exchange_weak_explicit" > '(' >
-          '&' > atomic_memory_locations > ',' > int_ > ',' > int_ > ',' > memory_order > ',' > memory_order > ')';
+          '&' > atomic_memory_locations > ',' > '&' > na_memory_locations > ',' > int_ > ',' > memory_order > ',' > memory_order > ')';
 
   register_location =
       lexeme[ 'r' >> uint_ >> !(alnum | char_('_')) ];

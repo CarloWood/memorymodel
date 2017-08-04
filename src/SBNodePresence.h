@@ -55,8 +55,8 @@ class SBNodePresence
  private:
   boolean::Expression m_sequenced_before_value_computation;  // We are sequenced before a value-computation Node.
   boolean::Expression m_sequenced_before_side_effect;        // We are sequenced before a side-effect Node.
-  bool m_sequenced_after_something;                                     // Hence, not a tail.
-  bool m_sequenced_before_pseudo_value_computation;                     // We pretend to be sequenced before a value-computation Node.
+  bool m_sequenced_after_something;                          // Hence, not a tail.
+  bool m_sequenced_before_pseudo_value_computation;          // We pretend to be sequenced before a value-computation Node.
 
  public:
   SBNodePresence() :

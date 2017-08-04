@@ -60,6 +60,8 @@ struct Context
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
   Evaluation::node_iterator write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+  Evaluation::node_iterator RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+  Evaluation::node_iterator compare_exchange_weak(ast::tag variable, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Evaluation&& evaluation);
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }

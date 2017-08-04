@@ -20,6 +20,10 @@ std::string Node::type() const
     case MutexDeclaration:
       type = "W";
       break;
+    case RMWAccess:
+    case CompareExchangeWeak:
+      type = "RMW";
+      break;
     case MutexLock2:
       return "LK";
     case MutexUnlock2:
