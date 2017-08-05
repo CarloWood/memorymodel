@@ -26,6 +26,8 @@ libcppmem_a_SOURCES = \
 		 Locks.cxx \
 		 Graph.cxx \
 		 Graph.h \
+		 NodePtr.cxx \
+		 NodePtr.h \
 		 Node.cxx \
 		 Node.h \
 		 Branch.cxx \

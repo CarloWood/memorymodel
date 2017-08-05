@@ -12,32 +12,10 @@ std::ostream& operator<<(std::ostream& os, Thread const& thread)
   return os;
 }
 
-char const* access_str(Access access)
-{
-  switch (access)
-  {
-    AI_CASE_RETURN(ReadAccess);
-    AI_CASE_RETURN(WriteAccess);
-    AI_CASE_RETURN(RMWAccess);
-    AI_CASE_RETURN(CompareExchangeWeak);
-    AI_CASE_RETURN(MutexDeclaration);
-    AI_CASE_RETURN(MutexLock1);
-    AI_CASE_RETURN(MutexLock2);
-    AI_CASE_RETURN(MutexUnlock1);
-    AI_CASE_RETURN(MutexUnlock2);
-  }
-  throw std::runtime_error("Unknown Access type");
-}
-
-std::ostream& operator<<(std::ostream& os, Access access)
-{
-  return os << access_str(access);
-}
-
-void Graph::new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node, Branches const& branches)
+void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches)
 {
   DebugMarkUp;
-  bool success = Node::add_edge(edge_type, tail_node, head_node, branches);
+  bool success = NodeBase::add_edge(edge_type, tail_node, head_node, branches);
   if (success)  // Successfully added a new edge.
   {
     Dout(dc::notice, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\".");
@@ -63,10 +41,10 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   int max_count = 0;
   int main_thread_nodes = 0;
   std::vector<int> number_of_nodes(context.number_of_threads(), 0);
-  for (auto&& node : m_nodes)
+  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
-    int n = ++number_of_nodes[node.thread()->id()];
-    if (node.thread()->is_main_thread())
+    int n = ++number_of_nodes[node->thread()->id()];
+    if (node->thread()->is_main_thread())
       ++main_thread_nodes;
     else if (n > max_count)
       max_count = n;
@@ -86,19 +64,19 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   out << " ranksep = 0.2;\n";
   out << " nodesep = 0.25;\n";
   out << " fontsize=" << fontsize << " fontname=\"Helvetica\" label=\"\";\n";
-  for (auto&& node : m_nodes)
+  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
-    Dout(dc::notice, '"' << node << '"');
+    Dout(dc::notice, '"' << *node << '"');
     double posx, posy;
-    int thread = node.thread()->id();
+    int thread = node->thread()->id();
     posx = 1.0 + xscale * thread;
     posy = 1.0 + yscale * (max_count + --depth[thread]);
-    out << "node" << node.name() <<
+    out << "node" << node->name() <<
         " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
-        " [label=\"" << node.label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
+        " [label=\"" << node->label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
         " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.25) << "\"][width=\"" << (xscale * 0.6) << "\"];\n";
   }
-  for (node_iterator node = m_nodes.begin(); node != m_nodes.end(); ++node)
+  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
   {
     //Dout(dc::notice, "LOOP: " << *node);
     for (auto&& end_point : node->get_end_points())
@@ -119,8 +97,8 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
           break;
       }
       Edge* edge = end_point.edge();
-      node_iterator tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
-      node_iterator head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
+      NodePtr tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
+      NodePtr head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
       out << "node" << tail_node->name() << " -> "
              "node" << head_node->name() <<
              " [label=<<font color=\"" << color << "\">sb";
@@ -134,31 +112,34 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     }
   }
 
-  out <<
-      "  { rank = sink;\n"
-      "     Legend [shape=none, margin=0, pos=\"1.0," << (1.0 - 1.5 * yscale) << "!\", label=<\n"
-      "     <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n"
-      "      <TR>\n"
-      "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Legend</B></FONT></TD>\n"
-      "      </TR>\n";
-
   conditions_type const& conditions{context.conditions()};
-  for (auto&& condition : conditions)
+  if (!conditions.empty())
   {
     out <<
-      "      <TR>\n"
-      "      <TD>" << condition.second.id_name() << "</TD>\n"
-      "      <TD><FONT COLOR=\"black\">";
-    condition.first->print_on(out, true);
-    out <<
-      "</FONT></TD>\n"
-      "      </TR>\n";
-  }
+        "  { rank = sink;\n"
+        "     Legend [shape=none, margin=0, pos=\"1.0," << (1.0 - 1.5 * yscale) << "!\", label=<\n"
+        "     <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n"
+        "      <TR>\n"
+        "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Legend</B></FONT></TD>\n"
+        "      </TR>\n";
 
-  out <<
-      "     </TABLE>\n"
-      "    >];\n"
-      "  }\n";
+    for (auto&& condition : conditions)
+    {
+      out <<
+        "      <TR>\n"
+        "      <TD>" << condition.second.id_name() << "</TD>\n"
+        "      <TD><FONT COLOR=\"black\">";
+      condition.first->print_on(out, true);
+      out <<
+        "</FONT></TD>\n"
+        "      </TR>\n";
+    }
+
+    out <<
+        "     </TABLE>\n"
+        "    >];\n"
+        "  }\n";
+  }
 
   out << "}\n";
 }

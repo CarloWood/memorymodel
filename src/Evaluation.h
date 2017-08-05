@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "debug.h"
+#include "NodePtr.h"
 #include <iosfwd>
 #include <vector>
 #include <set>
@@ -11,7 +12,6 @@
 #endif
 
 struct Context;
-class Node;
 class NodeRequestedType;
 
 enum binary_operators {
@@ -51,8 +51,7 @@ class Evaluation
 #endif
 
  public:
-  using node_iterator = std::set<std::unique_ptr<Node>>::iterator;
-  using node_pairs_type = std::vector<std::pair<node_iterator, node_iterator>>;
+  using node_pairs_type = std::vector<std::pair<NodePtr, NodePtr>>;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition, comma };  // See also is_valid.
 
@@ -76,8 +75,8 @@ class Evaluation
   std::unique_ptr<Evaluation> m_lhs;            // Only valid when m_state == pre, post, unary, binary or condition.
   std::unique_ptr<Evaluation> m_rhs;            // Only valid when m_state == binary or condition.
   std::unique_ptr<Evaluation> m_condition;      // Only valid when m_state == condition  (m_condition ? m_lhs : m_rhs).
-  std::vector<node_iterator> m_value_computations; // And RMW nodes, because we never look for nodes that are JUST side-effect.
-  std::vector<node_iterator> m_side_effects;    // Nodes that are not value_computations.
+  std::vector<NodePtr> m_value_computations;    // And RMW nodes, because we never look for nodes that are JUST side-effect.
+  std::vector<NodePtr> m_side_effects;          // Nodes that are not value_computations.
 
  public:
   Evaluation() : m_state(uninitialized), m_allocated(false) { }
@@ -133,12 +132,12 @@ class Evaluation
   void comma_operator(Evaluation&& rhs);
   void read(ast::tag tag, Context& context);
   void read(ast::tag tag, std::memory_order mo, Context& context);
-  void add_value_computation(node_iterator const& node);
+  void add_value_computation(NodePtr const& node);
   void write(ast::tag tag, Context& context, bool side_effect_sb_value_computation = false);
-  node_iterator write(ast::tag tag, std::memory_order mo, Context& context);
-  node_iterator RMW(ast::tag tag, std::memory_order mo, Context& context);
-  node_iterator compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context);
-  void add_side_effect(node_iterator const& node);
+  NodePtr write(ast::tag tag, std::memory_order mo, Context& context);
+  NodePtr RMW(ast::tag tag, std::memory_order mo, Context& context);
+  NodePtr compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context);
+  void add_side_effect(NodePtr const& node);
   void destruct(Context& context);
   void swap_sum();
   void strip_rhs();
@@ -147,7 +146,12 @@ class Evaluation
   friend char const* state_str(State state);
 
   void print_on(std::ostream& os, bool use_html_color = false) const;
-  void for_each_node(NodeRequestedType const& requested_type, std::function<void(node_iterator const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+
+  // Accessors used to print RMW node labels. See RMWNode::print_code.
+  State state() const { return m_state; }
+  binary_operators binary_operator() const { ASSERT(m_state == binary); return m_operator.binary; }
+  Evaluation const* rhs() const { ASSERT(m_state == binary); return m_rhs.get(); }
 };
 
 #ifdef CWDEBUG

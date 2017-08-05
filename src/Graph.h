@@ -8,12 +8,11 @@
 class Graph
 {
  public:
-  using nodes_type = std::set<std::unique_ptr<Node>>;
-  using node_iterator = nodes_type::iterator;
+  using nodes_type = NodePtr::container_type;
 
  private:
   nodes_type m_nodes;                                   // All nodes, ordered by Node::m_id.
-  Node::id_type m_next_node_id;                         // The id to use for the next node.
+  NodeBase::id_type m_next_node_id;                     // The id to use for the next node.
 
  public:
   Graph() :
@@ -23,23 +22,23 @@ class Graph
 
  public:
   // Add a new node.
-  template<typename ...Args>
-  node_iterator new_node(Args&&... args)
+  template<typename NODE, typename ...Args>
+  NodePtr new_node(Args&&... args)
   {
     DebugMarkUp;
-    auto node = m_nodes.emplace_hint(m_nodes.end(), new Node(m_next_node_id++, std::forward<Args>(args)...));
+    NodePtr node = m_nodes.emplace_hint(m_nodes.end(), new NODE(m_next_node_id++, std::forward<Args>(args)...));
     Dout(dc::notice, "Created node " << *node << '.');
     return node;
   }
 
-  void remove_node(node_iterator const& node)
+  void remove_node(NodePtr const& node)
   {
     Dout(dc::notice, "Removing Node " << *node);
-    m_nodes.erase(node);
+    m_nodes.erase(node.get_iterator());
   }
 
   // Add a new edge.
-  void new_edge(EdgeType edge_type, node_iterator const& tail_node, node_iterator const& head_node, Branches const& branches = Branches());
+  void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches = Branches());
 };
 
 #ifdef CWDEBUG

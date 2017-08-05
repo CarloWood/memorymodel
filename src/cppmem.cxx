@@ -313,8 +313,8 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
       result = atomic_fetch_add_explicit.m_memory_location_id;
       result.OP(additive_ado_add, execute_expression(atomic_fetch_add_explicit.m_expression, context));
-      Evaluation::node_iterator rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
-      context.add_edges(edge_sb, *rmw_node->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      NodePtr rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
+      context.add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
@@ -322,15 +322,15 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
       result = atomic_fetch_sub_explicit.m_memory_location_id;
       result.OP(additive_ado_sub, execute_expression(atomic_fetch_sub_explicit.m_expression, context));
-      Evaluation::node_iterator rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
-      context.add_edges(edge_sb, *rmw_node->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      NodePtr rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
+      context.add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
     {
       auto const& atomic_compare_exchange_weak_explicit{boost::get<ast::atomic_compare_exchange_weak_explicit>(node)};
       result = atomic_compare_exchange_weak_explicit.m_memory_location_id;
-      Evaluation::node_iterator cew_node =
+      NodePtr cew_node =
           result.compare_exchange_weak(
               atomic_compare_exchange_weak_explicit.m_memory_location_id,
               atomic_compare_exchange_weak_explicit.m_expected,
@@ -338,7 +338,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
               atomic_compare_exchange_weak_explicit.m_succeed,
               atomic_compare_exchange_weak_explicit.m_fail,
               context);
-      context.add_edges(edge_sb, *cew_node->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      context.add_edges(edge_sb, *cew_node.get<CEWNode>()->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_load_call:
@@ -442,10 +442,10 @@ void execute_statement(ast::statement const& statement, Context& context)
       value = execute_expression(store_call.m_val, context);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      Evaluation::node_iterator write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
+      NodePtr write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
       // Side-effects and value-computations of function arguments are sequenced before the side-effects and value-computations of the function body.
       // The evaluation of the write_node is the function argument passed here (the previous value of 'value' as returned by execute_expression()).
-      context.add_edges(edge_sb, *write_node->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      context.add_edges(edge_sb, *write_node.get<WriteNode>()->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::SN_function_call:

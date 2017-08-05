@@ -8,6 +8,7 @@ class NodeProvidedType
  public:
   enum Type {
     value_computation,
+    value_computation_and_side_effect = value_computation,
     side_effect
   };
 

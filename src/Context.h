@@ -7,6 +7,7 @@
 #include "Graph.h"
 #include "Branch.h"
 #include "Condition.h"
+#include "NodePtr.h"
 #include <string>
 
 using iterator_type = std::string::const_iterator;
@@ -59,9 +60,9 @@ struct Context
 
   // Atomic read and writes.
   void read(ast::tag variable, std::memory_order mo, Evaluation& evaluation);
-  Evaluation::node_iterator write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
-  Evaluation::node_iterator RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
-  Evaluation::node_iterator compare_exchange_weak(ast::tag variable, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Evaluation&& evaluation);
+  NodePtr write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+  NodePtr RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation);
+  NodePtr compare_exchange_weak(ast::tag variable, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Evaluation&& evaluation);
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }
@@ -80,7 +81,7 @@ struct Context
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
-      Evaluation::node_iterator const& after_node
+      NodePtr const& after_node
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
   // Generate node pairs for edge_type edges between heads of before_evaluation and tails of after_evaluation.
   // Pass the result to the add_edges below.

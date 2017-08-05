@@ -47,7 +47,7 @@ Evaluation Context::uninitialized(ast::tag decl)
 void Context::read(ast::tag variable, Evaluation& evaluation)
 {
   DoutTag(dc::notice, "[NA read from", variable);
-  auto new_node = m_graph.new_node(m_current_thread, variable);
+  auto new_node = m_graph.new_node<NAReadNode>(m_current_thread, variable);
   // Should be added as side effect when variable is volatile.
   evaluation.add_value_computation(new_node);
 }
@@ -55,12 +55,12 @@ void Context::read(ast::tag variable, Evaluation& evaluation)
 void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect_sb_value_computation)
 {
   DoutTag(dc::notice, "[NA write to", variable);
-  auto write_node = m_graph.new_node(m_current_thread, variable, std::move(evaluation));
+  auto write_node_ptr = m_graph.new_node<NAWriteNode>(m_current_thread, variable, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
   evaluation = variable;
-  evaluation.add_side_effect(write_node);
+  evaluation.add_side_effect(write_node_ptr);
 
   // Sequence all value-computations of the right-hand-side of an assignment before the side-effect of that assignment.
   //
@@ -74,12 +74,13 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
   //     v
   //  pseudo_node       this represents the value computation of the pre-increment/decrement expression.
   //
-  Dout(dc::notice, "Generating sb edges between the rhs of an assignment (" << *write_node->get_evaluation() << ") and the lhs variable " << *write_node << '.');
+  Evaluation const* write_evaluation = write_node_ptr.get<WriteNode>()->get_evaluation();
+  Dout(dc::notice, "Generating sb edges between the rhs of an assignment (" << *write_evaluation << ") and the lhs variable " << *write_node_ptr << '.');
   DebugMarkDownRight;
-  write_node->get_evaluation()->for_each_node(NodeRequestedType::value_computation_heads,
-      [this, &write_node, &side_effect_sb_value_computation](Evaluation::node_iterator const& before_node)
+  write_evaluation->for_each_node(NodeRequestedType::value_computation_heads,
+      [this, &write_node_ptr, &side_effect_sb_value_computation](NodePtr const& before_node)
       {
-        m_graph.new_edge(edge_sb, before_node, write_node);
+        m_graph.new_edge(edge_sb, before_node, write_node_ptr);
         if (side_effect_sb_value_computation)
           before_node->sequenced_before_side_effect_sequenced_before_value_computation(); // Corrupt before_node to fake a (non-existing) pseudo node
                                                                                           // representing the value-computation of the pre-increment/
@@ -87,23 +88,23 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
                                                                                           // sequenced before.
       }
   COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-  // Fake a (non-existing) pseudo node representing the value-computation after the write_node.
+  // Fake a (non-existing) pseudo node representing the value-computation after the write node.
   if (side_effect_sb_value_computation)
-    write_node->sequenced_before_value_computation();
+    write_node_ptr->sequenced_before_value_computation();
 }
 
 void Context::read(ast::tag variable, std::memory_order mo, Evaluation& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " read from", variable);
-  auto new_node = m_graph.new_node(m_current_thread, variable, mo);
+  auto new_node = m_graph.new_node<AtomicReadNode>(m_current_thread, variable, mo);
   // Should be added as side effect when variable is volatile.
   evaluation.add_value_computation(new_node);
 }
 
-Evaluation::node_iterator Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
+NodePtr Context::write(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " write to", variable);
-  auto write_node = m_graph.new_node(m_current_thread, WriteAccess, variable, mo, std::move(evaluation));
+  auto write_node = m_graph.new_node<AtomicWriteNode>(m_current_thread, variable, mo, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
@@ -112,10 +113,10 @@ Evaluation::node_iterator Context::write(ast::tag variable, std::memory_order mo
   return write_node;
 }
 
-Evaluation::node_iterator Context::RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
+NodePtr Context::RMW(ast::tag variable, std::memory_order mo, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << mo << " RMW of", variable);
-  auto rmw_node = m_graph.new_node(m_current_thread, RMWAccess, variable, mo, std::move(evaluation));
+  auto rmw_node = m_graph.new_node<RMWNode>(m_current_thread, variable, mo, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
@@ -124,28 +125,23 @@ Evaluation::node_iterator Context::RMW(ast::tag variable, std::memory_order mo, 
   return rmw_node;
 }
 
-Evaluation::node_iterator Context::compare_exchange_weak(
+NodePtr Context::compare_exchange_weak(
     ast::tag variable, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Evaluation&& evaluation)
 {
   DoutTag(dc::notice, "[" << success << '/' << fail << " compare_exchange_weak of", variable);
-  // FIXME -- implement this function
-#if 1
-  Evaluation::node_iterator cew_node;
-#else
-  auto cew_node = m_graph.new_node(m_current_thread, CompareExchangeWeak, variable, expected, desired, success, fail, std::move(evaluation));
+  auto cew_node = m_graph.new_node<CEWNode>(m_current_thread, variable, expected, desired, success, fail, std::move(evaluation));
 #ifdef TRACK_EVALUATION
   evaluation.refresh(); // Allow re-use of moved object.
 #endif
   evaluation = variable;
-  evaluation.add_value_computation(cew_node);   // RMW/CEW nodes are added as value computation.
-#endif
+  evaluation.add_value_computation(cew_node);   // CEW nodes are added as value computation.
   return cew_node;
 }
 
 Evaluation Context::lockdecl(ast::tag mutex)
 {
   DoutTag(dc::notice, "[declaration of", mutex);
-  auto mutex_decl_node = m_graph.new_node(m_current_thread, mutex, mutex_decl);
+  auto mutex_decl_node = m_graph.new_node<MutexDeclNode>(m_current_thread, mutex);
   Evaluation result = mutex;
   result.add_side_effect(mutex_decl_node);
   return result;
@@ -154,10 +150,10 @@ Evaluation Context::lockdecl(ast::tag mutex)
 Evaluation Context::lock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[lock of", mutex);
-  auto mutex_node1 = m_graph.new_node(m_current_thread, mutex, mutex_lock1);
+  auto mutex_node1 = m_graph.new_node<MutexReadNode>(m_current_thread, mutex);
   Evaluation result = mutex;
   result.add_value_computation(mutex_node1);
-  auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_lock2);
+  auto mutex_node2 = m_graph.new_node<MutexLockNode>(m_current_thread, mutex);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
   m_graph.new_edge(edge_sb, mutex_node1, mutex_node2);
@@ -167,10 +163,10 @@ Evaluation Context::lock(ast::tag mutex)
 Evaluation Context::unlock(ast::tag mutex)
 {
   DoutTag(dc::notice, "[unlock of", mutex);
-  auto mutex_node1 = m_graph.new_node(m_current_thread, mutex, mutex_unlock1);
+  auto mutex_node1 = m_graph.new_node<MutexReadNode>(m_current_thread, mutex);
   Evaluation result = mutex;
   result.add_value_computation(mutex_node1);
-  auto mutex_node2 = m_graph.new_node(m_current_thread, mutex, mutex_unlock2);
+  auto mutex_node2 = m_graph.new_node<MutexUnlockNode>(m_current_thread, mutex);
   // Adding this as a side effect for now...
   result.add_side_effect(mutex_node2);
   m_graph.new_edge(edge_sb, mutex_node1, mutex_node2);
@@ -190,11 +186,11 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
 
   // Find all tail nodes in after_evaluation.
   after_evaluation.for_each_node(NodeRequestedType::tails,
-      [&before_evaluation, &node_pairs COMMA_DEBUG_ONLY(&debug_channel)](Evaluation::node_iterator const& after_node)
+      [&before_evaluation, &node_pairs COMMA_DEBUG_ONLY(&debug_channel)](NodePtr const& after_node)
       {
         // Find all node pairs that need a new edge.
         before_evaluation.for_each_node(NodeRequestedType::heads,
-            [&after_node, &node_pairs](Evaluation::node_iterator const& before_node)
+            [&after_node, &node_pairs](NodePtr const& before_node)
             {
               node_pairs.push_back(std::make_pair(before_node, after_node));
             }
@@ -208,11 +204,11 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
 void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
-    Evaluation::node_iterator const& after_node
+    NodePtr const& after_node
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
   before_evaluation.for_each_node(NodeRequestedType::heads,
-      [this, edge_type, &after_node](Evaluation::node_iterator const& before_node)
+      [this, edge_type, &after_node](NodePtr const& before_node)
       {
         m_graph.new_edge(edge_type, before_node, after_node);
       }
@@ -285,14 +281,14 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //   after_node
     //
     full_expression.for_each_node(NodeRequestedType::tails,
-        [this, &number_of_nodes, &node_pairs](Evaluation::node_iterator const& after_node)
+        [this, &number_of_nodes, &node_pairs](NodePtr const& after_node)
         {
           ++number_of_nodes;
           // Generate all sequenced-before edges between full-expressions.
           if (m_last_full_expression.is_valid())
           {
             m_last_full_expression.for_each_node(NodeRequestedType::heads,
-                [this, &after_node, &node_pairs](Evaluation::node_iterator const& before_node)
+                [this, &after_node, &node_pairs](NodePtr const& before_node)
                 {
                   node_pairs.push_back(std::make_pair(before_node, after_node));
                 }

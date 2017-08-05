@@ -6,69 +6,137 @@
 #include "BooleanExpression.h"
 #include <sstream>
 
-std::string Node::type() const
+char const* memory_order_str(std::memory_order memory_order)
 {
-  std::string type;
-  switch (m_access)
+  switch (memory_order)
   {
-    case ReadAccess:
-    case MutexLock1:
-    case MutexUnlock1:
-      type = "R";
-      break;
-    case WriteAccess:
-    case MutexDeclaration:
-      type = "W";
-      break;
-    case RMWAccess:
-    case CompareExchangeWeak:
-      type = "RMW";
-      break;
-    case MutexLock2:
-      return "LK";
-    case MutexUnlock2:
-      return "UL";
+    case std::memory_order_relaxed:
+      return "rlx";
+    case std::memory_order_consume:
+      return "con";
+    case std::memory_order_acquire:
+      return "acq";
+    case std::memory_order_release:
+      return "rel";
+    case std::memory_order_acq_rel:   // acquire/release
+      return "ar";
+    case std::memory_order_seq_cst:   // sequentially consistent
+      return "sc";
   }
-  if (!m_atomic)
-    type += "na";
-  else
-    switch (m_memory_order)
-    {
-      case std::memory_order_relaxed:   // relaxed
-        type += "rlx";
-        break;
-      case std::memory_order_consume:   // consume
-        type += "con";
-        break;
-      case std::memory_order_acquire:   // acquire
-        type += "acq";
-        break;
-      case std::memory_order_release:   // release
-        type += "rel";
-        break;
-      case std::memory_order_acq_rel:   // acquire/release
-        // This should not happen because this is always either a Read or Write
-        // operation and therefore either acquire or release respectively.
-        DoutFatal(dc::core, "memory_order_acq_rel for Node type?!");
-        break;
-      case std::memory_order_seq_cst:   // sequentially consistent
-        type += "sc";
-        break;
-    }
-
-  return type;
+  return "<UNKNOWN memory order>";
 }
 
-std::string Node::label(bool dot_file) const
+std::string NAReadNode::type() const
+{
+  return "Rna";
+}
+
+std::string AtomicReadNode::type() const
+{
+  std::string result = "R";
+  result += memory_order_str(m_read_memory_order);
+  return result;
+}
+
+std::string NAWriteNode::type() const
+{
+  return "Wna";
+}
+
+std::string AtomicWriteNode::type() const
+{
+  std::string result = "W";
+  result += memory_order_str(m_write_memory_order);
+  return result;
+}
+
+std::string MutexDeclNode::type() const
+{
+  return "Wna";
+}
+
+std::string MutexLockNode::type() const
+{
+  return "LK";
+}
+
+std::string MutexUnlockNode::type() const
+{
+  return "UL";
+}
+
+std::string RMWNode::type() const
+{
+  std::string result = "RMW";
+  result += memory_order_str(m_memory_order);
+  return result;
+}
+
+std::string CEWNode::type() const
+{
+  std::string result = "CEW";
+  result += memory_order_str(m_write_memory_order);     // memory order of the RMW operation on success (m_variable == expected).
+  result += ',';
+  result += memory_order_str(m_fail_memory_order);
+  return result;
+}
+
+std::string NodeBase::label(bool dot_file) const
 {
   std::ostringstream ss;
-  ss << name() << ':' << type() << ' ' << tag() << '=';
-  if (!dot_file)
-  {
-    if (is_write())
-      m_evaluation->print_on(ss);
-  }
+  ss << name() << ':' << type() << ' ' << tag();
+  print_code(ss, dot_file);
   return ss.str();
+}
+
+void NAReadNode::print_code(std::ostream& os, bool UNUSED_ARG(dot_file)) const
+{
+  //FIXME print what we read...
+  //os << '<-';
+}
+
+void AtomicReadNode::print_code(std::ostream& os, bool UNUSED_ARG(dot_file)) const
+{
+  //FIXME print what we read...
+  //os << '<-';
+}
+
+void WriteNode::print_code(std::ostream& os, bool dot_file) const
+{
+  os << '=';
+  if (!dot_file)
+    m_evaluation->print_on(os);
+}
+
+void MutexDeclNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+{
+}
+
+void MutexReadNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+{
+}
+
+void MutexLockNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+{
+}
+
+void MutexUnlockNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+{
+}
+
+void RMWNode::print_code(std::ostream& os, bool dot_file) const
+{
+  ASSERT(m_evaluation->binary_operator() == additive_ado_add || m_evaluation->binary_operator() == additive_ado_sub);
+  os << ((m_evaluation->binary_operator() == additive_ado_add) ? "+=": "-=");
+  if (!dot_file)
+    m_evaluation->rhs()->print_on(os);
+}
+
+void CEWNode::print_code(std::ostream& os, bool dot_file) const
+{
+  os << "=" << m_expected << '?';
+  if (!dot_file)
+    os << m_desired;
 }
 
 char const* edge_str(EdgeType edge_type)
@@ -144,9 +212,9 @@ bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
          *end_point1.m_other_node == *end_point2.m_other_node;
 }
 
-bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator const& other_node, bool edge_owner) const
+bool NodeBase::add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const
 {
-  DoutEntering(dc::sb_edge, "Node::add_end_point(" << *edge << ", " << type << ", " << *other_node << ", " << edge_owner << ") [this = " << *this << "]");
+  DoutEntering(dc::sb_edge, "NodeBase::add_end_point(" << *edge << ", " << type << ", " << *other_node << ", " << edge_owner << ") [this = " << *this << "]");
   m_end_points.emplace_back(edge, type, other_node, edge_owner);
   end_points_type::iterator begin = m_end_points.begin();
   end_points_type::iterator last = m_end_points.end();
@@ -163,9 +231,9 @@ bool Node::add_end_point(Edge* edge, EndPointType type, EndPoint::node_iterator 
 }
 
 // A new incoming sequenced-before edge was added.
-void Node::update_exists() const
+void NodeBase::update_exists() const
 {
-  DoutEntering(dc::sb_edge, "Node::update_exists() [this = " << *this << "]");
+  DoutEntering(dc::sb_edge, "NodeBase::update_exists() [this = " << *this << "]");
   boolean::Expression node_exists(0);  // When does this node exist?
   int node_heads = 0;
   for (auto&& end_point : m_end_points)
@@ -187,9 +255,9 @@ void Node::update_exists() const
 }
 
 //static
-bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node, EndPoint::node_iterator const& head_node, Branches const& branches)
+bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches)
 {
-  DoutEntering(dc::sb_edge, "Node::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << branches << ")");
+  DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << branches << ")");
   Edge* new_edge = new Edge(edge_type, tail_node);
   new_edge->add_branches(branches);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
@@ -208,16 +276,16 @@ bool Node::add_edge(EdgeType edge_type, EndPoint::node_iterator const& tail_node
 }
 
 //static
-boolean::Expression const Node::s_one(1);
+boolean::Expression const NodeBase::s_one(1);
 
-boolean::Expression const& Node::provides_sequenced_before_value_computation() const
+boolean::Expression const& NodeBase::provides_sequenced_before_value_computation() const
 {
   if (provided_type().type() == NodeProvidedType::side_effect)
     return m_connected.provides_sequenced_before_value_computation();
   return s_one;
 }
 
-boolean::Expression const& Node::provides_sequenced_before_side_effect() const
+boolean::Expression const& NodeBase::provides_sequenced_before_side_effect() const
 {
   if (provided_type().type() == NodeProvidedType::value_computation)
     return m_connected.provides_sequenced_before_side_effect();
@@ -225,7 +293,7 @@ boolean::Expression const& Node::provides_sequenced_before_side_effect() const
 }
 
 // Called on the tail-node of a new (conditional) sb edge.
-void Node::sequenced_before() const
+void NodeBase::sequenced_before() const
 {
   using namespace boolean;
   DoutEntering(dc::sb_edge, "sequenced_before() [this = " << *this << "]");
@@ -269,7 +337,7 @@ void Node::sequenced_before() const
   }
 }
 
-bool Node::provides_sequenced_after_something() const
+bool NodeBase::provides_sequenced_after_something() const
 {
   bool result = true;
   if (provided_type().type() == NodeProvidedType::side_effect)
@@ -278,7 +346,7 @@ bool Node::provides_sequenced_after_something() const
 }
 
 // Called on the head-node of a new (conditional) sb edge.
-void Node::sequenced_after() const
+void NodeBase::sequenced_after() const
 {
   DoutEntering(dc::sb_edge, "sequenced_after() [this = " << *this << "]");
   m_connected.set_sequenced_after_something();
@@ -287,7 +355,7 @@ void Node::sequenced_after() const
 // This is a value-computation node that no longer should be marked as value-computation
 // head, because it is sequenced before a side-effect that must be sequenced before
 // it's value computation (which then becomes the new value-computation head).
-void Node::sequenced_before_side_effect_sequenced_before_value_computation() const
+void NodeBase::sequenced_before_side_effect_sequenced_before_value_computation() const
 {
   Dout(dc::notice, "Marking " << *this << " as sequenced before a (pseudo) value computation.");
   // Passing one() as boolean expression because we are unconditionally sequenced before
@@ -325,13 +393,13 @@ void Node::sequenced_before_side_effect_sequenced_before_value_computation() con
 // This is the write node of a prefix operator that read from read_node,
 // or the write node of an assignment expression whose value computation
 // is used.
-void Node::sequenced_before_value_computation() const
+void NodeBase::sequenced_before_value_computation() const
 {
   Dout(dc::notice, "Marking " << *this << " as sequenced before its value computation.");
   m_connected.set_sequenced_before_pseudo_value_computation();
 }
 
-bool Node::matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const
+bool NodeBase::matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const
 {
   if (requested_type.any())
     return true;

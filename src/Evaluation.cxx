@@ -540,23 +540,23 @@ void Evaluation::write(ast::tag tag, Context& context, bool side_effect_sb_value
   context.write(tag, std::move(*this), side_effect_sb_value_computation);
 }
 
-Evaluation::node_iterator Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
+NodePtr Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
 {
   return context.write(tag, mo, std::move(*this));
 }
 
-Evaluation::node_iterator Evaluation::RMW(ast::tag tag, std::memory_order mo, Context& context)
+NodePtr Evaluation::RMW(ast::tag tag, std::memory_order mo, Context& context)
 {
   return context.RMW(tag, mo, std::move(*this));
 }
 
-Evaluation::node_iterator Evaluation::compare_exchange_weak(
+NodePtr Evaluation::compare_exchange_weak(
     ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context)
 {
   return context.compare_exchange_weak(tag, expected, desired, success, fail, std::move(*this));
 }
 
-void Evaluation::add_value_computation(node_iterator const& node)
+void Evaluation::add_value_computation(NodePtr const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single value computation?
@@ -564,7 +564,7 @@ void Evaluation::add_value_computation(node_iterator const& node)
   m_value_computations.push_back(node);
 }
 
-void Evaluation::add_side_effect(node_iterator const& node)
+void Evaluation::add_side_effect(NodePtr const& node)
 {
   DoutEntering(dc::notice, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single side effect?
@@ -681,15 +681,15 @@ void Evaluation::unary_operator(ast::unary_operators op)
 
 void Evaluation::destruct(Context& context)
 {
-  std::vector<Evaluation::node_iterator> nodes;
+  std::vector<NodePtr> nodes;
   for_each_node(NodeRequestedType::all,
-      [&nodes](Evaluation::node_iterator const& node)
+      [&nodes](NodePtr const& node)
       {
         nodes.push_back(node);
       }
       COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::notice)
   );
-  for (Evaluation::node_iterator node : nodes)
+  for (NodePtr node : nodes)
     context.m_graph.remove_node(node);
 }
 
@@ -751,7 +751,7 @@ char const* name_Evaluation = "Evaluation";
 
 void Evaluation::for_each_node(
     NodeRequestedType const& requested_type,
-    std::function<void(node_iterator const&)> const& action
+    std::function<void(NodePtr const&)> const& action
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
   DoutEntering(debug_channel, "Evaluation::for_each_node(" << requested_type << ", ...) [this = " << *this << "].");
@@ -781,8 +781,8 @@ void Evaluation::for_each_node(
         {
           Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
-        if (node->is_write())   // RMW's are stored in m_value_computations and are writes!
-          node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+        if (WriteNode const* write_node = node.get<WriteNode>())   // RMW's are stored in m_value_computations and are writes!
+          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       }
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
@@ -797,8 +797,8 @@ void Evaluation::for_each_node(
         {
           Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
-        if (node->is_write())
-          node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+        if (WriteNode const* write_node = node.get<WriteNode>())
+          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
       }
       break;
     }
