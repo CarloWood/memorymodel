@@ -193,8 +193,8 @@ std::ostream& operator<<(std::ostream& os, Edge const& edge)
   os << '{';
   Debug(os << edge.m_id << "; ");
   os << edge.m_edge_type << "; " << *edge.m_tail_node;
-  if (edge.m_branches.conditional())
-    os << "; " << edge.m_branches;
+  if (edge.m_condition.conditional())
+    os << "; " << edge.m_condition;
   os << '}';
   return os;
 }
@@ -255,11 +255,10 @@ void NodeBase::update_exists() const
 }
 
 //static
-bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches)
+bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << branches << ")");
-  Edge* new_edge = new Edge(edge_type, tail_node);
-  new_edge->add_branches(branches);
+  DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << condition << ")");
+  Edge* new_edge = new Edge(edge_type, tail_node, condition);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
   // Call tail first!
   bool success2 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
@@ -305,9 +304,9 @@ void NodeBase::sequenced_before() const
   {
     if (end_point.edge_type() == edge_sb && end_point.type() == tail)
     {
-      Dout(dc::notice, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->branches() << "'.");
+      Dout(dc::notice, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->condition() << "'.");
       // Get condition of this edge.
-      boolean::Product edge_conditional(end_point.edge()->branches().boolean_product());
+      boolean::Product edge_conditional(end_point.edge()->condition().boolean_product());
       // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
       // OR everything.
       sequenced_before_value_computation += end_point.other_node()->provides_sequenced_before_value_computation() * edge_conditional;

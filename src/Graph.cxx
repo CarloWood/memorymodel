@@ -12,10 +12,10 @@ std::ostream& operator<<(std::ostream& os, Thread const& thread)
   return os;
 }
 
-void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches)
+void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
   DebugMarkUp;
-  bool success = NodeBase::add_edge(edge_type, tail_node, head_node, branches);
+  bool success = NodeBase::add_edge(edge_type, tail_node, head_node, condition);
   if (success)  // Successfully added a new edge.
   {
     Dout(dc::notice, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\".");
@@ -112,8 +112,8 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     }
   }
 
-  conditions_type const& conditions{context.conditions()};
-  if (!conditions.empty())
+  conditionals_type const& conditionals{context.conditionals()};
+  if (!conditionals.empty())
   {
     out <<
         "  { rank = sink;\n"
@@ -123,13 +123,13 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
         "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Legend</B></FONT></TD>\n"
         "      </TR>\n";
 
-    for (auto&& condition : conditions)
+    for (auto&& conditional : conditionals)
     {
       out <<
         "      <TR>\n"
-        "      <TD>" << condition.second.id_name() << "</TD>\n"
+        "      <TD>" << conditional.second.id_name() << "</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
-      condition.first->print_on(out, true);
+      conditional.first->print_on(out, true);
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";

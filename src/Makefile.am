@@ -30,10 +30,10 @@ libcppmem_a_SOURCES = \
 		 NodePtr.h \
 		 Node.cxx \
 		 Node.h \
+		 Conditional.cxx \
+		 Conditional.h \
 		 Branch.cxx \
 		 Branch.h \
-		 Branches.cxx \
-		 Branches.h \
 		 Condition.cxx \
 		 Condition.h \
 		 SBNodePresence.cxx \

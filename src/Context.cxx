@@ -219,18 +219,18 @@ void Context::add_edges(
     EdgeType edge_type,
     Evaluation::node_pairs_type node_pairs
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
-    Branches const& branches)
+    Condition const& condition)
 {
 #ifdef CWDEBUG
   Dout(debug_channel|continued_cf, "Generate " << edge_type << " from generated node pairs");
-  if (branches.conditional())
-    Dout(dc::continued, " with conditional " << branches);
+  if (condition.conditional())
+    Dout(dc::continued, " with conditional " << condition);
   Dout(dc::finish, ".");
   DebugMarkUp;
 #endif
   // Now actually add the new edges.
   for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
-    m_graph.new_edge(edge_type, node_pair->first, node_pair->second, branches);
+    m_graph.new_edge(edge_type, node_pair->first, node_pair->second, condition);
 }
 
 void Context::add_edges(

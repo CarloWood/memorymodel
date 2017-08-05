@@ -1,31 +1,30 @@
 #pragma once
 
+#include "Branch.h"
 #include "BooleanExpression.h"
-#include <set>
-#include <string>
 #include <iosfwd>
 
-struct Evaluation;
-struct Context;
-
-struct Condition
+// The condition under which an edge exists,
+// which might or might not depend on a conditional.
+//
+// If the condition is 1 then it is not depending on a conditional.
+//
+class Condition
 {
-  using id_type = int;
+ private:
+  boolean::Product m_boolean_product;   // Either one (1) (not a branch)
+                                        // or a single indeterminate boolean variable (one branch of the conditional that it represents),
+                                        // or its negation thereof (the other branch of the conditional that it represents).
 
-  id_type m_id;
-  boolean::Variable m_boolexpr_variable;
-  static id_type s_next_condition_id;               // The id to use for the next Condition.
+ public:
+  Condition() : m_boolean_product(1) { }
+  Condition(Condition const& condition) : m_boolean_product(condition.m_boolean_product) {  }
+  Condition(Branch const&);
+  Condition& operator=(Condition const&) = delete;
+  void operator=(Condition&&) = delete;
 
-  // Construct a new id / boolean variable pair.
-  Condition() :
-      m_id(s_next_condition_id++),
-      m_boolexpr_variable(boolean::Context::instance().create_variable(id_name()))
-    { Dout(dc::notice, "Created a new Condition with m_boolexpr_variable " << m_boolexpr_variable); }
+  bool conditional() const { return !m_boolean_product.is_one(); }
+  boolean::Product const& boolean_product() const { return m_boolean_product; }
 
-  id_type id() const { return m_id; }
-  std::string id_name() const;
-  boolean::Variable boolexpr_variable() const { return m_boolexpr_variable; }
   friend std::ostream& operator<<(std::ostream& os, Condition const& condition);
 };
-
-using conditions_type = std::map<Evaluation*, Condition>;

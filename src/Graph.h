@@ -38,7 +38,7 @@ class Graph
   }
 
   // Add a new edge.
-  void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches = Branches());
+  void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition = Condition());
 };
 
 #ifdef CWDEBUG

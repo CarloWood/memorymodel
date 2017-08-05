@@ -6,7 +6,7 @@
 #include "Loops.h"
 #include "Graph.h"
 #include "Branch.h"
-#include "Condition.h"
+#include "Conditional.h"
 #include "NodePtr.h"
 #include <string>
 
@@ -16,9 +16,9 @@ struct Context
 {
   struct ConditionalBranch
   {
-    conditions_type::iterator m_condition;
-    ConditionalBranch(conditions_type::iterator const& condition) : m_condition(condition) { }
-    Branches operator()(bool condition_true) { return Branches(Branch(m_condition, condition_true)); }
+    conditionals_type::iterator m_conditional;
+    ConditionalBranch(conditionals_type::iterator const& conditional) : m_conditional(conditional) { }
+    Condition operator()(bool conditional_true) { return Condition(Branch(m_conditional, conditional_true)); }
   };
 
   position_handler<iterator_type>& m_position_handler;
@@ -35,7 +35,7 @@ struct Context
   std::stack<bool> m_threads;                           // Whether or not current scope is a thread.
   std::stack<Evaluation> m_last_full_expressions;       // Last full-expressions of parent threads.
   bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
-  conditions_type m_conditions;                         // Branch conditions.
+  conditionals_type m_conditionals;           // Branch condition toggles.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -66,7 +66,7 @@ struct Context
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }
-  conditions_type const& conditions() const { return  m_conditions; }
+  conditionals_type const& conditionals() const { return  m_conditionals; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);
@@ -94,7 +94,7 @@ struct Context
       EdgeType edge_type,
       Evaluation::node_pairs_type node_pairs
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
-      Branches const& branches = Branches());
+      Condition const& condition = Condition());
   // Short circuit for the combination of the above two member functions.
   void add_edges(
       EdgeType edge_type,
@@ -106,14 +106,14 @@ struct Context
   {
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
-    // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::map<Evaluation*, Condition>
-    // that the new Condition is stored in.
+    // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::map<Evaluation*, Conditional>
+    // that the new Conditional is stored in.
     //
     // Is this a new condition?
-    auto existing_entry = m_conditions.find(condition.get());
-    if (existing_entry != m_conditions.end())
+    auto existing_entry = m_conditionals.find(condition.get());
+    if (existing_entry != m_conditionals.end())
       return existing_entry;
-    auto res = m_conditions.emplace(condition.get(), Condition());      // Calling Condition() creates 'irreversible' a new boolean variable.
+    auto res = m_conditionals.emplace(condition.get(), Conditional());      // Calling Conditional() creates 'irreversible' a new boolean variable.
     // This created a new boolean variable, so the insertion has to be new.
     ASSERT(res.second);
     return res.first;

@@ -2,7 +2,7 @@
 
 #include "ast.h"
 #include "Evaluation.h"
-#include "Branches.h"
+#include "Condition.h"
 #include "SBNodePresence.h"
 #include "NodePtr.h"
 #include "utils/AIRefCount.h"
@@ -137,7 +137,7 @@ class Edge
 {
  private:
   EdgeType m_edge_type;
-  Branches m_branches;
+  Condition m_condition;
   NodePtr m_tail_node;    // The Node from where the edge starts:  tail_node ---> head_node.
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
@@ -147,15 +147,15 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type, NodePtr const& tail_node) :
+  Edge(EdgeType edge_type, NodePtr const& tail_node, Condition const& condition) :
       m_edge_type(edge_type),
+      m_condition(condition),
       m_tail_node(tail_node)
       COMMA_DEBUG_ONLY(m_id(s_id++))
       { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
 
   EdgeType edge_type() const { return m_edge_type; }
-  void add_branches(Branches const& branches) { m_branches &= branches; }
-  Branches const& branches() const { return m_branches; }
+  Condition const& condition() const { return m_condition; }
 
   inline bool is_conditional() const;
   inline boolean::Expression exists() const;
@@ -218,7 +218,7 @@ class NodeBase
 
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
-  static bool add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Branches const& branches);
+  static bool add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition);
   void sequenced_before_side_effect_sequenced_before_value_computation() const;
   void sequenced_before_value_computation() const;
 
@@ -395,5 +395,5 @@ class CEWNode : public AtomicWriteNode
 };
 
 //inline
-bool Edge::is_conditional() const { return !m_tail_node->exists().is_one() || !m_branches.boolean_product().is_one(); }
-boolean::Expression Edge::exists() const { return m_tail_node->exists() * m_branches.boolean_product(); }
+bool Edge::is_conditional() const { return !m_tail_node->exists().is_one() || !m_condition.boolean_product().is_one(); }
+boolean::Expression Edge::exists() const { return m_tail_node->exists() * m_condition.boolean_product(); }

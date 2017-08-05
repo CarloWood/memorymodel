@@ -1,19 +1,14 @@
 #include "sys.h"
 #include "Condition.h"
-#include "Evaluation.h"
-#include "Context.h"
 #include <ostream>
 
-std::string Condition::id_name() const
+Condition::Condition(Branch const& branch)
 {
-  return std::string(1, 'A' + m_id);
+  m_boolean_product = branch.boolean_product(); // Really just X or ~X (but the latter is stored in a 'Product').
 }
 
 std::ostream& operator<<(std::ostream& os, Condition const& condition)
 {
-  os << '[' << condition.m_id << "] " << condition.m_boolexpr_variable;
+  os << condition.m_boolean_product;
   return os;
 }
-
-//static
-Condition::id_type Condition::s_next_condition_id;
