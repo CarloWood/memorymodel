@@ -374,12 +374,9 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
         Evaluation true_evaluation = execute_expression(expression, context);
         Evaluation false_evaluation = execute_expression(assignment_expression, context);
-        result.conditional_operator(
-            std::move(true_evaluation),
-            context.generate_node_pairs(result, true_evaluation, DEBUGCHANNELS::dc::sb_edge),
-            std::move(false_evaluation),
-            context.generate_node_pairs(result, false_evaluation, DEBUGCHANNELS::dc::sb_edge),
-            context);
+        Evaluation::node_pairs_type truth_node_pairs{context.generate_node_pairs(result, true_evaluation, false COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
+        Evaluation::node_pairs_type false_node_pairs{context.generate_node_pairs(false_evaluation, false COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
+        result.conditional_operator(std::move(true_evaluation), std::move(truth_node_pairs), std::move(false_evaluation), std::move(false_node_pairs), context);
       }
       break;
     }

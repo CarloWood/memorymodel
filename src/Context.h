@@ -14,6 +14,8 @@ using iterator_type = std::string::const_iterator;
 
 struct Context
 {
+  using last_before_nodes_type = std::vector<NodePtr>;
+
   struct ConditionalBranch
   {
     conditionals_type::iterator m_conditional;
@@ -30,12 +32,14 @@ struct Context
  private:
   int m_full_expression_detector_depth;
   Evaluation m_last_full_expression;
-  Thread::id_type m_next_thread_id;                     // The id to use for the next thread.
-  ThreadPtr m_current_thread;                           // The current thread.
-  std::stack<bool> m_threads;                           // Whether or not current scope is a thread.
-  std::stack<Evaluation> m_last_full_expressions;       // Last full-expressions of parent threads.
-  bool m_beginning_of_thread;                           // Set to true when a new thread was just started.
-  conditionals_type m_conditionals;           // Branch condition toggles.
+  Thread::id_type m_next_thread_id;                             // The id to use for the next thread.
+  ThreadPtr m_current_thread;                                   // The current thread.
+  std::stack<bool> m_threads;                                   // Whether or not current scope is a thread.
+  std::stack<Evaluation> m_last_full_expressions;               // Last full-expressions of parent threads.
+  bool m_beginning_of_thread;                                   // Set to true when a new thread was just started.
+  conditionals_type m_conditionals;                             // Branch condition toggles.
+  last_before_nodes_type m_last_before_nodes;                   // The before nodes of the last call to generate_edges.
+  std::stack<last_before_nodes_type> m_before_nodes_stack;      //  pushed here when requested.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -86,9 +90,14 @@ struct Context
   // Generate node pairs for edge_type edges between heads of before_evaluation and tails of after_evaluation.
   // Pass the result to the add_edges below.
   Evaluation::node_pairs_type generate_node_pairs(
+      Evaluation const& after_evaluation,
+      bool pop_before_nodes
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+  Evaluation::node_pairs_type generate_node_pairs(
       Evaluation const& before_evaluation,
-      Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+      Evaluation const& after_evaluation,
+      bool push_before_nodes
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
   // Add edges for each node pair in node_pairs.
   void add_edges(
       EdgeType edge_type,
@@ -100,7 +109,8 @@ struct Context
       EdgeType edge_type,
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+      Condition const& condition = Condition());
   // Register a branch condition.
   ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)
   {

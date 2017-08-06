@@ -173,32 +173,56 @@ Evaluation Context::unlock(ast::tag mutex)
   return result;
 }
 
+// Generate node pairs for edges between m_last_before_nodes (or the top of m_before_nodes_stack if
+// pop_before_nodes is set) and the nodes of after_evaluation.
+Evaluation::node_pairs_type Context::generate_node_pairs(
+    Evaluation const& after_evaluation,
+    bool pop_before_nodes
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+{
+  if (pop_before_nodes)
+  {
+    ASSERT(!m_before_nodes_stack.empty());
+    m_before_nodes_stack.top().swap(m_last_before_nodes);
+    m_before_nodes_stack.pop();
+  }
+
+  Evaluation::node_pairs_type node_pairs;
+  for (NodePtr const& before_node : m_last_before_nodes)
+  {
+    after_evaluation.for_each_node(NodeRequestedType::tails,
+        [&node_pairs, &before_node](NodePtr const& after_node)
+        {
+          node_pairs.push_back(std::make_pair(before_node, after_node));
+        }
+    COMMA_DEBUG_ONLY(debug_channel));
+  }
+
+  return node_pairs;
+}
+
 Evaluation::node_pairs_type Context::generate_node_pairs(
     Evaluation const& before_evaluation,
-    Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
+    Evaluation const& after_evaluation,
+    bool push_before_nodes
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
   Dout(debug_channel, "Generate node pairs for edges between between " << before_evaluation << " and " << after_evaluation << ".");
   DebugMarkDownRight;
 
-  // First find all new edges without actually adding new ones (that would interfere with the algorithm).
-  Evaluation::node_pairs_type node_pairs;
-
-  // Find all tail nodes in after_evaluation.
-  after_evaluation.for_each_node(NodeRequestedType::tails,
-      [&before_evaluation, &node_pairs COMMA_DEBUG_ONLY(&debug_channel)](NodePtr const& after_node)
+  // Store all head nodes of before_evaluation in m_last_before_nodes.
+  m_last_before_nodes.clear();
+  before_evaluation.for_each_node(NodeRequestedType::heads,
+      [this](NodePtr const& before_node)
       {
-        // Find all node pairs that need a new edge.
-        before_evaluation.for_each_node(NodeRequestedType::heads,
-            [&after_node, &node_pairs](NodePtr const& before_node)
-            {
-              node_pairs.push_back(std::make_pair(before_node, after_node));
-            }
-        COMMA_DEBUG_ONLY(debug_channel));
+        m_last_before_nodes.push_back(before_node);
       }
   COMMA_DEBUG_ONLY(debug_channel));
 
-  return node_pairs;
+  if (push_before_nodes)
+    m_before_nodes_stack.push(m_last_before_nodes);
+
+  return generate_node_pairs(after_evaluation, false COMMA_DEBUG_ONLY(debug_channel));
 }
 
 void Context::add_edges(
@@ -237,9 +261,16 @@ void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
     Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+    Condition const& condition)
 {
-  add_edges(edge_type, generate_node_pairs(before_evaluation, after_evaluation COMMA_DEBUG_ONLY(debug_channel)) COMMA_DEBUG_ONLY(debug_channel));
+  // When we add edges as part of a branch, then remember the tails of the edges
+  // because we'll need them again when for generating the edges into the other
+  // branch.
+  bool remember_before_nodes = condition.conditional();
+  add_edges(edge_type,
+      generate_node_pairs(before_evaluation, after_evaluation, remember_before_nodes COMMA_DEBUG_ONLY(debug_channel))
+      COMMA_DEBUG_ONLY(debug_channel), condition);
 }
 
 void Context::detect_full_expression_start()
