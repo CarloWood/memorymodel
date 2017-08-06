@@ -293,16 +293,17 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
 #ifdef CWDEBUG
     debug::Mark* marker;
 #endif
-    bool last_full_expression_is_valid = m_last_full_expression.is_valid();
+    bool const last_full_expression_is_valid = m_last_full_expression.is_valid();
     if (last_full_expression_is_valid)
     {
       Dout(dc::sb_edge, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
       Debug(marker = new debug::Mark("\e[43;33;1m↳\e[0m"));    // DebugMarkDownRight
     }
 
-    // First find all new edges without actually adding new ones (that would interfere with the algorithm).
-    Evaluation::node_pairs_type node_pairs;
+    // Count number of nodes in full_expression.
     int number_of_nodes = 0;
+    full_expression.for_each_node(NodeRequestedType::tails, [&number_of_nodes](NodePtr const&) { ++number_of_nodes; } COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+
     // Find all tail nodes in the current full_expression.
     //
     //   before_node
@@ -311,35 +312,16 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //       v
     //   after_node
     //
-    full_expression.for_each_node(NodeRequestedType::tails,
-        [this, &number_of_nodes, &node_pairs](NodePtr const& after_node)
-        {
-          ++number_of_nodes;
-          // Generate all sequenced-before edges between full-expressions.
-          if (m_last_full_expression.is_valid())
-          {
-            m_last_full_expression.for_each_node(NodeRequestedType::heads,
-                [this, &after_node, &node_pairs](NodePtr const& before_node)
-                {
-                  node_pairs.push_back(std::make_pair(before_node, after_node));
-                }
-            COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-          }
-        }
-    COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-    // Now actually add the new edges.
-    for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
-      m_graph.new_edge(edge_sb, node_pair->first, node_pair->second);
+    if (number_of_nodes > 0)
+    {
+      if (m_last_full_expression.is_valid())
+        add_edges(edge_sb, m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      m_last_full_expression = std::move(full_expression);
+    }
 
 #ifdef CWDEBUG
     if (last_full_expression_is_valid)
       delete marker;
 #endif
-
-    // Replace m_last_full_expression with the current one if there was any node at all.
-    if (number_of_nodes > 0)
-    {
-      m_last_full_expression = std::move(full_expression);
-    }
   }
 }
