@@ -20,9 +20,8 @@ class Condition
   Condition() : m_boolean_product(1) { }
   Condition(Condition const& condition) : m_boolean_product(condition.m_boolean_product) {  }
   Condition(Branch const&);
-  Condition& operator=(Condition const&) = delete;
-  void operator=(Condition&&) = delete;
 
+  void reset() { m_boolean_product = 1; }
   bool conditional() const { return !m_boolean_product.is_one(); }
   boolean::Product const& boolean_product() const { return m_boolean_product; }
 

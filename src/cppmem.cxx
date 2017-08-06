@@ -98,13 +98,11 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
   context.m_symbols.add(declaration_statement);
 }
 
-Evaluation execute_condition(ast::expression const& condition, Context& context)
+void execute_condition(ast::expression const& condition, Context& context)
 {
   DoutEntering(dc::notice, "execute_condition(`" << condition << "`)");
-
-  Evaluation result = execute_expression(condition, context);
+  execute_expression(condition, context);
   Dout(dc::continued, condition);
-  return result;
 }
 
 Evaluation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
@@ -397,6 +395,7 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       break;
     }
   }
+  Dout(dc::notice, "RETURNING " << result);
   return result;
 }
 
@@ -512,9 +511,15 @@ void execute_statement(ast::statement const& statement, Context& context)
       try { execute_condition(selection_statement.m_if_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
+      auto condition = context.add_condition_from_last_full_expression();
+      context.m_last_full_expression_condition = condition(true);
+      Debug(context.print_last_full_expression());
       execute_statement(selection_statement.m_if_statement.m_then, context);
       if (selection_statement.m_if_statement.m_else)
+      {
+        context.m_last_full_expression_condition = condition(false);
         execute_statement(*selection_statement.m_if_statement.m_else, context);
+      }
       break;
     }
     case ast::SN_iteration_statement:

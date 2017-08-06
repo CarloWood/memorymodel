@@ -293,10 +293,10 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
 #ifdef CWDEBUG
     debug::Mark* marker;
 #endif
-    bool const last_full_expression_is_valid = m_last_full_expression.is_valid();
+    bool const last_full_expression_is_valid{m_last_full_expression};
     if (last_full_expression_is_valid)
     {
-      Dout(dc::sb_edge, "Generate sequenced-before edges between " << m_last_full_expression << " and " << full_expression << ".");
+      Dout(dc::sb_edge, "Generate sequenced-before edges between " << *m_last_full_expression << " and " << full_expression << ".");
       Debug(marker = new debug::Mark("\e[43;33;1m↳\e[0m"));    // DebugMarkDownRight
     }
 
@@ -314,9 +314,10 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //
     if (number_of_nodes > 0)
     {
-      if (m_last_full_expression.is_valid())
-        add_edges(edge_sb, m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-      m_last_full_expression = std::move(full_expression);
+      if (m_last_full_expression)
+        add_edges(edge_sb, *m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_last_full_expression_condition);
+      m_last_full_expression = Evaluation::make_unique(std::move(full_expression));
+      m_last_full_expression_condition.reset();
     }
 
 #ifdef CWDEBUG

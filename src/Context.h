@@ -31,22 +31,23 @@ struct Context
 
  private:
   int m_full_expression_detector_depth;
-  Evaluation m_last_full_expression;
-  Thread::id_type m_next_thread_id;                             // The id to use for the next thread.
-  ThreadPtr m_current_thread;                                   // The current thread.
-  std::stack<bool> m_threads;                                   // Whether or not current scope is a thread.
-  std::stack<Evaluation> m_last_full_expressions;               // Last full-expressions of parent threads.
-  bool m_beginning_of_thread;                                   // Set to true when a new thread was just started.
-  conditionals_type m_conditionals;                             // Branch condition toggles.
-  last_before_nodes_type m_last_before_nodes;                   // The before nodes of the last call to generate_edges.
-  std::stack<last_before_nodes_type> m_before_nodes_stack;      //  pushed here when requested.
+  std::unique_ptr<Evaluation> m_last_full_expression;
+  Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
+  ThreadPtr m_current_thread;                                           // The current thread.
+  std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
+  std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // Last full-expressions of parent threads.
+  bool m_beginning_of_thread;                                           // Set to true when a new thread was just started.
+  conditionals_type m_conditionals;                                     // Branch condition toggles.
+  last_before_nodes_type m_last_before_nodes;                           // The before nodes of the last call to generate_edges.
+  std::stack<last_before_nodes_type> m_before_nodes_stack;              //  pushed here when requested.
+ public:
+  Condition m_last_full_expression_condition;
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
       m_position_handler(ph),
       m_graph(g),
       m_full_expression_detector_depth(0),
-      m_last_full_expression(Evaluation::not_used),
       m_next_thread_id{1},
       m_current_thread{Thread::create_main_thread()},
       m_beginning_of_thread(false) { }
@@ -114,6 +115,7 @@ struct Context
   // Register a branch condition.
   ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)
   {
+    ASSERT(condition->is_valid());
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
     // to shared_ptr everywhere). Moreover, we use this pointer as key for the std::map<Evaluation*, Conditional>
@@ -128,6 +130,20 @@ struct Context
     ASSERT(res.second);
     return res.first;
   }
+  ConditionalBranch add_condition_from_last_full_expression()
+  {
+    Dout(dc::notice, "Adding condition from m_last_full_expression (" << *m_last_full_expression << ").");
+    return add_condition(m_last_full_expression);
+  }
+
+#ifdef CWDEBUG
+  void print_last_full_expression() const
+  {
+    // Only call print_last_full_expression() when you know there is one...
+    ASSERT(m_last_full_expression);
+    Dout(dc::notice, "Last full expression: " << *m_last_full_expression << " with condition " << m_last_full_expression_condition);
+  }
+#endif
 };
 
 // Statements that are not expressions, but contain expressions, are
