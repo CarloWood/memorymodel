@@ -2,7 +2,7 @@
 
 #include "ast.h"
 #include "debug.h"
-#include "NodePtr.h"
+#include "EvaluationNodes.h"
 #include <iosfwd>
 #include <vector>
 #include <set>
@@ -112,7 +112,8 @@ class Evaluation
   bool is_valid() const
   {
 #ifdef TRACK_EVALUATION
-    ASSERT(entry()->status_below(Tracked::Entry::pillaged));
+    if (!entry()->status_below(Tracked::Entry::pillaged))
+      DoutFatal(dc::core, "Calling is_valid() on a uninitialized Evaluation (" << *this << ").");
 #endif
     return m_state > uninitialized;
   }
@@ -147,6 +148,7 @@ class Evaluation
 
   void print_on(std::ostream& os, bool use_html_color = false) const;
   void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  EvaluationNodes get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
 
   // Accessors used to print RMW node labels. See RMWNode::print_code.
   State state() const { return m_state; }

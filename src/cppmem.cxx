@@ -372,8 +372,9 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
         Evaluation true_evaluation = execute_expression(expression, context);
         Evaluation false_evaluation = execute_expression(assignment_expression, context);
-        Evaluation::node_pairs_type truth_node_pairs{context.generate_node_pairs(result, true_evaluation, false COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
-        Evaluation::node_pairs_type false_node_pairs{context.generate_node_pairs(false_evaluation, false COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
+        EvaluationNodes before_nodes = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+        Evaluation::node_pairs_type truth_node_pairs{context.generate_node_pairs(before_nodes, true_evaluation COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
+        Evaluation::node_pairs_type false_node_pairs{context.generate_node_pairs(before_nodes, false_evaluation COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
         result.conditional_operator(std::move(true_evaluation), std::move(truth_node_pairs), std::move(false_evaluation), std::move(false_node_pairs), context);
       }
       break;
@@ -511,13 +512,11 @@ void execute_statement(ast::statement const& statement, Context& context)
       try { execute_condition(selection_statement.m_if_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
-      auto condition = context.add_condition_from_last_full_expression();
-      context.m_last_full_expression_condition = condition(true);
-      Debug(context.print_last_full_expression());
+      auto condition = context.begin_branch_with_condition(true);
       execute_statement(selection_statement.m_if_statement.m_then, context);
       if (selection_statement.m_if_statement.m_else)
       {
-        context.m_last_full_expression_condition = condition(false);
+        context.begin_branch_with_condition(condition, false);
         execute_statement(*selection_statement.m_if_statement.m_else, context);
       }
       break;

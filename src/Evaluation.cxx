@@ -827,6 +827,20 @@ void Evaluation::for_each_node(
   }
 }
 
+EvaluationNodes Evaluation::get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
+{
+  DoutEntering(debug_channel, "Evaluation::get_nodes(" << requested_type << ") [this = " << *this << "]");
+  EvaluationNodes result;
+  for_each_node(requested_type,
+      [&result](NodePtr const& node)
+      {
+        result.push_back(node);
+      }
+  COMMA_DEBUG_ONLY(debug_channel));
+  Dout(debug_channel, "Returning EvaluationNodes: " << result);
+  return result;
+}
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct valuecomp("VALUECOMP");

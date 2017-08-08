@@ -8,6 +8,12 @@
 #define context (*this)
 #endif
 
+std::ostream& operator<<(std::ostream& os, Context::ConditionalBranch const& conditional_branch)
+{
+  os << '{' << *conditional_branch.m_conditional->first << ", " << conditional_branch.m_conditional->second << '}';
+  return os;
+}
+
 void Context::scope_start(bool is_thread)
 {
   DoutEntering(dc::notice, "Context::scope_start('is_thread' = " << is_thread << ")");
@@ -173,22 +179,13 @@ Evaluation Context::unlock(ast::tag mutex)
   return result;
 }
 
-// Generate node pairs for edges between m_last_before_nodes (or the top of m_before_nodes_stack if
-// pop_before_nodes is set) and the nodes of after_evaluation.
 Evaluation::node_pairs_type Context::generate_node_pairs(
-    Evaluation const& after_evaluation,
-    bool pop_before_nodes
+    EvaluationNodes const& before_nodes,
+    Evaluation const& after_evaluation
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
-  if (pop_before_nodes)
-  {
-    ASSERT(!m_before_nodes_stack.empty());
-    m_before_nodes_stack.top().swap(m_last_before_nodes);
-    m_before_nodes_stack.pop();
-  }
-
   Evaluation::node_pairs_type node_pairs;
-  for (NodePtr const& before_node : m_last_before_nodes)
+  for (NodePtr const& before_node : before_nodes)
   {
     after_evaluation.for_each_node(NodeRequestedType::tails,
         [&node_pairs, &before_node](NodePtr const& after_node)
@@ -197,7 +194,6 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
         }
     COMMA_DEBUG_ONLY(debug_channel));
   }
-
   return node_pairs;
 }
 
@@ -211,18 +207,12 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
   DebugMarkDownRight;
 
   // Store all head nodes of before_evaluation in m_last_before_nodes.
-  m_last_before_nodes.clear();
-  before_evaluation.for_each_node(NodeRequestedType::heads,
-      [this](NodePtr const& before_node)
-      {
-        m_last_before_nodes.push_back(before_node);
-      }
-  COMMA_DEBUG_ONLY(debug_channel));
+  m_last_before_nodes = before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel));
 
   if (push_before_nodes)
     m_before_nodes_stack.push(m_last_before_nodes);
 
-  return generate_node_pairs(after_evaluation, false COMMA_DEBUG_ONLY(debug_channel));
+  return generate_node_pairs(m_last_before_nodes, after_evaluation COMMA_DEBUG_ONLY(debug_channel));
 }
 
 void Context::add_edges(
@@ -290,15 +280,22 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
+    bool const last_full_expression_is_valid{m_last_full_expression};
 #ifdef CWDEBUG
     debug::Mark* marker;
-#endif
-    bool const last_full_expression_is_valid{m_last_full_expression};
     if (last_full_expression_is_valid)
     {
       Dout(dc::sb_edge, "Generate sequenced-before edges between " << *m_last_full_expression << " and " << full_expression << ".");
       Debug(marker = new debug::Mark("\e[43;33;1m↳\e[0m"));    // DebugMarkDownRight
+      s_first_full_expression = false;
     }
+    else if (!s_first_full_expression)
+    {
+      // m_last_full_expression should only be invalid when we encounter the first full-expression.
+      // After that it should always be equal to the previous full-expression.
+      DoutFatal(dc::core, "Unexpected invalid m_last_full_expression! Last full-expression condition is " << *m_full_expression_conditions.back());
+    }
+#endif
 
     // Count number of nodes in full_expression.
     int number_of_nodes = 0;
@@ -314,10 +311,14 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     //
     if (number_of_nodes > 0)
     {
-      if (m_last_full_expression)
+      if (last_full_expression_is_valid)
         add_edges(edge_sb, *m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_last_full_expression_condition);
+      if (m_last_full_expression_condition.conditional())
+      {
+        m_full_expression_conditions.push_back(std::move(m_last_full_expression)); // Keep Evaluation that are conditionals alive.
+        m_last_full_expression_condition.reset();
+      }
       m_last_full_expression = Evaluation::make_unique(std::move(full_expression));
-      m_last_full_expression_condition.reset();
     }
 
 #ifdef CWDEBUG
@@ -326,3 +327,6 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
 #endif
   }
 }
+
+//static
+bool Context::s_first_full_expression = true;

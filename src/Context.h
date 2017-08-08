@@ -7,20 +7,22 @@
 #include "Graph.h"
 #include "Branch.h"
 #include "Conditional.h"
-#include "NodePtr.h"
+#include "EvaluationNodes.h"
 #include <string>
 
 using iterator_type = std::string::const_iterator;
 
 struct Context
 {
-  using last_before_nodes_type = std::vector<NodePtr>;
+  using last_before_nodes_type = EvaluationNodes;
+  using full_expression_conditions_type = std::vector<std::unique_ptr<Evaluation>>;
 
   struct ConditionalBranch
   {
     conditionals_type::iterator m_conditional;
     ConditionalBranch(conditionals_type::iterator const& conditional) : m_conditional(conditional) { }
     Condition operator()(bool conditional_true) { return Condition(Branch(m_conditional, conditional_true)); }
+    friend std::ostream& operator<<(std::ostream& os, ConditionalBranch const& conditional_branch);
   };
 
   position_handler<iterator_type>& m_position_handler;
@@ -31,7 +33,8 @@ struct Context
 
  private:
   int m_full_expression_detector_depth;
-  std::unique_ptr<Evaluation> m_last_full_expression;
+  std::unique_ptr<Evaluation> m_last_full_expression;                   // The previous full expression. Or with state `uninitialized`
+                                                                        //  when there wasn't a previous full expression.
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
@@ -40,6 +43,10 @@ struct Context
   conditionals_type m_conditionals;                                     // Branch condition toggles.
   last_before_nodes_type m_last_before_nodes;                           // The before nodes of the last call to generate_edges.
   std::stack<last_before_nodes_type> m_before_nodes_stack;              //  pushed here when requested.
+  full_expression_conditions_type m_full_expression_conditions;         // List of Evaluations that are a conditional and a full expression.
+                                                                        //  needed to keep them alive because full expressions aren't pointed
+                                                                        //  to from elsewhere.
+
  public:
   Condition m_last_full_expression_condition;
 
@@ -82,39 +89,46 @@ struct Context
   void detect_full_expression_start();
   void detect_full_expression_end(Evaluation& full_expression);
 
-  // Add edges between heads of before_evaluation and after_node.
-  void add_edges(
-      EdgeType edge_type,
-      Evaluation const& before_evaluation,
-      NodePtr const& after_node
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
-  // Generate node pairs for edge_type edges between heads of before_evaluation and tails of after_evaluation.
-  // Pass the result to the add_edges below.
+  // Generate node pairs for Sequenced-Before heads of before_nodes and Sequenced-Before tails of after_evaluation.
   Evaluation::node_pairs_type generate_node_pairs(
-      Evaluation const& after_evaluation,
-      bool pop_before_nodes
+      EvaluationNodes const& before_nodes,
+      Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+
+  // Generate node pairs for Sequenced-Before heads of before_evaluation and Sequenced-Before tails of after_evaluation.
+  // If push_before_nodes is true then the heads of before_evaluation are stored in m_before_nodes_stack.
   Evaluation::node_pairs_type generate_node_pairs(
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation,
       bool push_before_nodes
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
-  // Add edges for each node pair in node_pairs.
+
+  // Add edges of type edge_type for each node pair in node_pairs with condition.
   void add_edges(
       EdgeType edge_type,
       Evaluation::node_pairs_type node_pairs
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
       Condition const& condition = Condition());
-  // Short circuit for the combination of the above two member functions.
+
+  // Add edges of type edge_type between heads of before_evaluation and and tails of after_evaluation with condition.
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
       Condition const& condition = Condition());
+
+  // Add edges of type edge_type between heads of before_evaluation and after_node.
+  void add_edges(
+      EdgeType edge_type,
+      Evaluation const& before_evaluation,
+      NodePtr const& after_node
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+
   // Register a branch condition.
   ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)
   {
+    DoutEntering(dc::notice, "Context::add_condition(" << *condition << ")");
     ASSERT(condition->is_valid());
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
@@ -130,19 +144,33 @@ struct Context
     ASSERT(res.second);
     return res.first;
   }
-  ConditionalBranch add_condition_from_last_full_expression()
+  ConditionalBranch begin_branch_with_condition(bool condition_true)
   {
-    Dout(dc::notice, "Adding condition from m_last_full_expression (" << *m_last_full_expression << ").");
-    return add_condition(m_last_full_expression);
+    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << condition_true << ")");
+    ASSERT(m_last_full_expression);
+    Dout(dc::notice|continued_cf, "Adding condition from m_last_full_expression (" << *m_last_full_expression << ") ");
+    ConditionalBranch conditional_branch{add_condition(m_last_full_expression)};        // The last full-expression is a conditional.
+    m_last_full_expression_condition = conditional_branch(condition_true);              // We'll follow the true/false branch of this condition first.
+    // We rely on this fact to know that m_last_full_expression is a condition.
+    ASSERT(m_last_full_expression_condition.conditional());
+    Dout(dc::finish, "with condition " << m_last_full_expression_condition << '.');
+    return conditional_branch;
+  }
+  void begin_branch_with_condition(ConditionalBranch& conditional_branch, bool condition_true)
+  {
+    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ", " << condition_true << ")");
+    m_last_full_expression_condition = conditional_branch(condition_true);
+    // We rely on this fact to know that m_last_full_expression is a condition.
+    ASSERT(m_last_full_expression_condition.conditional());
   }
 
 #ifdef CWDEBUG
   void print_last_full_expression() const
   {
-    // Only call print_last_full_expression() when you know there is one...
-    ASSERT(m_last_full_expression);
-    Dout(dc::notice, "Last full expression: " << *m_last_full_expression << " with condition " << m_last_full_expression_condition);
+    Dout(dc::notice|continued_cf, "Last full expression: " << *m_last_full_expression);
   }
+ private:
+  static bool s_first_full_expression;
 #endif
 };
 
