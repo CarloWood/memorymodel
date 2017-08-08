@@ -33,12 +33,12 @@ struct Context
 
  private:
   int m_full_expression_detector_depth;
-  std::unique_ptr<Evaluation> m_last_full_expression;                   // The previous full expression. Or with state `uninitialized`
+  std::unique_ptr<Evaluation> m_previous_full_expression;                   // The previous full expression. Or with state `uninitialized`
                                                                         //  when there wasn't a previous full expression.
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
-  std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // Last full-expressions of parent threads.
+  std::stack<std::unique_ptr<Evaluation>> m_previous_full_expressions;      // Previous full-expressions of parent threads.
   bool m_beginning_of_thread;                                           // Set to true when a new thread was just started.
   conditionals_type m_conditionals;                                     // Branch conditionals.
   std::stack<last_before_nodes_type> m_before_nodes_stack;              // The head nodes of those branch conditionals.
@@ -47,7 +47,7 @@ struct Context
                                                                         //  to from elsewhere.
 
  public:
-  Condition m_last_full_expression_condition;
+  Condition m_previous_full_expression_condition;
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -137,27 +137,29 @@ struct Context
   ConditionalBranch begin_branch_with_condition(bool condition_true)
   {
     DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << condition_true << ")");
-    ASSERT(m_last_full_expression);
-    Dout(dc::notice|continued_cf, "Adding condition from m_last_full_expression (" << *m_last_full_expression << ") ");
-    ConditionalBranch conditional_branch{add_condition(m_last_full_expression)};        // The last full-expression is a conditional.
-    m_last_full_expression_condition = conditional_branch(condition_true);              // We'll follow the true/false branch of this condition first.
-    // We rely on this fact to know that m_last_full_expression is a condition.
-    ASSERT(m_last_full_expression_condition.conditional());
-    Dout(dc::finish, "with condition " << m_last_full_expression_condition << '.');
+    ASSERT(m_previous_full_expression);
+    Dout(dc::notice|continued_cf, "Adding condition from m_previous_full_expression (" << *m_previous_full_expression << ") ");
+    ConditionalBranch conditional_branch{add_condition(m_previous_full_expression)};        // The previous full-expression is a conditional.
+    m_previous_full_expression_condition = conditional_branch(condition_true);              // We'll follow the true/false branch of this condition first.
+    // We rely on this fact to know that m_previous_full_expression is a condition.
+    ASSERT(m_previous_full_expression_condition.conditional());
+    Dout(dc::finish, "with condition " << m_previous_full_expression_condition << '.');
     return conditional_branch;
   }
   void begin_branch_with_condition(ConditionalBranch& conditional_branch, bool condition_true)
   {
     DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ", " << condition_true << ")");
-    m_last_full_expression_condition = conditional_branch(condition_true);
-    // We rely on this fact to know that m_last_full_expression is a condition.
-    ASSERT(m_last_full_expression_condition.conditional());
+    m_previous_full_expression_condition = conditional_branch(condition_true);
+    //m_previous_full_expression = m_before_nodes_stack.top();
+    //m_before_nodes_stack.pop();
+    // We rely on this fact to know that m_previous_full_expression is a condition.
+    ASSERT(m_previous_full_expression_condition.conditional());
   }
 
 #ifdef CWDEBUG
-  void print_last_full_expression() const
+  void print_previous_full_expression() const
   {
-    Dout(dc::notice|continued_cf, "Last full expression: " << *m_last_full_expression);
+    Dout(dc::notice|continued_cf, "Previous full expression: " << *m_previous_full_expression);
   }
  private:
   static bool s_first_full_expression;
