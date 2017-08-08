@@ -40,9 +40,8 @@ struct Context
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
   std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // Last full-expressions of parent threads.
   bool m_beginning_of_thread;                                           // Set to true when a new thread was just started.
-  conditionals_type m_conditionals;                                     // Branch condition toggles.
-  last_before_nodes_type m_last_before_nodes;                           // The before nodes of the last call to generate_edges.
-  std::stack<last_before_nodes_type> m_before_nodes_stack;              //  pushed here when requested.
+  conditionals_type m_conditionals;                                     // Branch conditionals.
+  std::stack<last_before_nodes_type> m_before_nodes_stack;              // The head nodes of those branch conditionals.
   full_expression_conditions_type m_full_expression_conditions;         // List of Evaluations that are a conditional and a full expression.
                                                                         //  needed to keep them alive because full expressions aren't pointed
                                                                         //  to from elsewhere.
@@ -95,14 +94,6 @@ struct Context
       Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 
-  // Generate node pairs for Sequenced-Before heads of before_evaluation and Sequenced-Before tails of after_evaluation.
-  // If push_before_nodes is true then the heads of before_evaluation are stored in m_before_nodes_stack.
-  Evaluation::node_pairs_type generate_node_pairs(
-      Evaluation const& before_evaluation,
-      Evaluation const& after_evaluation,
-      bool push_before_nodes
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
-
   // Add edges of type edge_type for each node pair in node_pairs with condition.
   void add_edges(
       EdgeType edge_type,
@@ -110,13 +101,12 @@ struct Context
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
       Condition const& condition = Condition());
 
-  // Add edges of type edge_type between heads of before_evaluation and and tails of after_evaluation with condition.
+  // Add unconditional edges of type edge_type between heads of before_evaluation and and tails of after_evaluation.
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
       Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
-      Condition const& condition = Condition());
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 
   // Add edges of type edge_type between heads of before_evaluation and after_node.
   void add_edges(

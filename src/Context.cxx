@@ -197,27 +197,6 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
   return node_pairs;
 }
 
-Evaluation::node_pairs_type Context::generate_node_pairs(
-    Evaluation const& before_evaluation,
-    Evaluation const& after_evaluation,
-    bool push_before_nodes
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
-{
-  Dout(debug_channel, "Generate node pairs for edges between between " << before_evaluation << " and " << after_evaluation << ".");
-  DebugMarkDownRight;
-
-  // Store all head nodes of before_evaluation in m_last_before_nodes.
-  m_last_before_nodes = before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel));
-
-  if (push_before_nodes)
-  {
-    Dout(dc::notice, "Pushing m_last_before_nodes (" << m_last_before_nodes << ") onto the stack.");
-    m_before_nodes_stack.push(m_last_before_nodes);
-  }
-
-  return generate_node_pairs(m_last_before_nodes, after_evaluation COMMA_DEBUG_ONLY(debug_channel));
-}
-
 void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
@@ -254,16 +233,15 @@ void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
     Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
-    Condition const& condition)
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
-  // When we add edges as part of a branch, then remember the tails of the edges
-  // because we'll need them again when for generating the edges into the other
-  // branch.
-  bool push_before_nodes = condition.conditional();
-  add_edges(edge_type,
-      generate_node_pairs(before_evaluation, after_evaluation, push_before_nodes COMMA_DEBUG_ONLY(debug_channel))
-      COMMA_DEBUG_ONLY(debug_channel), condition);
+  add_edges(
+      edge_type,
+      generate_node_pairs(
+          before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel)),
+          after_evaluation
+          COMMA_DEBUG_ONLY(debug_channel))
+      COMMA_DEBUG_ONLY(debug_channel));
 }
 
 void Context::detect_full_expression_start()
@@ -315,11 +293,31 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     if (number_of_nodes > 0)
     {
       if (last_full_expression_is_valid)
-        add_edges(edge_sb, *m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_last_full_expression_condition);
-      if (m_last_full_expression_condition.conditional())
       {
-        m_full_expression_conditions.push_back(std::move(m_last_full_expression)); // Keep Evaluation that are conditionals alive.
-        m_last_full_expression_condition.reset();
+        if (m_last_full_expression_condition.conditional())
+	{
+          Dout(dc::sb_edge, "Generate node pairs for edges between between conditional " << *m_last_full_expression << " and " << full_expression << ".");
+          DebugMarkDownRight;
+
+          // Get all head nodes of the last full expression (which is a condition).
+          EvaluationNodes last_full_expression_nodes =
+              m_last_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+
+          Dout(dc::notice, "Pushing " << last_full_expression_nodes << " onto m_before_nodes_stack.");
+          m_before_nodes_stack.push(last_full_expression_nodes);
+
+          // Keep Evaluation that are conditionals alive.
+          m_full_expression_conditions.push_back(std::move(m_last_full_expression));
+          m_last_full_expression_condition.reset();
+
+          // When we add edges as part of a branch, then remember the tails of the edges because
+          // we'll need them again when for generating the edges into the other branch.
+          add_edges(edge_sb,
+              generate_node_pairs(last_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
+              COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_last_full_expression_condition);
+	}
+        else
+          add_edges(edge_sb, *m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       }
       m_last_full_expression = Evaluation::make_unique(std::move(full_expression));
     }
