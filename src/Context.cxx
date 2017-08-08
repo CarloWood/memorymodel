@@ -210,7 +210,10 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
   m_last_before_nodes = before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel));
 
   if (push_before_nodes)
+  {
+    Dout(dc::notice, "Pushing m_last_before_nodes (" << m_last_before_nodes << ") onto the stack.");
     m_before_nodes_stack.push(m_last_before_nodes);
+  }
 
   return generate_node_pairs(m_last_before_nodes, after_evaluation COMMA_DEBUG_ONLY(debug_channel));
 }
@@ -257,9 +260,9 @@ void Context::add_edges(
   // When we add edges as part of a branch, then remember the tails of the edges
   // because we'll need them again when for generating the edges into the other
   // branch.
-  bool remember_before_nodes = condition.conditional();
+  bool push_before_nodes = condition.conditional();
   add_edges(edge_type,
-      generate_node_pairs(before_evaluation, after_evaluation, remember_before_nodes COMMA_DEBUG_ONLY(debug_channel))
+      generate_node_pairs(before_evaluation, after_evaluation, push_before_nodes COMMA_DEBUG_ONLY(debug_channel))
       COMMA_DEBUG_ONLY(debug_channel), condition);
 }
 

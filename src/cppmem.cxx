@@ -396,7 +396,6 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
       break;
     }
   }
-  Dout(dc::notice, "RETURNING " << result);
   return result;
 }
 
