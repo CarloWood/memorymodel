@@ -308,13 +308,14 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
 
           // Keep Evaluation that are conditionals alive.
           m_full_expression_conditions.push_back(std::move(m_last_full_expression));
-          m_last_full_expression_condition.reset();
 
           // When we add edges as part of a branch, then remember the tails of the edges because
           // we'll need them again when for generating the edges into the other branch.
           add_edges(edge_sb,
               generate_node_pairs(last_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
               COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_last_full_expression_condition);
+
+          m_last_full_expression_condition.reset();
 	}
         else
           add_edges(edge_sb, *m_last_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
