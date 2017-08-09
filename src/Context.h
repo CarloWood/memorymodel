@@ -15,7 +15,7 @@ using iterator_type = std::string::const_iterator;
 struct Context
 {
   using last_before_nodes_type = EvaluationNodes;
-  using full_expression_conditions_type = std::vector<std::unique_ptr<Evaluation>>;
+  using full_expression_evaluations_type = std::vector<std::unique_ptr<Evaluation>>;
 
   struct ConditionalBranch
   {
@@ -32,31 +32,41 @@ struct Context
   Graph& m_graph;
 
  private:
-  int m_full_expression_detector_depth;
-  std::unique_ptr<Evaluation> m_previous_full_expression;                   // The previous full expression. Or with state `uninitialized`
-                                                                        //  when there wasn't a previous full expression.
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
-  std::stack<std::unique_ptr<Evaluation>> m_previous_full_expressions;      // Previous full-expressions of parent threads.
   bool m_beginning_of_thread;                                           // Set to true when a new thread was just started.
+  int m_full_expression_detector_depth;                                 // The current number of nested FullExpressionDetector objects.
+  std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // The last full-expressions of parent threads.
   conditionals_type m_conditionals;                                     // Branch conditionals.
-  std::stack<last_before_nodes_type> m_before_nodes_stack;              // The head nodes of those branch conditionals.
-  full_expression_conditions_type m_full_expression_conditions;         // List of Evaluations that are a conditional and a full expression.
-                                                                        //  needed to keep them alive because full expressions aren't pointed
-                                                                        //  to from elsewhere.
-
- public:
-  Condition m_previous_full_expression_condition;
+  full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
+  std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression, if not a condition
+                                                                        //  (aka m_previous_full_expression_condition is 1),
+                                                                        //  otherwise use m_last_condition.
+  Condition m_previous_full_expression_condition;                       // The condition of the previous full expression (not 1), if that
+                                                                        // is a full expression, otherwise this is 1.
+  int m_last_condition;                                                 // The index into m_full_expression_evaluations of the previous full expression
+                                                                        //  if the previous full expression is a condition
+                                                                        //  (aka m_previous_full_expression_condition is not 1).
+  int m_last_full_expression_of_previous_branch;                        // The index into m_full_expression_evaluations of the last full expression
+                                                                        //  of the previous branch.
+  int m_finalize_branch;                                                // Set when the next full expression comes after a selection statement;
+                                                                        //  set to 1 when there was only a 'true' branch, set to 2 when there were
+                                                                        //  two branches (aka, if (...) { ... } else { ... }  <next-full-expression>;
+                                                                        //                          ^        ^               ^
+                                                                        //                           \        \               \_ current position.
+                                                                        //                            \        \_ m_last_full_expression_of_previous_branch.
+                                                                        //                             \_ m_last_condition.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
       m_position_handler(ph),
       m_graph(g),
-      m_full_expression_detector_depth(0),
       m_next_thread_id{1},
       m_current_thread{Thread::create_main_thread()},
-      m_beginning_of_thread(false) { }
+      m_beginning_of_thread(false),
+      m_full_expression_detector_depth(0),
+      m_finalize_branch(0) { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -134,6 +144,9 @@ struct Context
     ASSERT(res.second);
     return res.first;
   }
+
+  // The previous full-expression is a condition and we're about to execute
+  // the branch that is followed when this condition is `condition_true`.
   ConditionalBranch begin_branch_with_condition(bool condition_true)
   {
     DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << condition_true << ")");
@@ -144,16 +157,31 @@ struct Context
     // We rely on this fact to know that m_previous_full_expression is a condition.
     ASSERT(m_previous_full_expression_condition.conditional());
     Dout(dc::finish, "with condition " << m_previous_full_expression_condition << '.');
+    // Keep Evaluations that are conditionals alive.
+    m_last_condition = m_full_expression_evaluations.size();
+    Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_full_expression_evaluations!");
+    m_full_expression_evaluations.push_back(std::move(m_previous_full_expression));
     return conditional_branch;
   }
+
   void begin_branch_with_condition(ConditionalBranch& conditional_branch, bool condition_true)
   {
     DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ", " << condition_true << ")");
+    m_last_full_expression_of_previous_branch = m_full_expression_evaluations.size();
+    Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_full_expression_evaluations!");
+    m_full_expression_evaluations.push_back(std::move(m_previous_full_expression));
     m_previous_full_expression_condition = conditional_branch(condition_true);
-    //m_previous_full_expression = m_before_nodes_stack.top();
-    //m_before_nodes_stack.pop();
     // We rely on this fact to know that m_previous_full_expression is a condition.
     ASSERT(m_previous_full_expression_condition.conditional());
+  }
+
+  void end_branch_with_condition(ConditionalBranch& conditional_branch, int number_of_branches, bool last_branch_condition_true)
+  {
+    DoutEntering(dc::notice, "Context::end_branch_with_condition(" << conditional_branch << ", " << last_branch_condition_true << ")");
+    ASSERT(number_of_branches == 1 || number_of_branches == 2);
+    m_finalize_branch = number_of_branches;
+    m_previous_full_expression_condition = conditional_branch(!last_branch_condition_true);
+    Dout(dc::notice, "m_previous_full_expression_condition = " << m_previous_full_expression_condition);
   }
 
 #ifdef CWDEBUG
@@ -240,6 +268,17 @@ struct Context
 //
 // Note that constant-expression is always a full-expression (as per http://eel.is/c++draft/intro.execution#12.2)
 //
+
+// Detect full expressions by creating a FullExpressionDetector object
+// at the start of executing an expression that potentially is a full-
+// expression.
+//
+// Note that an expression is a full-expression if it is not already
+// part of another full-expression. Hence this detector works by
+// counting the number of FullExpressionDetector objects and only
+// processing an expression as a full expression when the last
+// FullExpressionDetector is destructed.
+//
 struct FullExpressionDetector
 {
   Evaluation& m_full_expression;        // Potential full-expression.
@@ -247,5 +286,6 @@ struct FullExpressionDetector
   FullExpressionDetector(Evaluation& full_expression, Context& context) :
       m_full_expression(full_expression), m_context(context)
     { context.detect_full_expression_start(); }
-  ~FullExpressionDetector() { m_context.detect_full_expression_end(m_full_expression); }
+  ~FullExpressionDetector()
+    { m_context.detect_full_expression_end(m_full_expression); }
 };

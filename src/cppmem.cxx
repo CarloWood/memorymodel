@@ -511,13 +511,16 @@ void execute_statement(ast::statement const& statement, Context& context)
       try { execute_condition(selection_statement.m_if_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
+      int number_branches = 1;
       auto condition = context.begin_branch_with_condition(true);
       execute_statement(selection_statement.m_if_statement.m_then, context);
       if (selection_statement.m_if_statement.m_else)
       {
+        number_branches = 2;
         context.begin_branch_with_condition(condition, false);
         execute_statement(*selection_statement.m_if_statement.m_else, context);
       }
+      context.end_branch_with_condition(condition, number_branches, number_branches == 1);
       break;
     }
     case ast::SN_iteration_statement:

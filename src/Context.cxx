@@ -22,7 +22,8 @@ void Context::scope_start(bool is_thread)
   {
     m_beginning_of_thread = true;
     m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
-    m_previous_full_expressions.emplace(std::move(m_previous_full_expression));
+    Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_last_full_expressions.");
+    m_last_full_expressions.emplace(std::move(m_previous_full_expression));
     DebugMarkDown;
     Dout(dc::notice, "Created " << m_current_thread << '.');
   }
@@ -38,8 +39,9 @@ void Context::scope_end()
     DebugMarkUp;
     Dout(dc::notice, "Joined thread " << m_current_thread << '.');
     m_current_thread = m_current_thread->parent_thread();
-    m_previous_full_expression = std::move(m_previous_full_expressions.top());
-    m_previous_full_expressions.pop();
+    m_previous_full_expression = std::move(m_last_full_expressions.top());
+    m_last_full_expressions.pop();
+    Dout(dc::notice, "RESTORED m_previous_full_expression from m_last_full_expressions to " << *m_previous_full_expression << ".");
   }
 }
 
@@ -261,12 +263,19 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
-    bool const previous_full_expression_is_valid{m_previous_full_expression};
+    // If m_previous_full_expression_condition is conditional,
+    // then m_previous_full_expression was moved to m_full_expression_evaluations.
+    std::unique_ptr<Evaluation> const& previous_full_expression{
+        m_previous_full_expression_condition.conditional() ?
+            m_full_expression_evaluations[m_last_condition] :
+            m_previous_full_expression};
+
+    bool const previous_full_expression_is_valid{previous_full_expression};
 #ifdef CWDEBUG
     debug::Mark* marker;
     if (previous_full_expression_is_valid)
     {
-      Dout(dc::sb_edge, "Generate sequenced-before edges between " << *m_previous_full_expression << " and " << full_expression << ".");
+      Dout(dc::sb_edge, "Generate sequenced-before edges between " << *previous_full_expression << " and " << full_expression << ".");
       Debug(marker = new debug::Mark("\e[43;33;1m↳\e[0m"));    // DebugMarkDownRight
       s_first_full_expression = false;
     }
@@ -274,7 +283,7 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     {
       // m_previous_full_expression should only be invalid when we encounter the first full-expression.
       // After that it should always be equal to the previous full-expression.
-      DoutFatal(dc::core, "Unexpected invalid m_previous_full_expression! Last full-expression condition is " << *m_full_expression_conditions.back());
+      DoutFatal(dc::core, "Unexpected invalid m_previous_full_expression! Last full-expression condition is " << *m_full_expression_evaluations.back());
     }
 #endif
 
@@ -296,31 +305,46 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
       {
         if (m_previous_full_expression_condition.conditional())
 	{
-          Dout(dc::sb_edge, "Generate node pairs for edges between between conditional " << *m_previous_full_expression << " and " << full_expression << ".");
-          DebugMarkDownRight;
+          if (!m_finalize_branch)
+          {
+            Dout(dc::sb_edge, "Generate edges between between conditional " << *previous_full_expression << " and " << full_expression << ".");
+            DebugMarkDownRight;
 
-          // Get all head nodes of the last full expression (which is a condition).
-          EvaluationNodes previous_full_expression_nodes =
-              m_previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+            // Get all head nodes of the last full expression (which is a condition).
+            EvaluationNodes previous_full_expression_nodes =
+                previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 
-          Dout(dc::notice, "Pushing " << previous_full_expression_nodes << " onto m_before_nodes_stack.");
-          m_before_nodes_stack.push(previous_full_expression_nodes);
+            // When we add edges as part of a branch, then remember the tails of the edges because
+            // we'll need them again when for generating the edges into the other branch.
+            add_edges(edge_sb,
+                generate_node_pairs(previous_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
+                COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_previous_full_expression_condition);
+          }
+          else
+          {
+            bool single_branch = m_finalize_branch == 1;
+            int index = single_branch ? m_last_condition : m_last_full_expression_of_previous_branch;
+            Dout(dc::sb_edge, "Finalize: generate edges between between " << (single_branch ? "conditional " : "") <<
+                *m_full_expression_evaluations[index] << " and " << full_expression << ".");
+            DebugMarkDownRight;
 
-          // Keep Evaluation that are conditionals alive.
-          m_full_expression_conditions.push_back(std::move(m_previous_full_expression));
-
-          // When we add edges as part of a branch, then remember the tails of the edges because
-          // we'll need them again when for generating the edges into the other branch.
-          add_edges(edge_sb,
-              generate_node_pairs(previous_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
-              COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_previous_full_expression_condition);
-
+            auto node_pairs =
+                generate_node_pairs(
+                    m_full_expression_evaluations[index]->get_nodes(
+                        NodeRequestedType::heads
+                        COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge)),
+                    full_expression
+                    COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+            add_edges(edge_sb, *m_previous_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+            add_edges(edge_sb, node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_previous_full_expression_condition);
+          }
           m_previous_full_expression_condition.reset();
 	}
         else
           add_edges(edge_sb, *m_previous_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       }
       m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
+      Dout(dc::notice, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
     }
 
 #ifdef CWDEBUG
