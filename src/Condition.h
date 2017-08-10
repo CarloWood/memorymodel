@@ -18,7 +18,6 @@ class Condition
 
  public:
   Condition() : m_boolean_product(1) { }
-  Condition(Condition const& condition) : m_boolean_product(condition.m_boolean_product) {  }
   Condition(Branch const&);
 
   void reset() { m_boolean_product = 1; }

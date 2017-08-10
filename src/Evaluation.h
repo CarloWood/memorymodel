@@ -156,6 +156,8 @@ class Evaluation
   Evaluation const* rhs() const { ASSERT(m_state == binary); return m_rhs.get(); }
 };
 
+std::ostream& operator<<(std::ostream& os, Evaluation::node_pairs_type const& node_pairs);
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 extern channel_ct valuecomp;

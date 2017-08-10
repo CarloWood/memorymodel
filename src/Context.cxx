@@ -186,6 +186,7 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
     Evaluation const& after_evaluation
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
+  DoutEntering(debug_channel|continued_cf, "Context::generate_node_pairs(" << before_nodes << ", " << after_evaluation << ") = ");
   Evaluation::node_pairs_type node_pairs;
   for (NodePtr const& before_node : before_nodes)
   {
@@ -196,6 +197,7 @@ Evaluation::node_pairs_type Context::generate_node_pairs(
         }
     COMMA_DEBUG_ONLY(debug_channel));
   }
+  Dout(dc::finish, node_pairs);
   return node_pairs;
 }
 
@@ -205,6 +207,7 @@ void Context::add_edges(
     NodePtr const& after_node
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
+  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << *after_node << ").");
   before_evaluation.for_each_node(NodeRequestedType::heads,
       [this, edge_type, &after_node](NodePtr const& before_node)
       {
@@ -237,6 +240,7 @@ void Context::add_edges(
     Evaluation const& after_evaluation
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
+  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << after_evaluation << ").");
   add_edges(
       edge_type,
       generate_node_pairs(
@@ -258,19 +262,24 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
   {
     // full_expression is the evaluation of a full-expression.
     Dout(dc::notice, "Found full-expression with evaluation: " << full_expression);
+
     // An Evaluation is allocated iff when the expression is pointed to by a std::unique_ptr,
     // which are only used as member functions of another Evaluation; hence a full-expression
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
-    // If m_previous_full_expression_condition is conditional,
-    // then m_previous_full_expression was moved to m_full_expression_evaluations.
+    BranchInfo* const branch_info = m_branch_info_stack.empty() ? nullptr : &m_branch_info_stack.top();
+
+    bool previous_full_expression_is_condition = branch_info && branch_info->m_condition.conditional();
+
+    // If m_condition is conditional then m_previous_full_expression is a condition and was moved to m_full_expression_evaluations.
     std::unique_ptr<Evaluation> const& previous_full_expression{
-        m_previous_full_expression_condition.conditional() ?
-            m_full_expression_evaluations[m_last_condition] :
+        previous_full_expression_is_condition ?
+            m_full_expression_evaluations[branch_info->m_last_condition] :
             m_previous_full_expression};
 
     bool const previous_full_expression_is_valid{previous_full_expression};
+
 #ifdef CWDEBUG
     debug::Mark* marker;
     if (previous_full_expression_is_valid)
@@ -286,10 +295,13 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
       DoutFatal(dc::core, "Unexpected invalid m_previous_full_expression! Last full-expression condition is " << *m_full_expression_evaluations.back());
     }
 #endif
+    Dout(dc::notice, "previous_full_expression_is_condition = " << previous_full_expression_is_condition);
+    Dout(dc::notice, "previous_full_expression_is_valid = " << previous_full_expression_is_valid);
 
     // Count number of nodes in full_expression.
     int number_of_nodes = 0;
     full_expression.for_each_node(NodeRequestedType::tails, [&number_of_nodes](NodePtr const&) { ++number_of_nodes; } COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    Dout(dc::notice, "number_of_nodes = " << number_of_nodes);
 
     // Find all tail nodes in the current full_expression.
     //
@@ -303,45 +315,57 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     {
       if (previous_full_expression_is_valid)
       {
-        if (m_previous_full_expression_condition.conditional())
+        std::vector<Evaluation::node_pairs_type> skip_edge_node_pairs;
+        std::vector<Condition> skip_conditions;
+
+        Dout(dc::notice, "Size of m_finalize_branch_stack = " << m_finalize_branch_stack.size());
+        while (m_finalize_branch_stack.size() > m_protected_finalize_branch_stack_size)
+        {
+          BranchInfo const& branch_info{m_finalize_branch_stack.top()};
+          bool single_branch = branch_info.m_finalize_branch == 1;
+          int index = single_branch ? branch_info.m_last_condition : branch_info.m_last_full_expression_of_previous_branch;
+          Dout(dc::sb_edge, "Finalize: generate edges between between " << (single_branch ? "conditional " : "") <<
+              *m_full_expression_evaluations[index] << " and " << full_expression << ".");
+          DebugMarkDownRight;
+
+          // Generate skip edge node pairs.
+          skip_edge_node_pairs.emplace_back(
+              generate_node_pairs(
+                  m_full_expression_evaluations[index]->get_nodes(
+                      NodeRequestedType::heads
+                      COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge)),
+                  full_expression
+                  COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge)));
+
+          // Also remember the condition to use for those.
+          skip_conditions.push_back(branch_info.m_condition);
+
+          // Pop branch info from stack.
+          m_finalize_branch_stack.pop();
+        }
+
+        if (previous_full_expression_is_condition)
 	{
-          if (!m_finalize_branch)
-          {
-            Dout(dc::sb_edge, "Generate edges between between conditional " << *previous_full_expression << " and " << full_expression << ".");
-            DebugMarkDownRight;
+          Dout(dc::sb_edge, "Generate edges between between conditional " << *previous_full_expression << " and " << full_expression << ".");
+          DebugMarkDownRight;
 
-            // Get all head nodes of the last full expression (which is a condition).
-            EvaluationNodes previous_full_expression_nodes =
-                previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+          // Get all head nodes of the last full expression (which is a condition).
+          EvaluationNodes previous_full_expression_nodes =
+              previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 
-            // When we add edges as part of a branch, then remember the tails of the edges because
-            // we'll need them again when for generating the edges into the other branch.
-            add_edges(edge_sb,
-                generate_node_pairs(previous_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
-                COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_previous_full_expression_condition);
-          }
-          else
-          {
-            bool single_branch = m_finalize_branch == 1;
-            int index = single_branch ? m_last_condition : m_last_full_expression_of_previous_branch;
-            Dout(dc::sb_edge, "Finalize: generate edges between between " << (single_branch ? "conditional " : "") <<
-                *m_full_expression_evaluations[index] << " and " << full_expression << ".");
-            DebugMarkDownRight;
+          add_edges(edge_sb,
+              generate_node_pairs(previous_full_expression_nodes, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))
+              COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), branch_info->m_condition);
 
-            auto node_pairs =
-                generate_node_pairs(
-                    m_full_expression_evaluations[index]->get_nodes(
-                        NodeRequestedType::heads
-                        COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge)),
-                    full_expression
-                    COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-            add_edges(edge_sb, *m_previous_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-            add_edges(edge_sb, node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), m_previous_full_expression_condition);
-          }
-          m_previous_full_expression_condition.reset();
+          branch_info->m_condition.reset();
 	}
         else
           add_edges(edge_sb, *m_previous_full_expression, full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+
+        // Add the skip edges.
+        int i = 0;
+        for (auto&& skip_edges : skip_edge_node_pairs)
+          add_edges(edge_sb, skip_edges COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), skip_conditions[i++]);
       }
       m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
       Dout(dc::notice, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
@@ -352,6 +376,107 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
       delete marker;
 #endif
   }
+}
+
+Context::ConditionalBranch Context::begin_branch_true()
+{
+  DoutEntering(dc::notice, "Context::begin_branch_with_condition()");
+  ASSERT(m_previous_full_expression);
+  Dout(dc::notice|continued_cf, "Adding condition from m_previous_full_expression (" << *m_previous_full_expression << ") ");
+  ConditionalBranch conditional_branch{add_condition(m_previous_full_expression)};    // The previous full-expression is a conditional.
+  // Create a new BranchInfo for this selection statement.
+  m_branch_info_stack.emplace();
+  m_branch_info_stack.top().begin_branch_true(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
+  return conditional_branch;
+}
+
+void Context::BranchInfo::begin_branch_true(
+    ConditionalBranch& conditional_branch,
+    full_expression_evaluations_type& full_expression_evaluations,
+    std::unique_ptr<Evaluation>&& previous_full_expression)
+{
+  m_condition = conditional_branch(true);                                             // We'll follow the true branch of this condition first.
+  // We rely on this fact to know that m_previous_full_expression is a condition.
+  ASSERT(m_condition.conditional());
+  Dout(dc::finish, "with condition " << m_condition << '.');
+  // Keep Evaluations that are conditionals alive.
+  m_last_condition = full_expression_evaluations.size();
+  Dout(dc::notice, "MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
+  full_expression_evaluations.push_back(std::move(previous_full_expression));
+  m_number_of_branches = 1;
+}
+
+void Context::BranchInfo::begin_branch_false(
+    ConditionalBranch& conditional_branch,
+    full_expression_evaluations_type& full_expression_evaluations,
+    std::unique_ptr<Evaluation>&& previous_full_expression)
+{
+  m_last_full_expression_of_previous_branch = full_expression_evaluations.size();
+  Dout(dc::notice, "MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
+  full_expression_evaluations.push_back(std::move(previous_full_expression));
+  m_condition = conditional_branch(false);
+  // We rely on this fact to know that m_previous_full_expression is a condition.
+  ASSERT(m_condition.conditional());
+  m_number_of_branches = 2;
+}
+
+void Context::BranchInfo::end_branch(ConditionalBranch& conditional_branch)
+{
+  // If there is only one branch,
+  //
+  // if (condition A)         // Node 1
+  // {
+  //   // Node 2
+  //   // Node 3
+  // }
+  // // Node 4
+  //
+  // The graph should look like this:
+  //
+  //             node 1
+  //             | A   |
+  //             v     |
+  //           node 2  | _
+  //             | A   | A <====
+  //             v     |
+  //           node 3  |
+  //             | A   |
+  //             v     v
+  //             node 4
+  //
+  // while if there are two branches,
+  //
+  // if (condition A)         // Node 1
+  // {
+  //   // Node 2
+  //   // Node 3
+  // }
+  // else
+  // {
+  //   // Node 4
+  //   // Node 5
+  // }
+  // // Node 6
+  //
+  // the graph should look like this:
+  //
+  //              _node 1_  _
+  //           A |        | A
+  //             v        v
+  //           node 2   node_4
+  //           A |        | A
+  //             v        v
+  //           node 3   node_5
+  //     ====> A |        | A
+  //             v_      _v
+  //               node 6
+  //
+  // The edge marked with the double arrow (<===) needs to be added
+  // when we find the node(s) of the next full-expression (node 6).
+  // The condition to be used for it is therefore:
+  m_condition = conditional_branch(m_number_of_branches == 2);
+  m_finalize_branch = m_number_of_branches;
+  Dout(dc::notice, "m_condition = " << m_condition);
 }
 
 //static

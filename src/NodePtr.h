@@ -2,6 +2,7 @@
 
 #include <set>
 #include <memory>
+#include <iosfwd>
 
 class NodeBase;
 

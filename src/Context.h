@@ -25,6 +25,38 @@ struct Context
     friend std::ostream& operator<<(std::ostream& os, ConditionalBranch const& conditional_branch);
   };
 
+  struct BranchInfo
+  {
+    Condition m_condition;                                                // The condition of the current branch (or skip edge) (ie not 1).
+    int m_last_condition;                                                 // The index into m_full_expression_evaluations of the previous full expression
+                                                                          //  if the previous full expression is a condition (aka m_condition is not 1).
+    int m_last_full_expression_of_previous_branch;                        // The index into m_full_expression_evaluations of the last full expression
+                                                                          //  of the previous branch.
+    int m_finalize_branch;                                                // Set when the next full expression comes after a selection statement;
+                                                                          //  set to 1 when there was only a 'true' branch, set to 2 when there were
+                                                                          //  two branches (aka, if (...) { ... } else { ... }  <next-full-expression>;
+                                                                          //                          ^        ^               ^
+                                                                          //                           \        \               \_ current position.
+                                                                          //                            \        \_ m_last_full_expression_of_previous_branch.
+                                                                          //                             \_ m_last_condition.
+    int m_number_of_branches;                                             // Set to 1 when a branch is started for condition == true; set to 2 when there
+                                                                          //  also is a branch for condition == false.
+    BranchInfo() : m_finalize_branch(0) { }
+
+    void begin_branch_true(
+        ConditionalBranch& conditional_branch,
+        full_expression_evaluations_type& full_expression_evaluations,
+        std::unique_ptr<Evaluation>&& previous_full_expression);
+
+    void begin_branch_false(
+        ConditionalBranch& conditional_branch,
+        full_expression_evaluations_type& full_expression_evaluations,
+        std::unique_ptr<Evaluation>&& previous_full_expression);
+
+    void end_branch(
+        ConditionalBranch& conditional_branch);
+  };
+
   position_handler<iterator_type>& m_position_handler;
   Symbols m_symbols;
   Locks m_locks;
@@ -41,22 +73,12 @@ struct Context
   conditionals_type m_conditionals;                                     // Branch conditionals.
   full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
   std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression, if not a condition
-                                                                        //  (aka m_previous_full_expression_condition is 1),
+                                                                        //  (aka m_condition is 1),
                                                                         //  otherwise use m_last_condition.
-  Condition m_previous_full_expression_condition;                       // The condition of the previous full expression (not 1), if that
-                                                                        // is a full expression, otherwise this is 1.
-  int m_last_condition;                                                 // The index into m_full_expression_evaluations of the previous full expression
-                                                                        //  if the previous full expression is a condition
-                                                                        //  (aka m_previous_full_expression_condition is not 1).
-  int m_last_full_expression_of_previous_branch;                        // The index into m_full_expression_evaluations of the last full expression
-                                                                        //  of the previous branch.
-  int m_finalize_branch;                                                // Set when the next full expression comes after a selection statement;
-                                                                        //  set to 1 when there was only a 'true' branch, set to 2 when there were
-                                                                        //  two branches (aka, if (...) { ... } else { ... }  <next-full-expression>;
-                                                                        //                          ^        ^               ^
-                                                                        //                           \        \               \_ current position.
-                                                                        //                            \        \_ m_last_full_expression_of_previous_branch.
-                                                                        //                             \_ m_last_condition.
+  std::stack<BranchInfo> m_branch_info_stack;                           // Stack to store BranchInfo for nested branches.
+  std::stack<BranchInfo> m_finalize_branch_stack;                       // Stack to store BranchInfo for branches that need to be finalized.
+  size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
+                                                                        //  m_finalize_branch_stack that should not be finalized yet.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -66,7 +88,7 @@ struct Context
       m_current_thread{Thread::create_main_thread()},
       m_beginning_of_thread(false),
       m_full_expression_detector_depth(0),
-      m_finalize_branch(0) { }
+      m_protected_finalize_branch_stack_size(0) { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -146,42 +168,33 @@ struct Context
   }
 
   // The previous full-expression is a condition and we're about to execute
-  // the branch that is followed when this condition is `condition_true`.
-  ConditionalBranch begin_branch_with_condition(bool condition_true)
+  // the branch that is followed when this condition is true.
+  ConditionalBranch begin_branch_true();
+
+  void begin_branch_false(ConditionalBranch& conditional_branch)
   {
-    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << condition_true << ")");
-    ASSERT(m_previous_full_expression);
-    Dout(dc::notice|continued_cf, "Adding condition from m_previous_full_expression (" << *m_previous_full_expression << ") ");
-    ConditionalBranch conditional_branch{add_condition(m_previous_full_expression)};        // The previous full-expression is a conditional.
-    m_previous_full_expression_condition = conditional_branch(condition_true);              // We'll follow the true/false branch of this condition first.
-    // We rely on this fact to know that m_previous_full_expression is a condition.
-    ASSERT(m_previous_full_expression_condition.conditional());
-    Dout(dc::finish, "with condition " << m_previous_full_expression_condition << '.');
-    // Keep Evaluations that are conditionals alive.
-    m_last_condition = m_full_expression_evaluations.size();
-    Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_full_expression_evaluations!");
-    m_full_expression_evaluations.push_back(std::move(m_previous_full_expression));
-    return conditional_branch;
+    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ")");
+    m_branch_info_stack.top().begin_branch_false(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
   }
 
-  void begin_branch_with_condition(ConditionalBranch& conditional_branch, bool condition_true)
+  void end_branch(ConditionalBranch& conditional_branch)
   {
-    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ", " << condition_true << ")");
-    m_last_full_expression_of_previous_branch = m_full_expression_evaluations.size();
-    Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_full_expression_evaluations!");
-    m_full_expression_evaluations.push_back(std::move(m_previous_full_expression));
-    m_previous_full_expression_condition = conditional_branch(condition_true);
-    // We rely on this fact to know that m_previous_full_expression is a condition.
-    ASSERT(m_previous_full_expression_condition.conditional());
+    DoutEntering(dc::notice, "Context::end_branch_with_condition(" << conditional_branch << ")");
+    m_branch_info_stack.top().end_branch(conditional_branch);
+    m_finalize_branch_stack.push(m_branch_info_stack.top());
+    m_branch_info_stack.pop();
   }
 
-  void end_branch_with_condition(ConditionalBranch& conditional_branch, int number_of_branches, bool last_branch_condition_true)
+  size_t protect_finalize_branch_stack()
   {
-    DoutEntering(dc::notice, "Context::end_branch_with_condition(" << conditional_branch << ", " << last_branch_condition_true << ")");
-    ASSERT(number_of_branches == 1 || number_of_branches == 2);
-    m_finalize_branch = number_of_branches;
-    m_previous_full_expression_condition = conditional_branch(!last_branch_condition_true);
-    Dout(dc::notice, "m_previous_full_expression_condition = " << m_previous_full_expression_condition);
+    size_t old_protected_finalize_branch_stack_size = m_protected_finalize_branch_stack_size;
+    m_protected_finalize_branch_stack_size = m_finalize_branch_stack.size();
+    return old_protected_finalize_branch_stack_size;
+  }
+
+  void unprotect_finalize_branch_stack(int old_protected_finalize_branch_stack_size)
+  {
+    m_protected_finalize_branch_stack_size = old_protected_finalize_branch_stack_size;
   }
 
 #ifdef CWDEBUG
