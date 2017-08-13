@@ -46,6 +46,10 @@ libcppmem_a_SOURCES = \
 		 debug_ostream_operators.h \
 		 ast.cxx \
 		 ast.h \
+		 iomanip_html.cxx \
+		 iomanip_html.h \
+		 iomanip_dotfile.cxx \
+		 iomanip_dotfile.h \
 		 Evaluation.cxx \
 		 Evaluation.h \
 		 position_handler.cxx \

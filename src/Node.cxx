@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "Node.h"
 #include "debug_ostream_operators.h"
+#include "iomanip_dotfile.h"
 #include "utils/is_power_of_two.h"
 #include "utils/macros.h"
 #include "BooleanExpression.h"
@@ -81,61 +82,60 @@ std::string CEWNode::type() const
   return result;
 }
 
-std::string NodeBase::label(bool dot_file) const
+std::ostream& operator<<(std::ostream& os, NodeBase const& node)
 {
-  std::ostringstream ss;
-  ss << name() << ':' << type() << ' ' << tag();
-  print_code(ss, dot_file);
-  return ss.str();
+  os << node.name() << ':' << node.type() << ' ' << node.tag();
+  node.print_code(os);
+  return os;
 }
 
-void NAReadNode::print_code(std::ostream& os, bool UNUSED_ARG(dot_file)) const
-{
-  //FIXME print what we read...
-  //os << '<-';
-}
-
-void AtomicReadNode::print_code(std::ostream& os, bool UNUSED_ARG(dot_file)) const
+void NAReadNode::print_code(std::ostream& os) const
 {
   //FIXME print what we read...
   //os << '<-';
 }
 
-void WriteNode::print_code(std::ostream& os, bool dot_file) const
+void AtomicReadNode::print_code(std::ostream& os) const
+{
+  //FIXME print what we read...
+  //os << '<-';
+}
+
+void WriteNode::print_code(std::ostream& os) const
 {
   os << '=';
-  if (!dot_file)
+  if (!IOManipDotFile::is_dot_file(os))
     m_evaluation->print_on(os);
 }
 
-void MutexDeclNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+void MutexDeclNode::print_code(std::ostream& UNUSED_ARG(os)) const
 {
 }
 
-void MutexReadNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+void MutexReadNode::print_code(std::ostream& UNUSED_ARG(os)) const
 {
 }
 
-void MutexLockNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+void MutexLockNode::print_code(std::ostream& UNUSED_ARG(os)) const
 {
 }
 
-void MutexUnlockNode::print_code(std::ostream& UNUSED_ARG(os), bool UNUSED_ARG(dot_file)) const
+void MutexUnlockNode::print_code(std::ostream& UNUSED_ARG(os)) const
 {
 }
 
-void RMWNode::print_code(std::ostream& os, bool dot_file) const
+void RMWNode::print_code(std::ostream& os) const
 {
   ASSERT(m_evaluation->binary_operator() == additive_ado_add || m_evaluation->binary_operator() == additive_ado_sub);
   os << ((m_evaluation->binary_operator() == additive_ado_add) ? "+=": "-=");
-  if (!dot_file)
+  if (!IOManipDotFile::is_dot_file(os))
     m_evaluation->rhs()->print_on(os);
 }
 
-void CEWNode::print_code(std::ostream& os, bool dot_file) const
+void CEWNode::print_code(std::ostream& os) const
 {
   os << "=" << m_expected << '?';
-  if (!dot_file)
+  if (!IOManipDotFile::is_dot_file(os))
     os << m_desired;
 }
 

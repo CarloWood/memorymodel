@@ -196,7 +196,7 @@ class NodeBase
 
   virtual bool is_second_mutex_access() const { return false; }
   virtual std::string type() const = 0;
-  virtual void print_code(std::ostream& os, bool dot_file) const = 0;
+  virtual void print_code(std::ostream& os) const = 0;
   virtual NodeProvidedType provided_type() const = 0;
 
  public:
@@ -225,7 +225,6 @@ class NodeBase
   // Accessors.
   ast::tag tag() const { return m_variable; }
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }
-  std::string label(bool dot_file = false) const;
   ThreadPtr const thread() const { return m_thread; }
   end_points_type const& get_end_points() const { return m_end_points; }
   boolean::Expression const& exists() const { return m_exists; }
@@ -234,7 +233,7 @@ class NodeBase
   friend bool operator<(NodeBase const& node1, NodeBase const& node2) { return node1.m_id < node2.m_id; }
   friend bool operator==(NodeBase const& node1, NodeBase const& node2) { return node1.m_id == node2.m_id; }
 
-  friend std::ostream& operator<<(std::ostream& os, NodeBase const& node) { return os << node.label(); }
+  friend std::ostream& operator<<(std::ostream& os, NodeBase const& node);
 
  private:
   bool add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const;
@@ -258,7 +257,7 @@ class NAReadNode : public ReadNode
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
 };
 
 class AtomicReadNode : public ReadNode
@@ -272,7 +271,7 @@ class AtomicReadNode : public ReadNode
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
 };
 
 // Base class for [value-computation/]side-effect nodes that write m_evaluation to their memory location.
@@ -291,7 +290,7 @@ class WriteNode : public NodeBase
 
   // Interface implementation.
   NodeProvidedType provided_type() const override { return NodeProvidedType::side_effect; }
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
 };
 
 class NAWriteNode : public WriteNode
@@ -323,7 +322,7 @@ class MutexDeclNode : public NodeBase
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::side_effect; }
 };
 
@@ -333,7 +332,7 @@ class MutexReadNode : public NAReadNode
   using NAReadNode::NAReadNode;
 
   // Interface implementation.
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
 };
 
 class MutexLockNode : public NodeBase
@@ -343,7 +342,7 @@ class MutexLockNode : public NodeBase
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
   bool is_second_mutex_access() const override { return true; }
 };
@@ -355,7 +354,7 @@ class MutexUnlockNode : public NodeBase
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
   bool is_second_mutex_access() const override { return true; }
 };
@@ -371,7 +370,7 @@ class RMWNode : public WriteNode
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
 };
 
@@ -390,7 +389,7 @@ class CEWNode : public AtomicWriteNode
 
   // Interface implementation.
   std::string type() const override;
-  void print_code(std::ostream& os, bool dot_file) const override;
+  void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
 };
 

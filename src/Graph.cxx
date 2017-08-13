@@ -3,6 +3,8 @@
 #include "Context.h"
 #include "debug.h"
 #include "utils/macros.h"
+#include "iomanip_dotfile.h"
+#include "iomanip_html.h"
 #include <stdexcept>
 #include <fstream>
 
@@ -58,6 +60,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   double const yscale = 1.0;
 
   // Write a .dot file.
+  out << dotfile;
   out << "digraph G {\n";
   out << " splines=true;\n";
   out << " overlap=false;\n";
@@ -73,7 +76,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     posy = 1.0 + yscale * (max_count + --depth[thread]);
     out << "node" << node->name() <<
         " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
-        " [label=\"" << node->label(true) << "\", pos=\"" << posx << ',' << posy << "!\"]"
+        " [label=\"" << *node << "\", pos=\"" << posx << ',' << posy << "!\"]"
         " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.25) << "\"][width=\"" << (xscale * 0.6) << "\"];\n";
   }
   for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
@@ -129,7 +132,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
         "      <TR>\n"
         "      <TD>" << conditional.second.id_name() << "</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
-      conditional.first->print_on(out, true);
+      out << html << *conditional.first;
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";

@@ -146,7 +146,7 @@ class Evaluation
   friend std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation);
   friend char const* state_str(State state);
 
-  void print_on(std::ostream& os, bool use_html_color = false) const;
+  void print_on(std::ostream& os) const;
   void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
   EvaluationNodes get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
 

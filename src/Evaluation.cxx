@@ -4,6 +4,7 @@
 #include "Context.h"
 #include "Graph.h"
 #include "TagCompare.h"
+#include "iomanip_html.h"
 #include "utils/macros.h"
 #include "utils/AIAlert.h"
 #include <ostream>
@@ -121,21 +122,48 @@ char const* color_code[3][2] = {
   { "\e[37m", "<FONT COLOR=\"gray\">" }
 };
 
-std::string color(Colors color, bool use_html_color)
+std::string color(Colors color, bool html)
 {
-  return color_code[color][use_html_color];
+  return color_code[color][html];
 }
 
-void Evaluation::print_on(std::ostream& os, bool use_html_color) const
+std::string to_html(char const* str)
 {
-  // This has to be a static because we recursively get here through a call to operator<<(ostream, Node).
-  static bool print_color_codes = true;
+  std::string result;
+  for (char const* p = str; *p; ++p)
+  {
+    switch (*p)
+    {
+      case '<':
+        result += "&lt;";
+        break;
+      case '>':
+        result += "&gt;";
+        break;
+      case '&':
+        result += "&amp;";
+        break;
+      default:
+        result += *p;
+    }
+  }
+  return result;
+}
+
+void Evaluation::print_on(std::ostream& os) const
+{
+  //DoutEntering(dc::notice, "Evaluation::print_on(" << (void*)&os << ") [this = " << (void*)this << "]");
+
+  bool const html = IOManipHtml::is_html(os);
+  static int suppress_color_index = std::ios_base::xalloc();
+  bool print_color_codes = !os.iword(suppress_color_index);
+
   os << '{';
   switch (m_state)
   {
     case Evaluation::unused:
       if (print_color_codes)
-        os << '<' << color(red, use_html_color) << "UNUSED Evaluation" << color(reset, use_html_color) << '>';
+        os << (html ? "&lt;" : "<") << color(red, html) << "UNUSED Evaluation" << color(reset, html) << (html ? "&gt;" : ">");
       else
         os << "<UNUSED Evaluation>";
       break;
@@ -157,17 +185,29 @@ void Evaluation::print_on(std::ostream& os, bool use_html_color) const
       os << increment_str(m_simple.m_increment);
       break;
     case Evaluation::unary:
-      os << code(m_operator.unary) << '(';
+    {
+      char const* unary_op = code(m_operator.unary);
+      if (html)
+        os << to_html(unary_op) << '(';
+      else
+        os << unary_op << '(';
       m_lhs->print_on(os);
       os << ')';
       break;
+    }
     case Evaluation::binary:
+    {
       os << '(';
       m_lhs->print_on(os);
-      os << ") " << code(m_operator.binary) << " (";
+      char const* binary_op = code(m_operator.binary);
+      if (html)
+        os << ") " << to_html(binary_op) << " (";
+      else
+        os << ") " << binary_op << " (";
       m_rhs->print_on(os);
       os << ')';
       break;
+    }
     case Evaluation::condition:
       os << '(';
       m_condition->print_on(os);
@@ -193,17 +233,21 @@ void Evaluation::print_on(std::ostream& os, bool use_html_color) const
       os << (first ? "/" : ",");
     else
     {
-      os << (first ? color(lightgray, use_html_color) + "/" : ",");
+      os << (first ? color(lightgray, html) + "/" : ",");
       if (first)
+      {
         print_color_codes = false;
+        os.iword(suppress_color_index) = 1;
+      }
     }
     os << *node;
     first = false;
   }
   if (orig_print_color_codes && !print_color_codes)
   {
-    os << color(reset, use_html_color);
+    os << color(reset, html);
     print_color_codes = true;
+    os.iword(suppress_color_index) = 0;
   }
   first = true;
   for (auto&& node : m_side_effects)
@@ -212,17 +256,21 @@ void Evaluation::print_on(std::ostream& os, bool use_html_color) const
       os << (first ? "/" : ",");
     else
     {
-      os << (first ? color(lightgray, use_html_color) + "/" : ",");
+      os << (first ? color(lightgray, html) + "/" : ",");
       if (first)
+      {
         print_color_codes = false;
+        os.iword(suppress_color_index) = 1;
+      }
     }
     os << *node;
     first = false;
   }
   if (orig_print_color_codes && !print_color_codes)
   {
-    os << color(reset, use_html_color);
+    os << color(reset, html);
     print_color_codes = true;
+    os.iword(suppress_color_index) = 0;
   }
 #ifdef TRACK_EVALUATION
   Debug(
