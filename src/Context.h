@@ -21,40 +21,39 @@ struct Context
   {
     conditionals_type::iterator m_conditional;
     ConditionalBranch(conditionals_type::iterator const& conditional) : m_conditional(conditional) { }
-    Condition operator()(bool conditional_true) { return Condition(Branch(m_conditional, conditional_true)); }
+    Condition operator()(bool conditional_true) const { return Condition(Branch(m_conditional, conditional_true)); }
     friend std::ostream& operator<<(std::ostream& os, ConditionalBranch const& conditional_branch);
   };
 
   struct BranchInfo
   {
-    Condition m_condition;                                                // The condition of the current branch (or skip edge) (ie not 1).
-    int m_last_condition;                                                 // The index into m_full_expression_evaluations of the previous full expression
-                                                                          //  if the previous full expression is a condition (aka m_condition is not 1).
-    int m_last_full_expression_of_previous_branch;                        // The index into m_full_expression_evaluations of the last full expression
-                                                                          //  of the previous branch.
-    int m_finalize_branch;                                                // Set when the next full expression comes after a selection statement;
-                                                                          //  set to 1 when there was only a 'true' branch, set to 2 when there were
-                                                                          //  two branches (aka, if (...) { ... } else { ... }  <next-full-expression>;
-                                                                          //                          ^        ^               ^
-                                                                          //                           \        \               \_ current position.
-                                                                          //                            \        \_ m_last_full_expression_of_previous_branch.
-                                                                          //                             \_ m_last_condition.
-    int m_number_of_branches;                                             // Set to 1 when a branch is started for condition == true; set to 2 when there
-                                                                          //  also is a branch for condition == false.
-    BranchInfo() : m_finalize_branch(0) { }
+    ConditionalBranch m_condition;                                        // The conditional of this selection statement.
+    full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Contect::m_full_expression_evaluations.
+    bool m_in_true_branch;                                                // True in True-branch, false in False-branch; true or false after selection statement
+                                                                          //  depending whether or not we had a False-branch (false if we did).
+    bool m_edge_to_true_branch_added;                                     // Set when the edge from the conditional expression was added that represents 'True'.
+    bool m_edge_to_false_branch_added;                                    // Set when the edge from the conditional expression was added that represents 'False'.
+    int m_condition_index;                                                // The index into m_full_expression_evaluations of the conditional expression.
+    int m_last_full_expression_of_true_branch_index;                      // The index into m_full_expression_evaluations of the last full expression
+                                                                          //  of the True-branch, or -1 when it doesn't exist.
+    int m_last_full_expression_of_false_branch_index;                     // The index into m_full_expression_evaluations of the last full expression
+                                                                          //  of the False-branch, or -1 when it doesn't exist.
 
-    void begin_branch_true(
-        ConditionalBranch& conditional_branch,
+    BranchInfo(
+        ConditionalBranch const& conditional_branch,
         full_expression_evaluations_type& full_expression_evaluations,
         std::unique_ptr<Evaluation>&& previous_full_expression);
 
-    void begin_branch_false(
-        ConditionalBranch& conditional_branch,
-        full_expression_evaluations_type& full_expression_evaluations,
-        std::unique_ptr<Evaluation>&& previous_full_expression);
+    void begin_branch_false(std::unique_ptr<Evaluation>&& previous_full_expression);
+    void end_branch(std::unique_ptr<Evaluation>&& previous_full_expression);
+    void added_edge_from_condition() { if (m_in_true_branch) m_edge_to_true_branch_added = true; else m_edge_to_false_branch_added = true; }
 
-    void end_branch(
-        ConditionalBranch& conditional_branch);
+    bool conditional_edge_of_current_branch_added() const { return m_in_true_branch ? m_edge_to_true_branch_added : m_edge_to_false_branch_added; }
+    Condition get_current_condition() const { return m_condition(m_in_true_branch); }
+    Condition get_negated_current_condition() const { return m_condition(!m_in_true_branch); }
+
+    void print_on(std::ostream& os) const;
+    friend std::ostream& operator<<(std::ostream& os, BranchInfo const& branch_info) { branch_info.print_on(os); return os; }
   };
 
   position_handler<iterator_type>& m_position_handler;
@@ -150,7 +149,7 @@ struct Context
   // Register a branch condition.
   ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)
   {
-    DoutEntering(dc::notice, "Context::add_condition(" << *condition << ")");
+    DoutEntering(dc::branch, "Context::add_condition(" << *condition << ")");
     ASSERT(condition->is_valid());
     // The Evaluation object that the unique_ptr points at is stored in a std::set and will never move anymore.
     // Therefore we can use a normal pointer to "copy" the unique_ptr (as opposed to changing the unique_ptr
@@ -169,31 +168,40 @@ struct Context
 
   // The previous full-expression is a condition and we're about to execute
   // the branch that is followed when this condition is true.
-  ConditionalBranch begin_branch_true();
+  void begin_branch_true();
 
-  void begin_branch_false(ConditionalBranch& conditional_branch)
+  void begin_branch_false()
   {
-    DoutEntering(dc::notice, "Context::begin_branch_with_condition(" << conditional_branch << ")");
-    m_branch_info_stack.top().begin_branch_false(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
+    DoutEntering(dc::branch, "Context::begin_branch_with_condition()");
+    Dout(dc::branch, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
+    m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
   }
 
-  void end_branch(ConditionalBranch& conditional_branch)
+  void end_branch()
   {
-    DoutEntering(dc::notice, "Context::end_branch_with_condition(" << conditional_branch << ")");
-    m_branch_info_stack.top().end_branch(conditional_branch);
+    DoutEntering(dc::branch, "Context::end_branch_with_condition()");
+    Dout(dc::branch, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
+    m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
+
+    Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
     m_finalize_branch_stack.push(m_branch_info_stack.top());
     m_branch_info_stack.pop();
   }
 
   size_t protect_finalize_branch_stack()
   {
+    DoutEntering(dc::branch, "Context::protect_finalize_branch_stack()");
     size_t old_protected_finalize_branch_stack_size = m_protected_finalize_branch_stack_size;
     m_protected_finalize_branch_stack_size = m_finalize_branch_stack.size();
+    Dout(dc::branch, "Set m_protected_finalize_branch_stack_size to " << m_protected_finalize_branch_stack_size <<
+        "; old value was " << old_protected_finalize_branch_stack_size << ".");
     return old_protected_finalize_branch_stack_size;
   }
 
   void unprotect_finalize_branch_stack(int old_protected_finalize_branch_stack_size)
   {
+    DoutEntering(dc::branch, "Context::unprotect_finalize_branch_stack()");
+    Dout(dc::branch, "Restoring m_protected_finalize_branch_stack_size to previous value (" << old_protected_finalize_branch_stack_size << ").");
     m_protected_finalize_branch_stack_size = old_protected_finalize_branch_stack_size;
   }
 

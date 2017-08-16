@@ -24,3 +24,9 @@ struct Branch
       m_conditional(conditional), m_conditional_true(conditional_true) { }
   friend std::ostream& operator<<(std::ostream& os, Branch const& branch);
 };
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+extern channel_ct branch;
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

@@ -120,6 +120,8 @@ class Evaluation
   bool is_sum() const { return m_state == binary && (m_operator.binary == additive_ado_add || m_operator.binary == additive_ado_sub); }
   bool is_negated() const { return m_state == unary && m_operator.unary == ast::uo_minus; }
   bool is_allocated() const { return m_allocated; }
+  bool is_literal() const { return m_state == literal; }
+  int literal_value() const { ASSERT(m_state == literal); return m_simple.m_literal; }
 
   void OP(binary_operators op, Evaluation&& rhs);         // *this OP= rhs.
   void postfix_operator(ast::postfix_operators op);       // (*this)++ or (*this)--

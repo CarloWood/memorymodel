@@ -132,7 +132,7 @@ class Product
 
  private:
   friend class Expression;
-  mask_type m_variables;        // Set iff for variables in use have their bit unset.
+  mask_type m_variables;        // Set iff for variables not in use. Variables in use have their bit unset.
   mask_type m_negation;         // Set iff for variables in use whose negation is used or unused variables.
 
  public:
@@ -147,7 +147,6 @@ class Product
   // Construct a Product that represents just one variable.
   Product(Variable variable, bool negated = false) : m_variables(~to_mask(variable.m_id)), m_negation(negated ? full_mask : m_variables) { }
 
-  //void negate() { m_negation ^= full_mask; m_negation &= m_variables; }
   bool is_sane() const;
 
   Product& operator*=(Product const& product)
@@ -192,7 +191,6 @@ class Product
   }
 
   Product operator*(Product const& rhs) const { Product result(*this); result *= rhs; return result; }
-  //Product operator~() const { Product result(*this); result.negate(); return result; }
 
   // Zero = { empty_mask, full_mask }
   // One = { full_mask, empty_mask }

@@ -259,19 +259,19 @@ bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr co
 {
   DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << condition << ")");
   Edge* new_edge = new Edge(edge_type, tail_node, condition);
-  // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
   // Call tail first!
-  bool success2 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
-  bool success1 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
+  bool success1 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
+  // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
+  // When false is returned, new_edge has been already deleted.
+  bool success2 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
   ASSERT(success1 == success2);
-  if (!success1) delete new_edge;
-  if (success1)
+  if (success2)
   {
     Dout(dc::sb_edge, "ADDED EDGE " << *new_edge);
     if (edge_type == edge_sb)
       head_node->update_exists();
   }
-  return success1;
+  return success2;
 }
 
 //static

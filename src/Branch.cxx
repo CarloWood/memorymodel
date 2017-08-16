@@ -8,3 +8,9 @@ std::ostream& operator<<(std::ostream& os, Branch const& branch)
   os << "iff " << *branch.m_conditional << " == " << (branch.m_conditional_true ? "true" : "false") << '}';
   return os;
 }
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct branch("BRANCH");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

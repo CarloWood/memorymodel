@@ -98,11 +98,12 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
   context.m_symbols.add(declaration_statement);
 }
 
-void execute_condition(ast::expression const& condition, Context& context)
+Evaluation execute_condition(ast::expression const& condition, Context& context)
 {
   DoutEntering(dc::notice, "execute_condition(`" << condition << "`)");
-  execute_expression(condition, context);
+  Evaluation result = execute_expression(condition, context);
   Dout(dc::continued, condition);
+  return result;
 }
 
 Evaluation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
@@ -508,19 +509,31 @@ void execute_statement(ast::statement const& statement, Context& context)
     {
       auto const& selection_statement{boost::get<ast::selection_statement>(node)};
       Dout(dc::notice|continued_cf, "if (");
-      try { execute_condition(selection_statement.m_if_statement.m_condition, context); }
+      Evaluation condition;
+      try { condition = execute_condition(selection_statement.m_if_statement.m_condition, context); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
-      auto condition = context.begin_branch_true();
-      execute_statement(selection_statement.m_if_statement.m_then, context);
-      if (selection_statement.m_if_statement.m_else)
+      if (condition.is_literal())
       {
-        context.begin_branch_false(condition);
-        int old_protected_finalize_branch_stack_size = context.protect_finalize_branch_stack();
-        execute_statement(*selection_statement.m_if_statement.m_else, context);
-        context.unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
+        Dout(dc::notice, "Selection statement conditional is a literal! Not doing a branch.");
+        if (condition.literal_value())
+          execute_statement(selection_statement.m_if_statement.m_then, context);
+        else if (selection_statement.m_if_statement.m_else)
+          execute_statement(*selection_statement.m_if_statement.m_else, context);
       }
-      context.end_branch(condition);
+      else
+      {
+        context.begin_branch_true();
+        execute_statement(selection_statement.m_if_statement.m_then, context);
+        int old_protected_finalize_branch_stack_size = context.protect_finalize_branch_stack();
+        if (selection_statement.m_if_statement.m_else)
+        {
+          context.begin_branch_false();
+          execute_statement(*selection_statement.m_if_statement.m_else, context);
+        }
+        context.unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
+        context.end_branch();
+      }
       break;
     }
     case ast::SN_iteration_statement:
