@@ -95,6 +95,9 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
         case edge_sb:
           color = "black";
           break;
+        case edge_asw:
+          color = "purple";
+          break;
         default:
           color = "red";
           break;
@@ -104,7 +107,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
       NodePtr head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
       out << "node" << tail_node->name() << " -> "
              "node" << head_node->name() <<
-             " [label=<<font color=\"" << color << "\">sb";
+             " [label=<<font color=\"" << color << "\">" << edge->name();
 #ifdef CWDEBUG
       out << edge->id();
 #endif

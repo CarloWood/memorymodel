@@ -1,9 +1,7 @@
 #pragma once
 
-#include "BooleanExpression.h"
-#include <set>
+#include "Condition.h"
 #include <string>
-#include <iosfwd>
 
 struct Evaluation;
 struct Context;

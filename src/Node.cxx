@@ -139,12 +139,40 @@ void CEWNode::print_code(std::ostream& os) const
     os << m_desired;
 }
 
+char const* Edge::name() const
+{
+  switch (m_edge_type)
+  {
+    case edge_sb: return "sb";
+    case edge_asw: return "asw";
+    case edge_dd: return "dd";
+    case edge_cd: return "cd";
+    case edge_rf: return "rf";
+    case edge_tot: return "tot";
+    case edge_mo: return "mo";
+    case edge_sc: return "sc";
+    case edge_lo: return "lo";
+    case edge_hb: return "hb";
+    case edge_vse: return "vse";
+    case edge_vsses: return "vsses";
+    case edge_ithb: return "ithb";
+    case edge_dob: return "dob";
+    case edge_cad: return "cad";
+    case edge_sw: return "sw";
+    case edge_hrs: return "hrs";
+    case edge_rs: return "rs";
+    case edge_dr: return "dr";
+    case edge_ur: return "ur";
+  }
+  return "???";
+}
+
 char const* edge_str(EdgeType edge_type)
 {
   switch (edge_type)
   {
     case edge_sb: return "Sequenced-Before";
-    case edge_asw: return "Additional-Synchronises-With";
+    case edge_asw: return "Additional-Synchronizes-With";
     case edge_dd: return "Data-Dependency";
     case edge_cd: return "Control-Dependency";
     AI_CASE_RETURN(edge_rf);
@@ -161,8 +189,8 @@ char const* edge_str(EdgeType edge_type)
     AI_CASE_RETURN(edge_sw);
     AI_CASE_RETURN(edge_hrs);
     AI_CASE_RETURN(edge_rs);
-    AI_CASE_RETURN(edge_data_races);
-    AI_CASE_RETURN(edge_unsequenced_races);
+    AI_CASE_RETURN(edge_dr);
+    AI_CASE_RETURN(edge_ur);
   }
   return "UNKNOWN edge_type";
 }
@@ -430,5 +458,6 @@ bool NodeBase::matches(NodeRequestedType const& requested_type, boolean::Express
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct sb_edge("SB_EDGE");
+channel_ct asw_edge("ASW_EDGE");
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

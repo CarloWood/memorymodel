@@ -496,6 +496,8 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& threads{boost::get<ast::threads>(node)};
       for (auto& statement_seq : threads.m_threads)
         execute_body("thread", statement_seq, context);
+      // The notation '}}}' implies that all theads are joined.
+      context.join_all_threads();
       break;
     }
     case ast::SN_compound_statement:
@@ -613,6 +615,9 @@ int main(int argc, char* argv[])
 #endif
   Debug(NAMESPACE_DEBUG::init());
 
+  //==========================================================================
+  // Open the input file.
+
   char const* filepath;
   if (argc == 2)
   {
@@ -630,6 +635,9 @@ int main(int argc, char* argv[])
     std::cerr << "Failed to open input file \"" << filepath << "\".\n";
     return 1;
   }
+
+  //==========================================================================
+  // Parse the input file.
 
   std::string source_code;              // We will read the contents here.
   in.unsetf(std::ios::skipws);          // No white space skipping!
@@ -658,7 +666,9 @@ int main(int argc, char* argv[])
 
   std::cout << "Abstract Syntax Tree: " << ast << std::endl;
 
+  //==========================================================================
   // Collect all global variables and their initialization, if any.
+
   for (auto& node : ast)
     if (node.which() == ast::DN_declaration_statement)
     {
@@ -666,7 +676,9 @@ int main(int argc, char* argv[])
       execute_declaration(declaration_statement, context);
     }
 
+  //==========================================================================
   // Collect all function definitions.
+
   ast::function const* main_function;
   for (auto& node : ast)
     if (node.which() == ast::DN_function)
@@ -681,6 +693,10 @@ int main(int argc, char* argv[])
       if (function.m_function_name.name == "main")
         main_function = &functions[function];
     }
+
+  //==========================================================================
+  // Generate Xopsem: all actions/nodes with all Sequenced-Before and
+  // Additionally-Synchronizes-With edges (we don't do Data-Dependencies).
 
   try
   {
@@ -698,6 +714,12 @@ int main(int argc, char* argv[])
     std::cerr << '.' << std::endl;
     return 1;
   }
+
+  //==========================================================================
+  // More stuff...
+
+  //==========================================================================
+  // Generate the .dot file.
 
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);

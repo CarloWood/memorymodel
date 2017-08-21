@@ -36,8 +36,14 @@ libcppmem_a_SOURCES = \
 		 Conditional.h \
 		 Branch.cxx \
 		 Branch.h \
+		 Thread.cxx \
+		 Thread.h \
+		 BranchInfo.cxx \
+		 BranchInfo.h \
 		 Condition.cxx \
 		 Condition.h \
+		 ConditionalBranch.cxx \
+		 ConditionalBranch.h \
 		 SBNodePresence.cxx \
 		 SBNodePresence.h \
 		 BooleanExpression.cxx \

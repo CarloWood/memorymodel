@@ -152,7 +152,9 @@ std::string to_html(char const* str)
 
 void Evaluation::print_on(std::ostream& os) const
 {
-  //DoutEntering(dc::notice, "Evaluation::print_on(" << (void*)&os << ") [this = " << (void*)this << "]");
+#ifdef TRACK_EVALUATION
+  DoutEntering(dc::notice, "Evaluation::print_on(" << (void*)&os << ") [this = " << (void*)this << " (" << static_cast<Tracked const&>(*this) << ")]");
+#endif
 
   bool const html = IOManipHtml::is_html(os);
   static int suppress_color_index = std::ios_base::xalloc();

@@ -40,9 +40,3 @@ class Graph
   // Add a new edge.
   void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition = Condition());
 };
-
-#ifdef CWDEBUG
-NAMESPACE_DEBUG_CHANNELS_START
-extern channel_ct sb_edge;
-NAMESPACE_DEBUG_CHANNELS_END
-#endif

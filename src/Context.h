@@ -5,8 +5,7 @@
 #include "Locks.h"
 #include "Loops.h"
 #include "Graph.h"
-#include "Branch.h"
-#include "Conditional.h"
+#include "BranchInfo.h"
 #include "EvaluationNodes.h"
 #include <string>
 
@@ -15,46 +14,7 @@ using iterator_type = std::string::const_iterator;
 struct Context
 {
   using last_before_nodes_type = EvaluationNodes;
-  using full_expression_evaluations_type = std::vector<std::unique_ptr<Evaluation>>;
-
-  struct ConditionalBranch
-  {
-    conditionals_type::iterator m_conditional;
-    ConditionalBranch(conditionals_type::iterator const& conditional) : m_conditional(conditional) { }
-    Condition operator()(bool conditional_true) const { return Condition(Branch(m_conditional, conditional_true)); }
-    friend std::ostream& operator<<(std::ostream& os, ConditionalBranch const& conditional_branch);
-  };
-
-  struct BranchInfo
-  {
-    ConditionalBranch m_condition;                                        // The conditional of this selection statement.
-    full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Contect::m_full_expression_evaluations.
-    bool m_in_true_branch;                                                // True in True-branch, false in False-branch; true or false after selection statement
-                                                                          //  depending whether or not we had a False-branch (false if we did).
-    bool m_edge_to_true_branch_added;                                     // Set when the edge from the conditional expression was added that represents 'True'.
-    bool m_edge_to_false_branch_added;                                    // Set when the edge from the conditional expression was added that represents 'False'.
-    int m_condition_index;                                                // The index into m_full_expression_evaluations of the conditional expression.
-    int m_last_full_expression_of_true_branch_index;                      // The index into m_full_expression_evaluations of the last full expression
-                                                                          //  of the True-branch, or -1 when it doesn't exist.
-    int m_last_full_expression_of_false_branch_index;                     // The index into m_full_expression_evaluations of the last full expression
-                                                                          //  of the False-branch, or -1 when it doesn't exist.
-
-    BranchInfo(
-        ConditionalBranch const& conditional_branch,
-        full_expression_evaluations_type& full_expression_evaluations,
-        std::unique_ptr<Evaluation>&& previous_full_expression);
-
-    void begin_branch_false(std::unique_ptr<Evaluation>&& previous_full_expression);
-    void end_branch(std::unique_ptr<Evaluation>&& previous_full_expression);
-    void added_edge_from_condition() { if (m_in_true_branch) m_edge_to_true_branch_added = true; else m_edge_to_false_branch_added = true; }
-
-    bool conditional_edge_of_current_branch_added() const { return m_in_true_branch ? m_edge_to_true_branch_added : m_edge_to_false_branch_added; }
-    Condition get_current_condition() const { return m_condition(m_in_true_branch); }
-    Condition get_negated_current_condition() const { return m_condition(!m_in_true_branch); }
-
-    void print_on(std::ostream& os) const;
-    friend std::ostream& operator<<(std::ostream& os, BranchInfo const& branch_info) { branch_info.print_on(os); return os; }
-  };
+  using threads_final_full_expression_type = std::map<int, std::vector<std::unique_ptr<Evaluation>>>;
 
   position_handler<iterator_type>& m_position_handler;
   Symbols m_symbols;
@@ -66,11 +26,13 @@ struct Context
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
-  bool m_beginning_of_thread;                                           // Set to true when a new thread was just started.
+  bool m_beginning_of_thread;                                           // Set to true when a new thread was just started; reset the first full-expression.
+  bool m_end_of_thread;                                                 // Set to true when we just left a threads scope; reset the next full-expression.
+  BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
+
   int m_full_expression_detector_depth;                                 // The current number of nested FullExpressionDetector objects.
   std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // The last full-expressions of parent threads.
   conditionals_type m_conditionals;                                     // Branch conditionals.
-  full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
   std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression, if not a condition
                                                                         //  (aka m_condition is 1),
                                                                         //  otherwise use m_last_condition.
@@ -92,6 +54,7 @@ struct Context
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
   void scope_end();
+  void join_all_threads();
 
   // Uninitialized declaration.
   Evaluation uninitialized(ast::tag decl);

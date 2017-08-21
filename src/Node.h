@@ -1,48 +1,16 @@
 #pragma once
 
+#include "Thread.h"
 #include "ast.h"
 #include "Evaluation.h"
 #include "Condition.h"
 #include "SBNodePresence.h"
 #include "NodePtr.h"
-#include "utils/AIRefCount.h"
 #include "utils/ulong_to_base.h"
-#include <memory>
-#include <utility>
-#include <iosfwd>
+#include <boost/intrusive_ptr.hpp>
 #include <string>
 
 class Edge;
-class Thread;
-using ThreadPtr = boost::intrusive_ptr<Thread>;
-
-class Thread : public AIRefCount
-{
- public:
-  using id_type = int;
-
- private:
-  id_type m_id;                 // Unique identifier of a thread.
-  ThreadPtr m_parent_thread;    // Only valid when m_id > 0.
-
- protected:
-  Thread() : m_id(0) { }
-  Thread(id_type id, ThreadPtr const& parent_thread) : m_id(id), m_parent_thread(parent_thread) { assert(m_id > 0); }
-
- public:
-  static ThreadPtr create_main_thread() { return new Thread; }
-  static ThreadPtr create_new_thread(id_type& next_id, ThreadPtr const& current_thread) { return new Thread(next_id++, current_thread); }
-  bool is_main_thread() const { return m_id == 0; }
-  id_type id() const { return m_id; }
-  ThreadPtr const& parent_thread() const { assert(m_id > 0); return m_parent_thread; }
-
-  friend bool operator==(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id == thr2->m_id; }
-  friend bool operator!=(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id != thr2->m_id; }
-  friend bool operator<(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id < thr2->m_id; }
-
-  friend std::ostream& operator<<(std::ostream& os, Thread const& thread);
-  friend std::ostream& operator<<(std::ostream& os, ThreadPtr const& thread) { return os << *thread; }
-};
 
 enum mutex_type
 {
@@ -55,7 +23,7 @@ enum mutex_type
 
 enum EdgeType {
   edge_sb,               // Sequenced-Before.
-  edge_asw,              // Additional-Synchronises-With.
+  edge_asw,              // Additional-Synchronizes-With.
   edge_dd,               // Data-Dependency.
   edge_cd,               // Control-Dependency.
   // Next we have several relations that are existentially quantified: for each choice of control-flow paths,
@@ -72,11 +40,11 @@ enum EdgeType {
   edge_ithb,             // Inter-thread happens-before.
   edge_dob,              // Dependency-ordered-before.
   edge_cad,              // Carries-a-dependency-to.
-  edge_sw,               // Synchronises-with.
+  edge_sw,               // Synchronizes-with.
   edge_hrs,              // Hypothetical release sequence.
   edge_rs,               // Release sequence.
-  edge_data_races,       // Inter-thread data races.
-  edge_unsequenced_races // Intra-thread unsequenced races, unrelated by sb.
+  edge_dr,               // Inter-thread data races, unrelated by hb.
+  edge_ur                // Intra-thread unsequenced races, unrelated by sb.
 };
 
 char const* edge_str(EdgeType edge_type);
@@ -85,7 +53,7 @@ std::ostream& operator<<(std::ostream& os, EdgeType edge_type);
 inline bool is_directed(EdgeType edge_type)
 {
   // FIXME
-  return edge_type < edge_data_races;
+  return edge_type < edge_dr;
 }
 
 enum EndPointType {
@@ -156,6 +124,7 @@ class Edge
 
   EdgeType edge_type() const { return m_edge_type; }
   Condition const& condition() const { return m_condition; }
+  char const* name() const;
 
   inline bool is_conditional() const;
   inline boolean::Expression exists() const;

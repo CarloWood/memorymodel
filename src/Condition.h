@@ -1,8 +1,9 @@
 #pragma once
 
-#include "Branch.h"
 #include "BooleanExpression.h"
 #include <iosfwd>
+
+class Branch;
 
 // The condition under which an edge exists,
 // which might or might not depend on a conditional.

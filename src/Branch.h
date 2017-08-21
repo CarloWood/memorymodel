@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Conditional.h"
-#include <iosfwd>
 
 struct Evaluation;
 
@@ -15,8 +14,8 @@ struct Evaluation;
 
 struct Branch
 {
-  conditionals_type::iterator m_conditional;  // The Conditional that this branch depends on.
-  bool m_conditional_true;                         // Whether the Conditional must be true or false.
+  conditionals_type::iterator m_conditional;    // The Conditional that this branch depends on.
+  bool m_conditional_true;                      // Whether the Conditional must be true or false.
 
   Conditional::id_type id() const { return m_conditional->second.id(); }
   boolean::Product boolean_product() const { return boolean::Product(m_conditional->second.boolexpr_variable(), !m_conditional_true); }

@@ -20,6 +20,7 @@ std::ostream& operator<<(std::ostream& os, std::memory_order);
 
 NAMESPACE_DEBUG_CHANNELS_START
 extern channel_ct sb_edge;
+extern channel_ct asw_edge;
 NAMESPACE_DEBUG_CHANNELS_END
 
 #else // CWDEBUG

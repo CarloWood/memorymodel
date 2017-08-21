@@ -1,5 +1,6 @@
 #include "sys.h"
 #include "Condition.h"
+#include "Branch.h"
 #include <ostream>
 
 Condition::Condition(Branch const& branch)

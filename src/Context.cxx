@@ -8,20 +8,19 @@
 #define context (*this)
 #endif
 
-std::ostream& operator<<(std::ostream& os, Context::ConditionalBranch const& conditional_branch)
-{
-  os << '{' << *conditional_branch.m_conditional->first << ", " << conditional_branch.m_conditional->second << '}';
-  return os;
-}
-
 void Context::scope_start(bool is_thread)
 {
   DoutEntering(dc::notice, "Context::scope_start('is_thread' = " << is_thread << ")");
   m_threads.push(is_thread);
   if (is_thread)
   {
+    // Do not create a thread as first thing inside another thread (not supported).
+    ASSERT(!m_beginning_of_thread);
     m_beginning_of_thread = true;
-    m_current_thread = Thread::create_new_thread(m_next_thread_id, m_current_thread);
+    m_current_thread = m_current_thread->create_new_thread(m_next_thread_id);
+    // Creating a thread inside a branch is not supported.
+    ASSERT(m_previous_full_expression);
+    // Remember the last full-expression of the parent thread.
     Dout(dc::notice, "MOVING m_previous_full_expression (" << *m_previous_full_expression << ") to m_last_full_expressions.");
     m_last_full_expressions.emplace(std::move(m_previous_full_expression));
     s_first_full_expression = true;
@@ -39,12 +38,24 @@ void Context::scope_end()
   {
     DebugMarkUp;
     Dout(dc::notice, "Joined thread " << m_current_thread << '.');
+    if (!m_previous_full_expression)     // Can happen if thread is empty.
+      m_beginning_of_thread = false;
+    else
+    {
+      m_current_thread->store_final_full_expression(std::move(m_previous_full_expression));
+      m_end_of_thread = true;
+    }
     m_current_thread = m_current_thread->parent_thread();
     m_previous_full_expression = std::move(m_last_full_expressions.top());
     s_first_full_expression = !m_previous_full_expression;
     m_last_full_expressions.pop();
     Dout(dc::notice, "RESTORED m_previous_full_expression from m_last_full_expressions to " << *m_previous_full_expression << ".");
   }
+}
+
+void Context::join_all_threads()
+{
+  m_current_thread->join_all_threads();
 }
 
 Evaluation Context::uninitialized(ast::tag decl)
@@ -269,6 +280,26 @@ void Context::detect_full_expression_end(Evaluation& full_expression)
     // which are only used as member functions of another Evaluation; hence a full-expression
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
+
+    // Add asw edges.
+    if (m_beginning_of_thread)
+    {
+      m_beginning_of_thread = false;
+      if (!m_last_full_expressions.empty())     // Can happen when we have an empty thread.
+        add_edges(edge_asw, *m_last_full_expressions.top(), full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::asw_edge));
+    }
+    if (m_end_of_thread)
+    {
+      m_end_of_thread = false;
+      m_current_thread->for_all_joined_child_threads(
+          [this, &full_expression](ThreadPtr const& child_thread)
+          {
+            if (child_thread->has_final_full_expression())
+              add_edges(edge_asw, child_thread->final_full_expression(), full_expression COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::asw_edge));
+          }
+      );
+      m_current_thread->clean_up_joined_child_threads();
+    }
 
     // This will be non-zero if we're inside some selection statement.
     Dout(dc::branch, "Size of m_branch_info_stack is " << m_branch_info_stack.size() << ".");
@@ -496,76 +527,6 @@ void Context::begin_branch_true()
   Dout(dc::branch, "Moving m_previous_full_expression to BranchInfo(): see MOVING...");
   m_branch_info_stack.emplace(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
   Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack, and returning " << conditional_branch << ".");
-}
-
-void Context::BranchInfo::print_on(std::ostream& os) const
-{
-  os << "{condition:" << m_condition <<
-    ", in_true_branch:" << m_in_true_branch <<
-    ", edge_to_true_branch_added:" << m_edge_to_true_branch_added <<
-    ", edge_to_false_branch_added:" << m_edge_to_false_branch_added <<
-    ", condition_index:" << m_condition_index <<
-    ", last_full_expression_of_true_branch_index:" << m_last_full_expression_of_true_branch_index <<
-    ", last_full_expression_of_false_branch_index:" << m_last_full_expression_of_false_branch_index << '}';
-}
-
-Context::BranchInfo::BranchInfo(
-    ConditionalBranch const& conditional_branch,
-    full_expression_evaluations_type& full_expression_evaluations,
-    std::unique_ptr<Evaluation>&& previous_full_expression) :
-      m_condition(conditional_branch),
-      m_full_expression_evaluations(full_expression_evaluations),
-      m_in_true_branch(true),
-      m_edge_to_true_branch_added(false),
-      m_edge_to_false_branch_added(false),
-      m_condition_index(-1),
-      m_last_full_expression_of_true_branch_index(-1),
-      m_last_full_expression_of_false_branch_index(-1)
-{
-  // Keep Evaluations that are conditionals alive.
-  Dout(dc::branch|dc::notice, "1.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
-  m_condition_index = full_expression_evaluations.size();
-  m_full_expression_evaluations.push_back(std::move(previous_full_expression));
-}
-
-void Context::BranchInfo::begin_branch_false(std::unique_ptr<Evaluation>&& previous_full_expression)
-{
-  m_in_true_branch = false;
-  if (previous_full_expression)
-  {
-    Dout(dc::branch|dc::notice, "2.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
-    m_last_full_expression_of_true_branch_index = m_full_expression_evaluations.size();
-    m_full_expression_evaluations.push_back(std::move(previous_full_expression));
-  }
-}
-
-void Context::BranchInfo::end_branch(std::unique_ptr<Evaluation>&& previous_full_expression)
-{
-  if (previous_full_expression)
-  {
-    // When we get here, we have one of the following situations:
-    //
-    //   if (A)
-    //   {
-    //     ...
-    //     x = 0;       // The last full-expression of (the true-branch).
-    //   }
-    //
-    //   if (A)
-    //   {
-    //   }
-    //   else
-    //   {
-    //     ...
-    //     x = 0;       // The last full-expression (of the false-branch).
-    //   }
-    Dout(dc::branch|dc::notice, "3.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
-    if (m_last_full_expression_of_true_branch_index == -1)
-      m_last_full_expression_of_true_branch_index = m_full_expression_evaluations.size();
-    else
-      m_last_full_expression_of_false_branch_index = m_full_expression_evaluations.size();
-    m_full_expression_evaluations.push_back(std::move(previous_full_expression));
-  }
 }
 
 //static
