@@ -16,11 +16,15 @@ std::ostream& operator<<(std::ostream& os, Thread const& thread)
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  DebugMarkUp;
   bool success = NodeBase::add_edge(edge_type, tail_node, head_node, condition);
   if (success)  // Successfully added a new edge.
   {
-    Dout(dc::notice, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\".");
+#ifdef CWDEBUG
+    Dout(dc::notice|continued_cf, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\"");
+    if (condition.conditional())
+      Dout(dc::continued, " with condition " << condition);
+    Dout(dc::finish, ".");
+#endif
     if (edge_type == edge_sb)
     {
       tail_node->sequenced_before();

@@ -1,13 +1,16 @@
 #pragma once
 
 #include "utils/AIRefCount.h"
+#include "BranchInfo.h"
 #include "debug.h"
 #include <vector>
 #include <memory>
 #include <utility>
 #include <iosfwd>
 #include <functional>
+#include <stack>
 
+struct Context;
 class Evaluation;
 class Thread;
 using ThreadPtr = boost::intrusive_ptr<Thread>;
@@ -17,24 +20,34 @@ class Thread : public AIRefCount
  public:
   using id_type = int;
   using child_threads_type = std::vector<ThreadPtr>;
+  using full_expression_evaluations_type = BranchInfo::full_expression_evaluations_type;
 
  private:
   id_type m_id;                         // Unique identifier of a thread.
   ThreadPtr m_parent_thread;            // Only valid when m_id > 0.
   child_threads_type m_child_threads;   // Child threads of this thread.
-  std::unique_ptr<Evaluation> m_final_full_expression;  // The last full-expression of this thread.
   bool m_is_joined;                     // Set when this thread leaves its scope.
 
+  int m_full_expression_detector_depth;                                 // The current number of nested FullExpressionDetector objects.
+  BranchInfo::full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Context::m_full_expression_evaluations.
+  std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression, if not a condition
+                                                                        //  (aka m_condition is 1),
+                                                                        //  otherwise use m_last_condition.
+  std::stack<BranchInfo> m_branch_info_stack;                           // Stack to store BranchInfo for nested branches.
+  std::stack<BranchInfo> m_finalize_branch_stack;                       // Stack to store BranchInfo for branches that need to be finalized.
+  size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
+                                                                        //  m_finalize_branch_stack that should not be finalized yet.
+
  protected:
-  Thread();
-  Thread(id_type id, ThreadPtr const& parent_thread);
+  Thread(full_expression_evaluations_type& full_expression_evaluations);
+  Thread(full_expression_evaluations_type& full_expression_evaluations, id_type id, ThreadPtr const& parent_thread);
   ~Thread() { ASSERT(m_id == 0 || m_is_joined); }
 
  public:
-  static ThreadPtr create_main_thread() { return new Thread; }
-  ThreadPtr create_new_thread(id_type& next_id)
+  static ThreadPtr create_main_thread(full_expression_evaluations_type& full_expression_evaluations) { return new Thread(full_expression_evaluations); }
+  ThreadPtr create_new_thread(full_expression_evaluations_type& full_expression_evaluations, id_type& next_id)
   {
-    ThreadPtr child_thread{new Thread(next_id++, this)};
+    ThreadPtr child_thread{new Thread(full_expression_evaluations, next_id++, this)};
     m_child_threads.emplace_back(child_thread);
     return child_thread;
   }
@@ -42,14 +55,56 @@ class Thread : public AIRefCount
   id_type id() const { return m_id; }
   ThreadPtr const& parent_thread() const { ASSERT(m_id > 0); return m_parent_thread; }
   bool is_joined() const { return m_is_joined; }
-  bool has_final_full_expression() const { return m_final_full_expression.get(); }
-  Evaluation const& final_full_expression() const { return *m_final_full_expression; }
+  bool has_previous_full_expression() const { return m_previous_full_expression.get(); }
+  Evaluation const& previous_full_expression() const { return *m_previous_full_expression; }
 
-  void store_final_full_expression(std::unique_ptr<Evaluation>&& final_full_expression) { m_final_full_expression = std::move(final_full_expression); }
+  // Called at sequence-points.
+  void detect_full_expression_start();
+  void detect_full_expression_end(Evaluation& full_expression);
+
   void join_all_threads();
   void for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& final_full_expression);
   void joined() { ASSERT(!m_is_joined); m_is_joined = true; }
   void clean_up_joined_child_threads();
+
+  // The previous full-expression is a condition and we're about to execute
+  // the branch that is followed when this condition is true.
+  void begin_branch_true(Context& context);
+
+  void begin_branch_false()
+  {
+    DoutEntering(dc::branch, "Thread::begin_branch_with_condition()");
+    Dout(dc::branch, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
+    m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
+  }
+
+  void end_branch()
+  {
+    DoutEntering(dc::branch, "Thread::end_branch_with_condition()");
+    Dout(dc::branch, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
+    m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
+
+    Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
+    m_finalize_branch_stack.push(m_branch_info_stack.top());
+    m_branch_info_stack.pop();
+  }
+
+  size_t protect_finalize_branch_stack()
+  {
+    DoutEntering(dc::branch, "Thread::protect_finalize_branch_stack()");
+    size_t old_protected_finalize_branch_stack_size = m_protected_finalize_branch_stack_size;
+    m_protected_finalize_branch_stack_size = m_finalize_branch_stack.size();
+    Dout(dc::branch, "Set m_protected_finalize_branch_stack_size to " << m_protected_finalize_branch_stack_size <<
+        "; old value was " << old_protected_finalize_branch_stack_size << ".");
+    return old_protected_finalize_branch_stack_size;
+  }
+
+  void unprotect_finalize_branch_stack(int old_protected_finalize_branch_stack_size)
+  {
+    DoutEntering(dc::branch, "Thread::unprotect_finalize_branch_stack()");
+    Dout(dc::branch, "Restoring m_protected_finalize_branch_stack_size to previous value (" << old_protected_finalize_branch_stack_size << ").");
+    m_protected_finalize_branch_stack_size = old_protected_finalize_branch_stack_size;
+  }
 
   friend bool operator==(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id == thr2->m_id; }
   friend bool operator!=(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id != thr2->m_id; }
@@ -57,4 +112,9 @@ class Thread : public AIRefCount
 
   friend std::ostream& operator<<(std::ostream& os, Thread const& thread);
   friend std::ostream& operator<<(std::ostream& os, ThreadPtr const& thread) { return os << *thread; }
+
+#ifdef CWDEBUG
+ private:
+  bool m_first_full_expression;
+#endif
 };

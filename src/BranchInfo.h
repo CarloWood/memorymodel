@@ -11,7 +11,7 @@ class BranchInfo
 
  //FIXME private:
   ConditionalBranch m_condition;                                        // The conditional of this selection statement.
-  full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Contect::m_full_expression_evaluations.
+  full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Context::m_full_expression_evaluations.
   bool m_in_true_branch;                                                // True in True-branch, false in False-branch; true or false after selection statement
                                                                         //  depending whether or not we had a False-branch (false if we did).
   bool m_edge_to_true_branch_added;                                     // Set when the edge from the conditional expression was added that represents 'True'.

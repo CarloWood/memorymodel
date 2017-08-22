@@ -6,14 +6,13 @@
 #include "Loops.h"
 #include "Graph.h"
 #include "BranchInfo.h"
-#include "EvaluationNodes.h"
+#include "EvaluationNodePtrs.h"
 #include <string>
 
 using iterator_type = std::string::const_iterator;
 
 struct Context
 {
-  using last_before_nodes_type = EvaluationNodes;
   using threads_final_full_expression_type = std::map<int, std::vector<std::unique_ptr<Evaluation>>>;
 
   position_handler<iterator_type>& m_position_handler;
@@ -23,33 +22,21 @@ struct Context
   Graph& m_graph;
 
  private:
+  BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
   bool m_beginning_of_thread;                                           // Set to true when a new thread was just started; reset the first full-expression.
   bool m_end_of_thread;                                                 // Set to true when we just left a threads scope; reset the next full-expression.
-  BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
-
-  int m_full_expression_detector_depth;                                 // The current number of nested FullExpressionDetector objects.
-  std::stack<std::unique_ptr<Evaluation>> m_last_full_expressions;      // The last full-expressions of parent threads.
   conditionals_type m_conditionals;                                     // Branch conditionals.
-  std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression, if not a condition
-                                                                        //  (aka m_condition is 1),
-                                                                        //  otherwise use m_last_condition.
-  std::stack<BranchInfo> m_branch_info_stack;                           // Stack to store BranchInfo for nested branches.
-  std::stack<BranchInfo> m_finalize_branch_stack;                       // Stack to store BranchInfo for branches that need to be finalized.
-  size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
-                                                                        //  m_finalize_branch_stack that should not be finalized yet.
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
       m_position_handler(ph),
       m_graph(g),
       m_next_thread_id{1},
-      m_current_thread{Thread::create_main_thread()},
-      m_beginning_of_thread(false),
-      m_full_expression_detector_depth(0),
-      m_protected_finalize_branch_stack_size(0) { }
+      m_current_thread{Thread::create_main_thread(m_full_expression_evaluations)},
+      m_beginning_of_thread(false) { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -71,6 +58,7 @@ struct Context
 
   // Accessors.
   int number_of_threads() const { return m_next_thread_id; }
+  ThreadPtr const& current_thread() const { return m_current_thread; }
   conditionals_type const& conditionals() const { return  m_conditionals; }
 
   // Mutex declaration and (un)locking.
@@ -78,22 +66,31 @@ struct Context
   Evaluation lock(ast::tag mutex);
   Evaluation unlock(ast::tag mutex);
 
-  // Called at sequence-points.
-  void detect_full_expression_start();
-  void detect_full_expression_end(Evaluation& full_expression);
-
   // Generate node pairs for Sequenced-Before heads of before_nodes and Sequenced-Before tails of after_evaluation.
   Evaluation::node_pairs_type generate_node_pairs(
-      EvaluationNodes const& before_nodes,
+      EvaluationNodePtrs const& before_node_ptrs,
       Evaluation const& after_evaluation
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+
+  // Generate node pairs for conditional Sequenced-Before heads of before_nodes and Sequenced-Before tails of after_evaluation.
+  Evaluation::node_pairs_type generate_node_pairs(
+      EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
+      Evaluation const& after_evaluation
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+
+  // Add edges of type edge_type between before_node_ptrs and after_node_ptrs with (optional) condition.
+  void add_edges(
+      EdgeType edge_type,
+      EvaluationNodePtrs const& before_node_ptrs,
+      EvaluationNodePtrs const& after_node_ptrs
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+      Condition const& condition = Condition());
 
   // Add edges of type edge_type for each node pair in node_pairs with condition.
   void add_edges(
       EdgeType edge_type,
       Evaluation::node_pairs_type node_pairs
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
-      Condition const& condition = Condition());
+      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 
   // Add unconditional edges of type edge_type between heads of before_evaluation and and tails of after_evaluation.
   void add_edges(
@@ -128,54 +125,6 @@ struct Context
     ASSERT(res.second);
     return res.first;
   }
-
-  // The previous full-expression is a condition and we're about to execute
-  // the branch that is followed when this condition is true.
-  void begin_branch_true();
-
-  void begin_branch_false()
-  {
-    DoutEntering(dc::branch, "Context::begin_branch_with_condition()");
-    Dout(dc::branch, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
-    m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
-  }
-
-  void end_branch()
-  {
-    DoutEntering(dc::branch, "Context::end_branch_with_condition()");
-    Dout(dc::branch, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
-    m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
-
-    Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
-    m_finalize_branch_stack.push(m_branch_info_stack.top());
-    m_branch_info_stack.pop();
-  }
-
-  size_t protect_finalize_branch_stack()
-  {
-    DoutEntering(dc::branch, "Context::protect_finalize_branch_stack()");
-    size_t old_protected_finalize_branch_stack_size = m_protected_finalize_branch_stack_size;
-    m_protected_finalize_branch_stack_size = m_finalize_branch_stack.size();
-    Dout(dc::branch, "Set m_protected_finalize_branch_stack_size to " << m_protected_finalize_branch_stack_size <<
-        "; old value was " << old_protected_finalize_branch_stack_size << ".");
-    return old_protected_finalize_branch_stack_size;
-  }
-
-  void unprotect_finalize_branch_stack(int old_protected_finalize_branch_stack_size)
-  {
-    DoutEntering(dc::branch, "Context::unprotect_finalize_branch_stack()");
-    Dout(dc::branch, "Restoring m_protected_finalize_branch_stack_size to previous value (" << old_protected_finalize_branch_stack_size << ").");
-    m_protected_finalize_branch_stack_size = old_protected_finalize_branch_stack_size;
-  }
-
-#ifdef CWDEBUG
-  void print_previous_full_expression() const
-  {
-    Dout(dc::notice|continued_cf, "Previous full expression: " << *m_previous_full_expression);
-  }
- private:
-  static bool s_first_full_expression;
-#endif
 };
 
 // Statements that are not expressions, but contain expressions, are
@@ -269,7 +218,7 @@ struct FullExpressionDetector
   Context& m_context;
   FullExpressionDetector(Evaluation& full_expression, Context& context) :
       m_full_expression(full_expression), m_context(context)
-    { context.detect_full_expression_start(); }
+    { context.current_thread()->detect_full_expression_start(); }
   ~FullExpressionDetector()
-    { m_context.detect_full_expression_end(m_full_expression); }
+    { m_context.current_thread()->detect_full_expression_end(m_full_expression); }
 };

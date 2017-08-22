@@ -2,7 +2,7 @@
 
 #include "ast.h"
 #include "debug.h"
-#include "EvaluationNodes.h"
+#include "EvaluationNodePtrs.h"
 #include <iosfwd>
 #include <vector>
 #include <set>
@@ -51,7 +51,7 @@ class Evaluation
 #endif
 
  public:
-  using node_pairs_type = std::vector<std::pair<NodePtr, NodePtr>>;
+  using node_pairs_type = std::vector<std::pair<NodePtrConditionPair, NodePtr>>;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition, comma };  // See also is_valid.
 
@@ -127,10 +127,9 @@ class Evaluation
   void postfix_operator(ast::postfix_operators op);       // (*this)++ or (*this)--
   void prefix_operator(ast::unary_operators op);          // ++*this or --*this
   void unary_operator(ast::unary_operators op);           // *this = OP *this
-  void conditional_operator(Evaluation&& true_value,      // *this = *this ? true_value : false_value
-                            node_pairs_type true_node_pairs,
-                            Evaluation&& false_value,
-                            node_pairs_type false_node_pairs,
+  void conditional_operator(EvaluationNodePtrs const& before_node_ptrs,      // *this = *this ? true_evaluation : false_evaluation
+                            Evaluation&& true_evaluation,
+                            Evaluation&& false_evaluation,
                             Context& context);
   void comma_operator(Evaluation&& rhs);
   void read(ast::tag tag, Context& context);
@@ -150,7 +149,7 @@ class Evaluation
 
   void print_on(std::ostream& os) const;
   void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
-  EvaluationNodes get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  EvaluationNodePtrs get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
 
   // Accessors used to print RMW node labels. See RMWNode::print_code.
   State state() const { return m_state; }

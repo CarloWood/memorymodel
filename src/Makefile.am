@@ -30,8 +30,8 @@ libcppmem_a_SOURCES = \
 		 NodePtr.h \
 		 Node.cxx \
 		 Node.h \
-		 EvaluationNodes.cxx \
-		 EvaluationNodes.h \
+		 EvaluationNodePtrs.cxx \
+		 EvaluationNodePtrs.h \
 		 Conditional.cxx \
 		 Conditional.h \
 		 Branch.cxx \
@@ -40,6 +40,8 @@ libcppmem_a_SOURCES = \
 		 Thread.h \
 		 BranchInfo.cxx \
 		 BranchInfo.h \
+		 NodePtrConditionPair.cxx \
+		 NodePtrConditionPair.h \
 		 Condition.cxx \
 		 Condition.h \
 		 ConditionalBranch.cxx \

@@ -299,7 +299,7 @@ std::ostream& operator<<(std::ostream& os, Evaluation::node_pairs_type const& no
   {
     if (!first)
       os << ", ";
-    os << '(' << *node_pair.first << "," << *node_pair.second << ')';
+    os << '(' << node_pair.first << "," << *node_pair.second << ')';
     first = false;
   }
   return os << '}';
@@ -758,27 +758,28 @@ void Evaluation::destruct(Context& context)
 }
 
 void Evaluation::conditional_operator(
-    Evaluation&& true_value,
-    node_pairs_type true_node_pairs,
-    Evaluation&& false_value,
-    node_pairs_type false_node_pairs,
+    EvaluationNodePtrs const& before_node_ptrs,
+    Evaluation&& true_evaluation,
+    Evaluation&& false_evaluation,
     Context& context)
 {
-  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_value << ", " << false_value << ") [this = " << *this << "] ==> ");
+  EvaluationNodePtrs true_nodes = true_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+  EvaluationNodePtrs false_nodes = false_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+  DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_evaluation << ", " << false_evaluation << ") [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
     Dout(dc::simplify, "Simplifying because condition is a literal...");
     if (m_simple.m_literal)
     {
-      *this = std::move(true_value);
-      false_value.destruct(context);
-      context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      *this = std::move(true_evaluation);
+      false_evaluation.destruct(context);
+      context.add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     else
     {
-      *this = std::move(false_value);
-      true_value.destruct(context);
-      context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      *this = std::move(false_evaluation);
+      true_evaluation.destruct(context);
+      context.add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
   }
   else
@@ -788,11 +789,11 @@ void Evaluation::conditional_operator(
     refresh();
 #endif
     m_state = condition;
-    m_lhs = make_unique(std::move(true_value));
-    m_rhs = make_unique(std::move(false_value));
+    m_lhs = make_unique(std::move(true_evaluation));
+    m_rhs = make_unique(std::move(false_evaluation));
     auto condition = context.add_condition(m_condition);
-    context.add_edges(edge_sb, true_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
-    context.add_edges(edge_sb, false_node_pairs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
+    context.add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
+    context.add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
   }
   Dout(dc::finish, *this << '.');
 }
@@ -891,17 +892,17 @@ void Evaluation::for_each_node(
   }
 }
 
-EvaluationNodes Evaluation::get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
+EvaluationNodePtrs Evaluation::get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
 {
   DoutEntering(debug_channel, "Evaluation::get_nodes(" << requested_type << ") [this = " << *this << "]");
-  EvaluationNodes result;
+  EvaluationNodePtrs result;
   for_each_node(requested_type,
-      [&result](NodePtr const& node)
+      [&result](NodePtr const& node_ptr)
       {
-        result.push_back(node);
+        result.push_back(node_ptr);
       }
   COMMA_DEBUG_ONLY(debug_channel));
-  Dout(debug_channel, "Returning EvaluationNodes: " << result);
+  Dout(debug_channel, "Returning EvaluationNodePtrs: " << result);
   return result;
 }
 

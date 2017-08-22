@@ -373,10 +373,8 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
         Evaluation true_evaluation = execute_expression(expression, context);
         Evaluation false_evaluation = execute_expression(assignment_expression, context);
-        EvaluationNodes before_nodes = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-        Evaluation::node_pairs_type truth_node_pairs{context.generate_node_pairs(before_nodes, true_evaluation COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
-        Evaluation::node_pairs_type false_node_pairs{context.generate_node_pairs(before_nodes, false_evaluation COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
-        result.conditional_operator(std::move(true_evaluation), std::move(truth_node_pairs), std::move(false_evaluation), std::move(false_node_pairs), context);
+        EvaluationNodePtrs before_node_ptrs = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+        result.conditional_operator(before_node_ptrs, std::move(true_evaluation), std::move(false_evaluation), context);
       }
       break;
     }
@@ -525,16 +523,16 @@ void execute_statement(ast::statement const& statement, Context& context)
       }
       else
       {
-        context.begin_branch_true();
+        context.current_thread()->begin_branch_true(context);
         execute_statement(selection_statement.m_if_statement.m_then, context);
-        int old_protected_finalize_branch_stack_size = context.protect_finalize_branch_stack();
+        int old_protected_finalize_branch_stack_size = context.current_thread()->protect_finalize_branch_stack();
         if (selection_statement.m_if_statement.m_else)
         {
-          context.begin_branch_false();
+          context.current_thread()->begin_branch_false();
           execute_statement(*selection_statement.m_if_statement.m_else, context);
         }
-        context.unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
-        context.end_branch();
+        context.current_thread()->unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
+        context.current_thread()->end_branch();
       }
       break;
     }

@@ -39,4 +39,8 @@ class Graph
 
   // Add a new edge.
   void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition = Condition());
+  void new_edge(EdgeType edge_type, NodePtrConditionPair const& tail_node_ptr_condition_pair, NodePtr const& head_node)
+  {
+    new_edge(edge_type, tail_node_ptr_condition_pair.node(), head_node, tail_node_ptr_condition_pair.condition());
+  }
 };
