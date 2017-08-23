@@ -181,46 +181,6 @@ Evaluation Context::unlock(ast::tag mutex)
   return result;
 }
 
-Evaluation::node_pairs_type Context::generate_node_pairs(
-    EvaluationNodePtrs const& before_node_ptrs,
-    Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
-{
-  DoutEntering(debug_channel|continued_cf, "Context::generate_node_pairs(" << before_node_ptrs << ", " << after_evaluation << ") = ");
-  Evaluation::node_pairs_type node_pairs;
-  for (NodePtr const& before_node_ptr : before_node_ptrs)
-  {
-    after_evaluation.for_each_node(NodeRequestedType::tails,
-        [&node_pairs, &before_node_ptr](NodePtr const& after_node)
-        {
-          node_pairs.push_back(std::make_pair(NodePtrConditionPair(before_node_ptr), after_node));
-        }
-    COMMA_DEBUG_ONLY(debug_channel));
-  }
-  Dout(dc::finish, node_pairs);
-  return node_pairs;
-}
-
-Evaluation::node_pairs_type Context::generate_node_pairs(
-    EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
-    Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
-{
-  DoutEntering(debug_channel|continued_cf, "Context::generate_node_pairs(" << before_node_ptr_condition_pairs << ", " << after_evaluation << ") = ");
-  Evaluation::node_pairs_type node_pairs;
-  for (NodePtrConditionPair const& before_node_ptr_condition_pair : before_node_ptr_condition_pairs)
-  {
-    after_evaluation.for_each_node(NodeRequestedType::tails,
-        [&node_pairs, &before_node_ptr_condition_pair](NodePtr const& after_node)
-        {
-          node_pairs.push_back(std::make_pair(before_node_ptr_condition_pair, after_node));
-        }
-    COMMA_DEBUG_ONLY(debug_channel));
-  }
-  Dout(dc::finish, node_pairs);
-  return node_pairs;
-}
-
 void Context::add_edges(
     EdgeType edge_type,
     EvaluationNodePtrs const& before_node_ptrs,
@@ -232,6 +192,18 @@ void Context::add_edges(
   for (auto&& before_node_ptr : before_node_ptrs)
     for (auto&& after_node_ptr : after_node_ptrs)
       m_graph.new_edge(edge_type, before_node_ptr, after_node_ptr, condition);
+}
+
+void Context::add_edges(
+    EdgeType edge_type,
+    EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
+    EvaluationNodePtrs const& after_node_ptrs
+    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+{
+  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_node_ptr_condition_pairs << ", " << after_node_ptrs << ").");
+  for (auto&& before_node_ptr_condition_pair : before_node_ptr_condition_pairs)
+    for (auto&& after_node_ptr : after_node_ptrs)
+      m_graph.new_edge(edge_type, before_node_ptr_condition_pair.node(), after_node_ptr, before_node_ptr_condition_pair.condition());
 }
 
 void Context::add_edges(
@@ -251,17 +223,6 @@ void Context::add_edges(
 
 void Context::add_edges(
     EdgeType edge_type,
-    Evaluation::node_pairs_type node_pairs
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
-{
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << node_pairs << ").");
-  // Now actually add the new edges.
-  for (Evaluation::node_pairs_type::iterator node_pair = node_pairs.begin(); node_pair != node_pairs.end(); ++node_pair)
-    m_graph.new_edge(edge_type, node_pair->first, node_pair->second);
-}
-
-void Context::add_edges(
-    EdgeType edge_type,
     Evaluation const& before_evaluation,
     Evaluation const& after_evaluation
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
@@ -269,9 +230,7 @@ void Context::add_edges(
   DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << after_evaluation << ").");
   add_edges(
       edge_type,
-      generate_node_pairs(
-          before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel)),
-          after_evaluation
-          COMMA_DEBUG_ONLY(debug_channel))
+      before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel)),
+      after_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(debug_channel))
       COMMA_DEBUG_ONLY(debug_channel));
 }

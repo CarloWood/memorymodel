@@ -291,20 +291,6 @@ std::ostream& operator<<(std::ostream& os, Evaluation const& value_computation)
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, Evaluation::node_pairs_type const& node_pairs)
-{
-  bool first = true;
-  os << '{';
-  for (auto&& node_pair : node_pairs)
-  {
-    if (!first)
-      os << ", ";
-    os << '(' << node_pair.first << "," << *node_pair.second << ')';
-    first = false;
-  }
-  return os << '}';
-}
-
 //static
 void Evaluation::negate(std::unique_ptr<Evaluation>& ptr)
 {

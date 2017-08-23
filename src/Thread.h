@@ -2,6 +2,7 @@
 
 #include "utils/AIRefCount.h"
 #include "BranchInfo.h"
+#include "EvaluationNodePtrs.h"
 #include "debug.h"
 #include <vector>
 #include <memory>
@@ -41,7 +42,7 @@ class Thread : public AIRefCount
  protected:
   Thread(full_expression_evaluations_type& full_expression_evaluations);
   Thread(full_expression_evaluations_type& full_expression_evaluations, id_type id, ThreadPtr const& parent_thread);
-  ~Thread() { ASSERT(m_id == 0 || m_is_joined); }
+  ~Thread() { Dout(dc::notice, "Destructing Thread with ID " << m_id); ASSERT(m_id == 0 || m_is_joined); }
 
  public:
   static ThreadPtr create_main_thread(full_expression_evaluations_type& full_expression_evaluations) { return new Thread(full_expression_evaluations); }
@@ -60,11 +61,11 @@ class Thread : public AIRefCount
 
   // Called at sequence-points.
   void detect_full_expression_start();
-  void detect_full_expression_end(Evaluation& full_expression);
+  void detect_full_expression_end(Evaluation& full_expression, Context& context);
 
   void join_all_threads();
   void for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& final_full_expression);
-  void joined() { ASSERT(!m_is_joined); m_is_joined = true; }
+  void joined() { Dout(dc::notice, "Calling joined() for thread with ID " << m_id); ASSERT(!m_is_joined); m_is_joined = true; }
   void clean_up_joined_child_threads();
 
   // The previous full-expression is a condition and we're about to execute
@@ -112,6 +113,10 @@ class Thread : public AIRefCount
 
   friend std::ostream& operator<<(std::ostream& os, Thread const& thread);
   friend std::ostream& operator<<(std::ostream& os, ThreadPtr const& thread) { return os << *thread; }
+
+ private:
+  // Add node/condition pairs to node_ptr_condition_pairs for all head nodes of the current thread or all child_threads.
+  void add_previous_nodes(EvaluationNodePtrConditionPairs& node_ptr_condition_pairs, bool child_threads);
 
 #ifdef CWDEBUG
  private:

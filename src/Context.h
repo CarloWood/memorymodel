@@ -60,23 +60,17 @@ struct Context
   int number_of_threads() const { return m_next_thread_id; }
   ThreadPtr const& current_thread() const { return m_current_thread; }
   conditionals_type const& conditionals() const { return  m_conditionals; }
+  bool beginning_of_thread() const { return m_beginning_of_thread; }
+  bool end_of_thread() const { return m_end_of_thread; }
+
+  // Get and reset these flags.
+  bool reset_beginning_of_thread() { bool ret = m_beginning_of_thread; m_beginning_of_thread = false; return ret; }
+  bool reset_end_of_thread() { bool ret = m_end_of_thread; m_end_of_thread = false; return ret; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);
   Evaluation lock(ast::tag mutex);
   Evaluation unlock(ast::tag mutex);
-
-  // Generate node pairs for Sequenced-Before heads of before_nodes and Sequenced-Before tails of after_evaluation.
-  Evaluation::node_pairs_type generate_node_pairs(
-      EvaluationNodePtrs const& before_node_ptrs,
-      Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
-
-  // Generate node pairs for conditional Sequenced-Before heads of before_nodes and Sequenced-Before tails of after_evaluation.
-  Evaluation::node_pairs_type generate_node_pairs(
-      EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
-      Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 
   // Add edges of type edge_type between before_node_ptrs and after_node_ptrs with (optional) condition.
   void add_edges(
@@ -86,10 +80,10 @@ struct Context
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
       Condition const& condition = Condition());
 
-  // Add edges of type edge_type for each node pair in node_pairs with condition.
   void add_edges(
       EdgeType edge_type,
-      Evaluation::node_pairs_type node_pairs
+      EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
+      EvaluationNodePtrs const& after_node_ptrs
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 
   // Add unconditional edges of type edge_type between heads of before_evaluation and and tails of after_evaluation.
@@ -220,5 +214,5 @@ struct FullExpressionDetector
       m_full_expression(full_expression), m_context(context)
     { context.current_thread()->detect_full_expression_start(); }
   ~FullExpressionDetector()
-    { m_context.current_thread()->detect_full_expression_end(m_full_expression); }
+    { m_context.current_thread()->detect_full_expression_end(m_full_expression, m_context); }
 };

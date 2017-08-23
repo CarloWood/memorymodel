@@ -51,7 +51,6 @@ class Evaluation
 #endif
 
  public:
-  using node_pairs_type = std::vector<std::pair<NodePtrConditionPair, NodePtr>>;
   enum Unused { not_used };
   enum State { unused, uninitialized, literal, variable, pre, post, unary, binary, condition, comma };  // See also is_valid.
 
@@ -156,8 +155,6 @@ class Evaluation
   binary_operators binary_operator() const { ASSERT(m_state == binary); return m_operator.binary; }
   Evaluation const* rhs() const { ASSERT(m_state == binary); return m_rhs.get(); }
 };
-
-std::ostream& operator<<(std::ostream& os, Evaluation::node_pairs_type const& node_pairs);
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START

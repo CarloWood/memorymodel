@@ -725,6 +725,6 @@ int main(int argc, char* argv[])
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
   graph.generate_dot_file(dot_filename, context);
-  std::string command = "dot "/*-Kneato*/" -Tpng -o " + png_filename + " " + dot_filename;
+  std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 }
