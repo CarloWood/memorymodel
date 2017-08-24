@@ -25,9 +25,11 @@ class Thread : public AIRefCount
 
  private:
   id_type m_id;                         // Unique identifier of a thread.
+  id_type m_batch_id;                   // The id of the first thread of the current batch of threads ({{{ ... }}}).
   ThreadPtr m_parent_thread;            // Only valid when m_id > 0.
   child_threads_type m_child_threads;   // Child threads of this thread.
   bool m_is_joined;                     // Set when this thread leaves its scope.
+  int m_pending_heads;                  // Number of not-yet-connected heads (added as CurrentHeadOfThread).
 
   int m_full_expression_detector_depth;                                 // The current number of nested FullExpressionDetector objects.
   BranchInfo::full_expression_evaluations_type& m_full_expression_evaluations;      // Convenience reference to Context::m_full_expression_evaluations.
@@ -42,7 +44,7 @@ class Thread : public AIRefCount
  protected:
   Thread(full_expression_evaluations_type& full_expression_evaluations);
   Thread(full_expression_evaluations_type& full_expression_evaluations, id_type id, ThreadPtr const& parent_thread);
-  ~Thread() { Dout(dc::notice, "Destructing Thread with ID " << m_id); ASSERT(m_id == 0 || m_is_joined); }
+  ~Thread() { Dout(dc::threads, "Destructing Thread with ID " << m_id); ASSERT(m_id == 0 || (m_is_joined && m_pending_heads == 0)); }
 
  public:
   static ThreadPtr create_main_thread(full_expression_evaluations_type& full_expression_evaluations) { return new Thread(full_expression_evaluations); }
@@ -63,10 +65,13 @@ class Thread : public AIRefCount
   void detect_full_expression_start();
   void detect_full_expression_end(Evaluation& full_expression, Context& context);
 
-  void join_all_threads();
+  void start_threads(id_type next_id);
+  void join_all_threads(id_type next_id);
   void for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& final_full_expression);
-  void joined() { Dout(dc::notice, "Calling joined() for thread with ID " << m_id); ASSERT(!m_is_joined); m_is_joined = true; }
+  void joined() { Dout(dc::threads, "Calling joined() for thread with ID " << m_id); ASSERT(!m_is_joined); m_is_joined = true; }
   void clean_up_joined_child_threads();
+  void joined_and_connected(ThreadPtr const& child_thread_ptr);
+  void connected();
 
   // The previous full-expression is a condition and we're about to execute
   // the branch that is followed when this condition is true.
@@ -75,14 +80,14 @@ class Thread : public AIRefCount
   void begin_branch_false()
   {
     DoutEntering(dc::branch, "Thread::begin_branch_with_condition()");
-    Dout(dc::branch, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
+    Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
     m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
   }
 
   void end_branch()
   {
     DoutEntering(dc::branch, "Thread::end_branch_with_condition()");
-    Dout(dc::branch, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
+    Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
     m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
 
     Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
@@ -115,8 +120,8 @@ class Thread : public AIRefCount
   friend std::ostream& operator<<(std::ostream& os, ThreadPtr const& thread) { return os << *thread; }
 
  private:
-  // Add node/condition pairs to node_ptr_condition_pairs for all head nodes of the current thread or all child_threads.
-  void add_previous_nodes(EvaluationNodePtrConditionPairs& node_ptr_condition_pairs, bool child_threads);
+  // Add node/condition pairs to current_heads_of_thread for all head nodes of the current thread or all child_threads.
+  void add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of_thread, bool child_threads);
 
 #ifdef CWDEBUG
  private:

@@ -332,7 +332,7 @@ void NodeBase::sequenced_before() const
   {
     if (end_point.edge_type() == edge_sb && end_point.type() == tail)
     {
-      Dout(dc::notice, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->condition() << "'.");
+      Dout(dc::sb_edge, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->condition() << "'.");
       // Get condition of this edge.
       boolean::Product edge_conditional(end_point.edge()->condition().boolean_product());
       // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
@@ -341,12 +341,12 @@ void NodeBase::sequenced_before() const
       sequenced_before_side_effect += end_point.other_node()->provides_sequenced_before_side_effect() * edge_conditional;
     }
     else
-      Dout(dc::notice, "Skipping EndPoint " << end_point << '.');
+      Dout(dc::sb_edge, "Skipping EndPoint " << end_point << '.');
   }
-  Dout(dc::notice, "Result:");
+  Dout(dc::sb_edge, "Result:");
   DebugMarkDownRight;
-  Dout(dc::notice, "sequenced_before_value_computation = '" << sequenced_before_value_computation << "'.");
-  Dout(dc::notice, "sequenced_before_side_effect = '" << sequenced_before_side_effect << "'.");
+  Dout(dc::sb_edge, "sequenced_before_value_computation = '" << sequenced_before_value_computation << "'.");
+  Dout(dc::sb_edge, "sequenced_before_side_effect = '" << sequenced_before_side_effect << "'.");
 
   // We don't support volatile memory accesses... otherwise a node could be a side_effect and value_computation at the same time :/
   bool node_provides_side_effect_not_value_computation = provided_type().type() == NodeProvidedType::side_effect;
@@ -384,7 +384,7 @@ void NodeBase::sequenced_after() const
 // it's value computation (which then becomes the new value-computation head).
 void NodeBase::sequenced_before_side_effect_sequenced_before_value_computation() const
 {
-  Dout(dc::notice, "Marking " << *this << " as sequenced before a (pseudo) value computation.");
+  Dout(dc::sb_edge, "Marking " << *this << " as sequenced before a (pseudo) value computation.");
   // Passing one() as boolean expression because we are unconditionally sequenced before
   // a related side-effect that is unconditionally sequenced before the value computation
   // of the expression that this node is currently a tail of.
@@ -422,7 +422,7 @@ void NodeBase::sequenced_before_side_effect_sequenced_before_value_computation()
 // is used.
 void NodeBase::sequenced_before_value_computation() const
 {
-  Dout(dc::notice, "Marking " << *this << " as sequenced before its value computation.");
+  Dout(dc::sb_edge, "Marking " << *this << " as sequenced before its value computation.");
   m_connected.set_sequenced_before_pseudo_value_computation();
 }
 

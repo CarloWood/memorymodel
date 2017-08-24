@@ -3,12 +3,23 @@
 #include "Evaluation.h"
 #include "SBNodePresence.h"
 #include "Context.h"
+#include <algorithm>
 
-void Thread::join_all_threads()
+void Thread::start_threads(id_type next_id)
 {
-  DoutEntering(dc::notice, "Thread::join_all_threads() with m_id = " << m_id);
+  DoutEntering(dc::threads, "Thread::start_threads(" << next_id << ") with m_id = " << m_id);
+  m_batch_id = next_id;
+}
+
+void Thread::join_all_threads(id_type next_id)
+{
+  DoutEntering(dc::threads, "Thread::join_all_threads(" << next_id << ") with m_id = " << m_id);
+  // Join all thread of current batch.
   for (auto&& child_thread : m_child_threads)
-    child_thread->joined();
+    if (child_thread->id() >= m_batch_id)
+      child_thread->joined();
+  // Make sure we won't join them again.
+  m_batch_id = next_id;
 }
 
 void Thread::for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& action)
@@ -23,17 +34,38 @@ void Thread::for_all_joined_child_threads(std::function<void(ThreadPtr const&)> 
 
 void Thread::clean_up_joined_child_threads()
 {
+  // All child threads should already have been joined and connected by now.
+  ASSERT(m_child_threads.empty());
+#if 0
   if (m_child_threads.empty())
     return;
   child_threads_type::iterator child = m_child_threads.end();
   while (child != m_child_threads.begin())
     if ((*--child)->is_joined())
       child = m_child_threads.erase(child);
+#endif
+}
+
+void Thread::connected()
+{
+  ASSERT(m_pending_heads > 0);
+  if (--m_pending_heads == 0 && m_is_joined)
+    m_parent_thread->joined_and_connected(this);
+}
+
+void Thread::joined_and_connected(ThreadPtr const& child_thread_ptr)
+{
+  DoutEntering(dc::threads, "Thread::joined_and_connected(" << child_thread_ptr << ") with id " << m_id);
+  // Erase the child thread id from our child thread list, because it is joined and full connected (with sb and asw edges).
+  child_threads_type::iterator child_thread = std::find(m_child_threads.begin(), m_child_threads.end(), child_thread_ptr);
+  ASSERT(child_thread != m_child_threads.end());
+  m_child_threads.erase(child_thread);
 }
 
 Thread::Thread(full_expression_evaluations_type& full_expression_evaluations) :
   m_id(0),
   m_is_joined(false),
+  m_pending_heads(0),
   m_full_expression_detector_depth(0),
   m_full_expression_evaluations(full_expression_evaluations),
   m_protected_finalize_branch_stack_size(0),
@@ -45,6 +77,7 @@ Thread::Thread(full_expression_evaluations_type& full_expression_evaluations, id
   m_id(id),
   m_parent_thread(parent_thread),
   m_is_joined(false),
+  m_pending_heads(0),
   m_full_expression_detector_depth(0),
   m_full_expression_evaluations(full_expression_evaluations),
   m_protected_finalize_branch_stack_size(0),
@@ -64,7 +97,7 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
   if (--m_full_expression_detector_depth == 0)
   {
     // full_expression is the evaluation of a full-expression.
-    Dout(dc::notice, "Found full-expression with evaluation: " << full_expression);
+    Dout(dc::fullexpr, "Found full-expression with evaluation: " << full_expression);
 
     // An Evaluation is allocated iff when the expression is pointed to by a std::unique_ptr,
     // which are only used as member functions of another Evaluation; hence a full-expression
@@ -74,13 +107,13 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
     EvaluationNodePtrs full_expression_nodes =
         full_expression.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 
-    Dout(dc::notice, "Found nodes in full-expression: " << full_expression_nodes);
+    Dout(dc::fullexpr, "Found nodes in full-expression: " << full_expression_nodes);
     if (!full_expression_nodes.empty())
     {
       // Add asw edges.
       if (context.reset_beginning_of_thread())
       {
-        EvaluationNodePtrConditionPairs previous_nodes;         // With condition when conditional.
+        EvaluationCurrentHeadsOfThread previous_nodes;         // With condition when conditional.
         m_parent_thread->add_previous_nodes(previous_nodes, false);
         context.add_edges(edge_asw, previous_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::asw_edge));
       }
@@ -145,8 +178,8 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
         m_first_full_expression = false;
 #endif
 
-        EvaluationNodePtrConditionPairs previous_nodes;         // With condition when conditional.
-        EvaluationNodePtrConditionPairs previous_thread_nodes;  // Same but of joined child threads.
+        EvaluationCurrentHeadsOfThread previous_nodes;         // With condition when conditional.
+        EvaluationCurrentHeadsOfThread previous_thread_nodes;  // Same but of joined child threads.
 
         add_previous_nodes(previous_nodes, false);
         if (context.end_of_thread())    // Did we just join threads?
@@ -175,21 +208,22 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
       if (context.reset_end_of_thread())
         clean_up_joined_child_threads();
       m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
-      Dout(dc::notice, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
+      Dout(dc::fullexpr, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
     }
   }
 }
 
-void Thread::add_previous_nodes(EvaluationNodePtrConditionPairs& node_ptr_condition_pairs, bool child_threads)
+void Thread::add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of_thread, bool child_threads)
 {
-  DoutEntering(dc::notice, "Thread::add_previous_nodes(" << node_ptr_condition_pairs << ", " << child_threads << ").");
+  DoutEntering(dc::threads|dc::sb_edge|dc::asw_edge,
+      "Thread::add_previous_nodes(" << current_heads_of_thread << ", " << child_threads << ") of thead " << m_id << ".");
 
   if (child_threads)
   {
     for_all_joined_child_threads(
-        [&node_ptr_condition_pairs](ThreadPtr const& child_thread)
+        [&current_heads_of_thread](ThreadPtr const& child_thread)
         {
-          child_thread->add_previous_nodes(node_ptr_condition_pairs, false);
+          child_thread->add_previous_nodes(current_heads_of_thread, false);
         }
     );
     return;
@@ -276,7 +310,11 @@ void Thread::add_previous_nodes(EvaluationNodePtrConditionPairs& node_ptr_condit
       // Generate skip edge node pairs.
       EvaluationNodePtrs node_ptrs{m_full_expression_evaluations[index]->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
       for (auto&& node_ptr : node_ptrs)
-        node_ptr_condition_pairs.emplace_back(node_ptr, condition);
+      {
+        ASSERT(node_ptr->thread().get() == this);
+        current_heads_of_thread.emplace_back(node_ptr, condition);
+        ++m_pending_heads;
+      }
     }
 
     // Pop branch info from stack.
@@ -288,7 +326,11 @@ void Thread::add_previous_nodes(EvaluationNodePtrConditionPairs& node_ptr_condit
   {
     EvaluationNodePtrs node_ptrs{m_previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
     for (auto&& node_ptr : node_ptrs)
-      node_ptr_condition_pairs.emplace_back(node_ptr);
+    {
+      ASSERT(node_ptr->thread().get() == this);
+      current_heads_of_thread.emplace_back(node_ptr);
+      ++m_pending_heads;
+    }
   }
 }
 
@@ -299,10 +341,17 @@ void Thread::begin_branch_true(Context& context)
   // m_previous_full_expression must be the conditional
   // expression that was tested (and assumed true here).
   ASSERT(m_previous_full_expression);
-  Dout(dc::branch, "Adding condition from m_previous_full_expression (" << *m_previous_full_expression << ")...");
+  Dout(dc::branch, "Adding condition (from previous_full-expression) (" << *m_previous_full_expression << ")...");
   ConditionalBranch conditional_branch{context.add_condition(m_previous_full_expression)};    // The previous full-expression is a conditional.
   // Create a new BranchInfo for this selection statement.
-  Dout(dc::branch, "Moving m_previous_full_expression to BranchInfo(): see MOVING...");
+  Dout(dc::fullexpr, "Moving m_previous_full_expression to BranchInfo(): see MOVING...");
   m_branch_info_stack.emplace(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
   Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack, and returning " << conditional_branch << ".");
 }
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct fullexpr("FULLEXPR");
+channel_ct threads("THREADS");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

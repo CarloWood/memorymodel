@@ -608,7 +608,7 @@ NodePtr Evaluation::compare_exchange_weak(
 
 void Evaluation::add_value_computation(NodePtr const& node)
 {
-  DoutEntering(dc::notice, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
+  DoutEntering(dc::sb_edge, "Evaluation::add_value_computation(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single value computation?
   ASSERT(m_value_computations.empty());
   m_value_computations.push_back(node);
@@ -616,7 +616,7 @@ void Evaluation::add_value_computation(NodePtr const& node)
 
 void Evaluation::add_side_effect(NodePtr const& node)
 {
-  DoutEntering(dc::notice, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
+  DoutEntering(dc::sb_edge, "Evaluation::add_side_effect(" << *node << ") [this is " << *this << "].");
   // FIXME: I think that we always only have at most a single side effect?
   ASSERT(m_value_computations.empty() || node->is_second_mutex_access());
   m_side_effects.push_back(node);

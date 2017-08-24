@@ -40,8 +40,8 @@ libcppmem_a_SOURCES = \
 		 Thread.h \
 		 BranchInfo.cxx \
 		 BranchInfo.h \
-		 NodePtrConditionPair.cxx \
-		 NodePtrConditionPair.h \
+		 CurrentHeadOfThread.cxx \
+		 CurrentHeadOfThread.h \
 		 Condition.cxx \
 		 Condition.h \
 		 ConditionalBranch.cxx \

@@ -26,7 +26,7 @@ Evaluation execute_expression(ast::expression const& expression, Context& contex
 
 void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
 {
-  DoutEntering(dc::notice, "execute_declaration(`" << declaration_statement << "`)");
+  DoutEntering(dc::execute, "execute_declaration(`" << declaration_statement << "`)");
 
   // http://eel.is/c++draft/intro.execution#12.5 states
   //
@@ -100,7 +100,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
 
 Evaluation execute_condition(ast::expression const& condition, Context& context)
 {
-  DoutEntering(dc::notice, "execute_condition(`" << condition << "`)");
+  DoutEntering(dc::execute, "execute_condition(`" << condition << "`)");
   Evaluation result = execute_expression(condition, context);
   Dout(dc::continued, condition);
   return result;
@@ -108,7 +108,7 @@ Evaluation execute_condition(ast::expression const& condition, Context& context)
 
 Evaluation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
 {
-  DoutEntering(dc::notice, "execute_primary_expression(`" << primary_expression << "`)");
+  DoutEntering(dc::execute, "execute_primary_expression(`" << primary_expression << "`)");
 
   Evaluation result;
   auto const& node = primary_expression.m_primary_expression_node;
@@ -189,7 +189,7 @@ template<typename T>
 Evaluation execute_operator_list_expression(T const& expr, Context& context)
 {
   // Only print Entering.. when there is actually an operator.
-  DoutEntering(dc::notice(!expr.m_chained.empty()),
+  DoutEntering(dc::execute(!expr.m_chained.empty()),
       "execute_operator_list_expression<" << type_info_of<T>().demangled_name() << ">(`" << expr << "`).");
 
   // T is one of:
@@ -227,7 +227,7 @@ template<typename OPERATORS, typename PREV_PRECEDENCE_TYPE>
 Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple, Context& context)
 {
   // Doesn't really make much sense to print this, as the function being called already prints basically the same info.
-  //DoutEntering(dc::notice, "execute_operator_list_expression<" <<
+  //DoutEntering(dc::execute, "execute_operator_list_expression<" <<
   //    type_info_of<OPERATORS>().demangled_name() << ", " <<
   //    type_info_of<PREV_PRECEDENCE_TYPE>().demangled_name() << ">(" << tuple << ").");
 
@@ -238,7 +238,7 @@ Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV
 Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Context& context)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
-  DoutEntering(dc::notice(!expr.m_postfix_operators.empty()), "execute_postfix_expression(`" << expr << "`)");
+  DoutEntering(dc::execute(!expr.m_postfix_operators.empty()), "execute_postfix_expression(`" << expr << "`)");
 
   Evaluation result;
 
@@ -272,7 +272,8 @@ template<>
 Evaluation execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
-  DoutEntering(dc::notice(!expr.m_unary_operators.empty()), "execute_operator_list_expression(`" << expr << "`) [for pre-increment, pre-decrement and unary expressions]");
+  DoutEntering(dc::execute(!expr.m_unary_operators.empty()),
+      "execute_operator_list_expression(`" << expr << "`) [for pre-increment, pre-decrement and unary expressions]");
 
   Evaluation result;
   auto const& node = expr.m_postfix_expression.m_postfix_expression_node;
@@ -353,7 +354,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
 
 Evaluation execute_expression(ast::assignment_expression const& expression, Context& context)
 {
-  DoutEntering(dc::notice, "execute_expression(`" << expression << "`).");
+  DoutEntering(dc::execute, "execute_expression(`" << expression << "`).");
   DebugMarkDown;
 
   Evaluation result;
@@ -400,7 +401,7 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
 
 Evaluation execute_expression(ast::expression const& expression, Context& context)
 {
-  DoutEntering(dc::notice(expression.m_chained.size() > 1), "execute_expression(`" << expression << "`).");
+  DoutEntering(dc::execute(expression.m_chained.size() > 1), "execute_expression(`" << expression << "`).");
   Evaluation result;
   // - expression (as part of noptr-new-declarator, condition, iteration-statement, jump-statement and decltype-specifier)
   FullExpressionDetector detector(result, context);
@@ -492,6 +493,8 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_threads:
     {
       auto const& threads{boost::get<ast::threads>(node)};
+      // The notation '{{{' begins starting a batch of threads.
+      context.start_threads();
       for (auto& statement_seq : threads.m_threads)
         execute_body("thread", statement_seq, context);
       // The notation '}}}' implies that all theads are joined.
@@ -515,7 +518,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       Dout(dc::finish, ")");
       if (condition.is_literal())
       {
-        Dout(dc::notice, "Selection statement conditional is a literal! Not doing a branch.");
+        Dout(dc::branch, "Selection statement conditional is a literal! Not doing a branch.");
         if (condition.literal_value())
           execute_statement(selection_statement.m_if_statement.m_then, context);
         else if (selection_statement.m_if_statement.m_else)
@@ -728,3 +731,9 @@ int main(int argc, char* argv[])
   std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 }
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct execute("EXECUTE");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

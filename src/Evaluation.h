@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "debug.h"
 #include "EvaluationNodePtrs.h"
+#include "NodePtr.h"
 #include <iosfwd>
 #include <vector>
 #include <set>

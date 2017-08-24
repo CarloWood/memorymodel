@@ -41,6 +41,7 @@ struct Context
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
   void scope_end();
+  void start_threads();
   void join_all_threads();
 
   // Uninitialized declaration.
@@ -82,7 +83,7 @@ struct Context
 
   void add_edges(
       EdgeType edge_type,
-      EvaluationNodePtrConditionPairs const& before_node_ptr_condition_pairs,
+      EvaluationCurrentHeadsOfThread& current_heads_of_thread,
       EvaluationNodePtrs const& after_node_ptrs
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 

@@ -29,7 +29,7 @@ BranchInfo::BranchInfo(
       m_last_full_expression_of_false_branch_index(-1)
 {
   // Keep Evaluations that are conditionals alive.
-  Dout(dc::branch|dc::notice, "1.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
+  Dout(dc::branch|dc::fullexpr, "1.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
   m_condition_index = full_expression_evaluations.size();
   m_full_expression_evaluations.push_back(std::move(previous_full_expression));
 }
@@ -39,7 +39,7 @@ void BranchInfo::begin_branch_false(std::unique_ptr<Evaluation>&& previous_full_
   m_in_true_branch = false;
   if (previous_full_expression)
   {
-    Dout(dc::branch|dc::notice, "2.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
+    Dout(dc::branch|dc::fullexpr, "2.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
     m_last_full_expression_of_true_branch_index = m_full_expression_evaluations.size();
     m_full_expression_evaluations.push_back(std::move(previous_full_expression));
   }
@@ -65,7 +65,7 @@ void BranchInfo::end_branch(std::unique_ptr<Evaluation>&& previous_full_expressi
     //     ...
     //     x = 0;       // The last full-expression (of the false-branch).
     //   }
-    Dout(dc::branch|dc::notice, "3.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
+    Dout(dc::branch|dc::fullexpr, "3.MOVING m_previous_full_expression (" << *previous_full_expression << ") to m_full_expression_evaluations!");
     if (m_last_full_expression_of_true_branch_index == -1)
       m_last_full_expression_of_true_branch_index = m_full_expression_evaluations.size();
     else

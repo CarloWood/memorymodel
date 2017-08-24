@@ -1,12 +1,12 @@
 #pragma once
 
-#include "NodePtrConditionPair.h"
 #include <vector>
 #include <iosfwd>
 
-using EvaluationNodePtrConditionPairs = std::vector<NodePtrConditionPair>;
-using EvaluationNodePtrs = std::vector<NodePtr>;
-std::ostream& operator<<(std::ostream& os, EvaluationNodePtrConditionPairs const& evaluation_node_ptr_condition_pairs);
-std::ostream& operator<<(std::ostream& os, EvaluationNodePtrs const& evaluation_node_ptrs);
+class CurrentHeadOfThread;
+class NodePtr;
 
-EvaluationNodePtrConditionPairs add_condition(EvaluationNodePtrs const& node_ptrs, Condition const& condition);
+using EvaluationCurrentHeadsOfThread = std::vector<CurrentHeadOfThread>;
+using EvaluationNodePtrs = std::vector<NodePtr>;
+std::ostream& operator<<(std::ostream& os, EvaluationCurrentHeadsOfThread const& evaluation_current_heads_of_thread);
+std::ostream& operator<<(std::ostream& os, EvaluationNodePtrs const& evaluation_node_ptrs);

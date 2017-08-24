@@ -20,7 +20,9 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
   if (success)  // Successfully added a new edge.
   {
 #ifdef CWDEBUG
-    Dout(dc::notice|continued_cf, "Added new edge " << *tail_node->get_end_points().back().edge() << " from \"" << *tail_node << "\" to \"" << *head_node << "\"");
+    Dout(dc::notice|continued_cf,
+        "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
+        " from \"" << *tail_node << "\" to \"" << *head_node << "\"");
     if (condition.conditional())
       Dout(dc::continued, " with condition " << condition);
     Dout(dc::finish, ".");

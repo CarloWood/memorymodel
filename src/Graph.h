@@ -2,6 +2,7 @@
 
 #include "Node.h"
 #include "debug.h"
+#include "CurrentHeadOfThread.h"
 #include <set>
 #include <stack>
 
@@ -27,20 +28,20 @@ class Graph
   {
     DebugMarkUp;
     NodePtr node = m_nodes.emplace_hint(m_nodes.end(), new NODE(m_next_node_id++, std::forward<Args>(args)...));
-    Dout(dc::notice, "Created node " << *node << '.');
+    Dout(dc::nodes, "Created node " << *node << '.');
     return node;
   }
 
   void remove_node(NodePtr const& node)
   {
-    Dout(dc::notice, "Removing Node " << *node);
+    Dout(dc::nodes, "Removing Node " << *node);
     m_nodes.erase(node.get_iterator());
   }
 
   // Add a new edge.
   void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition = Condition());
-  void new_edge(EdgeType edge_type, NodePtrConditionPair const& tail_node_ptr_condition_pair, NodePtr const& head_node)
+  void new_edge(EdgeType edge_type, CurrentHeadOfThread const& tail_current_head_of_thread, NodePtr const& head_node)
   {
-    new_edge(edge_type, tail_node_ptr_condition_pair.node(), head_node, tail_node_ptr_condition_pair.condition());
+    new_edge(edge_type, tail_current_head_of_thread.node(), head_node, tail_current_head_of_thread.condition());
   }
 };

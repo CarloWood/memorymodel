@@ -120,7 +120,11 @@ class Edge
       m_condition(condition),
       m_tail_node(tail_node)
       COMMA_DEBUG_ONLY(m_id(s_id++))
-      { Dout(dc::notice, "Creating Edge " << m_id << '.'); }
+      {
+        Dout(dc::sb_edge(edge_type == edge_sb)|
+             dc::asw_edge(edge_type == edge_asw),
+             "Creating " << edge_type << " Edge " << m_id << '.');
+      }
 
   EdgeType edge_type() const { return m_edge_type; }
   Condition const& condition() const { return m_condition; }
