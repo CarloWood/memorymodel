@@ -497,7 +497,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       context.start_threads();
       for (auto& statement_seq : threads.m_threads)
         execute_body("thread", statement_seq, context);
-      // The notation '}}}' implies that all theads are joined.
+      // The notation '}}}' implies that all threads are joined.
       context.join_all_threads();
       break;
     }

@@ -66,7 +66,13 @@ struct Context
 
   // Get and reset these flags.
   bool reset_beginning_of_thread() { bool ret = m_beginning_of_thread; m_beginning_of_thread = false; return ret; }
-  bool reset_end_of_thread() { bool ret = m_end_of_thread; m_end_of_thread = false; return ret; }
+  bool reset_end_of_thread()
+  {
+    bool ret = m_end_of_thread;
+    m_end_of_thread = false;
+    Dout(dc::threads(ret), "Resetting m_end_of_thread.");
+    return ret;
+  }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);

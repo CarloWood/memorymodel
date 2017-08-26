@@ -266,7 +266,7 @@ void NodeBase::update_exists() const
   int node_heads = 0;
   for (auto&& end_point : m_end_points)
   {
-    if (end_point.edge_type() == edge_sb && end_point.type() == head)
+    if ((end_point.edge_type() == edge_sb || end_point.edge_type() == edge_asw) && end_point.type() == head)
     {
       ++node_heads;
       node_exists += end_point.edge()->exists();
@@ -296,7 +296,7 @@ bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr co
   if (success2)
   {
     Dout(dc::sb_edge, "ADDED EDGE " << *new_edge);
-    if (edge_type == edge_sb)
+    if (edge_type == edge_sb || edge_type == edge_asw)
       head_node->update_exists();
   }
   return success2;

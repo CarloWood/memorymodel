@@ -8,12 +8,6 @@
 #include <stdexcept>
 #include <fstream>
 
-std::ostream& operator<<(std::ostream& os, Thread const& thread)
-{
-  os << "{Thread: m_id = " << thread.m_id << "}";
-  return os;
-}
-
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
   bool success = NodeBase::add_edge(edge_type, tail_node, head_node, condition);
@@ -132,7 +126,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
         "     Legend [shape=none, margin=0, pos=\"1.0," << (1.0 - 1.5 * yscale) << "!\", label=<\n"
         "     <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n"
         "      <TR>\n"
-        "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Legend</B></FONT></TD>\n"
+        "       <TD COLSPAN=\"2\"><FONT face=\"Helvetica\"><B>Conditions</B></FONT></TD>\n"
         "      </TR>\n";
 
     for (auto&& conditional : conditionals)

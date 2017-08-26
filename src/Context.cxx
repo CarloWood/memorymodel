@@ -13,16 +13,7 @@ void Context::scope_start(bool is_thread)
 #ifdef CWDEBUG
   DoutEntering(dc::notice|continued_cf, "Context::scope_start(" << is_thread << ")");
   if (is_thread)
-  {
-    using namespace DEBUGCHANNELS;
     Dout(dc::continued, " [new thread]");
-    if (!dc::asw_edge.is_on())
-      dc::asw_edge.on();
-    if (!dc::threads.is_on())
-      dc::threads.on();
-    if (!dc::branch.is_on())
-      dc::branch.on();
-  }
   Dout(dc::finish, ".");
 #endif
 
@@ -42,7 +33,7 @@ void Context::scope_end()
 {
   bool is_thread = m_threads.top();
 #ifdef CWDEBUG
-  DoutEntering(dc::notice|continued_cf, "Context::scope_end()");
+  DoutEntering(dc::notice|dc::threads(is_thread)|continued_cf, "Context::scope_end()");
   if (is_thread)
     Dout(dc::continued, " [thread end]");
   Dout(dc::finish, ".");
@@ -53,11 +44,22 @@ void Context::scope_end()
   {
     DebugMarkUp;
     Dout(dc::threads, "Thread " << m_current_thread << " ended.");
-    if (!current_thread()->has_previous_full_expression())     // Can happen if thread is empty.
+    if (m_beginning_of_thread)     // Can happen if thread is empty.
+    {
       m_beginning_of_thread = false;
+      Dout(dc::threads, "Not setting m_end_of_thread because this thread didn't have any full-expression.");
+      // Erase the current thread entirely.
+      m_current_thread->joined();
+      m_current_thread->parent_thread()->do_erase();
+    }
     else
+    {
       m_end_of_thread = true;
+      Dout(dc::threads, "Set m_end_of_thread.");
+    }
     m_current_thread = m_current_thread->parent_thread();
+    // Did we just close a child thread with a full-expression in it, or was it an empty child thread?
+    m_current_thread->closed_child_thread_with_full_expression(m_end_of_thread);
   }
 }
 

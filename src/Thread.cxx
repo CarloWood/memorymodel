@@ -5,6 +5,17 @@
 #include "Context.h"
 #include <algorithm>
 
+std::ostream& operator<<(std::ostream& os, Thread const& thread)
+{
+  os << "{Thread: m_id:" << thread.m_id <<
+    ", m_is_joined:" << thread.m_is_joined <<
+    ", m_pending_heads:" << thread.m_pending_heads <<
+    ", m_joined_child_threads:" << thread.m_joined_child_threads <<
+    ", m_saw_empty_child_thread:" << thread.m_saw_empty_child_thread <<
+    "}";
+  return os;
+}
+
 void Thread::start_threads(id_type next_id)
 {
   DoutEntering(dc::threads, "Thread::start_threads(" << next_id << ") with m_id = " << m_id);
@@ -14,42 +25,60 @@ void Thread::start_threads(id_type next_id)
 void Thread::join_all_threads(id_type next_id)
 {
   DoutEntering(dc::threads, "Thread::join_all_threads(" << next_id << ") with m_id = " << m_id);
-  // Join all thread of current batch.
+  // Join all threads of current batch.
   for (auto&& child_thread : m_child_threads)
     if (child_thread->id() >= m_batch_id)
       child_thread->joined();
+  // Actually erase the child threads, if any.
+  if (m_need_erase)
+    do_erase();
   // Make sure we won't join them again.
   m_batch_id = next_id;
+  if (m_unhandled_condition)
+    condition_handled();
 }
 
 void Thread::for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& action)
 {
+  DoutEntering(dc::threads, "Thread::for_all_joined_child_threads(...) [this = thread " << m_id << "]");
   for (auto&& child_thread : m_child_threads)
   {
     child_thread->for_all_joined_child_threads(action);
     if (child_thread->is_joined())
+    {
+      Dout(dc::threads, "Calling action() on child thread " << child_thread->m_id);
       action(child_thread);
+    }
+    else
+      Dout(dc::threads, "Skipping action() on child thread " << child_thread->m_id << " because it is already joined.");
   }
 }
 
 void Thread::clean_up_joined_child_threads()
 {
   // All child threads should already have been joined and connected by now.
+  for (auto&& child_thread : m_child_threads)
+    Dout(dc::warning, "Thread " << child_thread << " was not joined and connected yet!");
   ASSERT(m_child_threads.empty());
-#if 0
-  if (m_child_threads.empty())
-    return;
-  child_threads_type::iterator child = m_child_threads.end();
-  while (child != m_child_threads.begin())
-    if ((*--child)->is_joined())
-      child = m_child_threads.erase(child);
-#endif
 }
 
 void Thread::connected()
 {
   ASSERT(m_pending_heads > 0);
   if (--m_pending_heads == 0 && m_is_joined)
+  {
+    m_parent_thread->joined_and_connected(this);
+    m_parent_thread->do_erase();
+  }
+}
+
+void Thread::joined()
+{
+  Dout(dc::threads, "Calling joined() for thread with ID " << m_id);
+  ASSERT(!m_is_joined);
+  m_is_joined = true;
+  m_parent_thread->m_joined_child_threads = true;
+  if (m_pending_heads == 0)
     m_parent_thread->joined_and_connected(this);
 }
 
@@ -59,17 +88,34 @@ void Thread::joined_and_connected(ThreadPtr const& child_thread_ptr)
   // Erase the child thread id from our child thread list, because it is joined and full connected (with sb and asw edges).
   child_threads_type::iterator child_thread = std::find(m_child_threads.begin(), m_child_threads.end(), child_thread_ptr);
   ASSERT(child_thread != m_child_threads.end());
-  m_child_threads.erase(child_thread);
+  (*child_thread)->m_erase = true;
+  m_need_erase = true;
+}
+
+void Thread::do_erase()
+{
+  m_child_threads.erase(std::remove_if(m_child_threads.begin(), m_child_threads.end(), [](ThreadPtr const& thread){ return thread->m_erase; }), m_child_threads.end());
+  m_need_erase = false;
+}
+
+void Thread::closed_child_thread_with_full_expression(bool had_full_expression)
+{
+  if (!had_full_expression)
+    m_saw_empty_child_thread = true;
 }
 
 Thread::Thread(full_expression_evaluations_type& full_expression_evaluations) :
   m_id(0),
   m_is_joined(false),
   m_pending_heads(0),
+  m_joined_child_threads(false),
+  m_saw_empty_child_thread(false),
+  m_erase(false),
+  m_need_erase(false),
   m_full_expression_detector_depth(0),
   m_full_expression_evaluations(full_expression_evaluations),
-  m_protected_finalize_branch_stack_size(0),
-  m_first_full_expression(true)
+  m_unhandled_condition(false),
+  m_protected_finalize_branch_stack_size(0)
 {
 }
 
@@ -78,10 +124,14 @@ Thread::Thread(full_expression_evaluations_type& full_expression_evaluations, id
   m_parent_thread(parent_thread),
   m_is_joined(false),
   m_pending_heads(0),
+  m_joined_child_threads(false),
+  m_saw_empty_child_thread(false),
+  m_erase(false),
+  m_need_erase(false),
   m_full_expression_detector_depth(0),
   m_full_expression_evaluations(full_expression_evaluations),
-  m_protected_finalize_branch_stack_size(0),
-  m_first_full_expression(true)
+  m_unhandled_condition(false),
+  m_protected_finalize_branch_stack_size(0)
 {
   ASSERT(m_id > 0);
 }
@@ -106,126 +156,75 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
 
     EvaluationNodePtrs full_expression_nodes =
         full_expression.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-
     Dout(dc::fullexpr, "Found nodes in full-expression: " << full_expression_nodes);
+
     if (!full_expression_nodes.empty())
     {
       // Add asw edges.
-      if (context.reset_beginning_of_thread())
+      if (context.reset_beginning_of_thread())                  // We found a full-expression; are we at the beginning of a new thread?
       {
-        EvaluationCurrentHeadsOfThread previous_nodes;         // With condition when conditional.
-        m_parent_thread->add_previous_nodes(previous_nodes, false);
+        EvaluationCurrentHeadsOfThread previous_nodes;          // With condition when conditional.
+        m_parent_thread->add_unconnected_head_nodes(previous_nodes, false);
         context.add_edges(edge_asw, previous_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::asw_edge));
       }
 
-      // This will be non-zero if we're inside some selection statement.
-      Dout(dc::branch, "Size of m_branch_info_stack is " << m_branch_info_stack.size() << ".");
-      // Let branch_info point to the inner most selection statement that we're current in, if any.
-      BranchInfo* const branch_info = m_branch_info_stack.empty() ? nullptr : &m_branch_info_stack.top();
-      // Detect if this full-expression is the first full-expression in the current branch.
-      bool first_full_expression_of_current_branch = branch_info && !branch_info->conditional_edge_of_current_branch_added();
+      EvaluationCurrentHeadsOfThread previous_nodes;            // With condition when conditional.
+      EvaluationCurrentHeadsOfThread previous_thread_nodes;     // Same but of joined child threads.
 
-#ifdef CWDEBUG
-      if (branch_info)
-      {
-        if (first_full_expression_of_current_branch)
-          Dout(dc::branch, "The previous full-expression is the CONDITION " << *m_full_expression_evaluations[branch_info->m_condition_index]);
-        else
-          Dout(dc::branch, "The previous full-expression is NOT the CONDITION.");
-      }
-#endif
+      add_unconnected_head_nodes(previous_nodes, false);        // This might set m_unhandled_condition.
+      if (context.end_of_thread())                              // Did we just join threads?
+        add_unconnected_head_nodes(previous_thread_nodes, true);
+      else
+        Dout(dc::threads, "Not calling add_unconnected_head_nodes() for child threads because context.end_of_thread() returned false.");
 
-      // If this is the first full-expression of a current branch then m_previous_full_expression
-      // is a condition and was moved to m_full_expression_evaluations.
-      std::unique_ptr<Evaluation> const& previous_full_expression{
-          first_full_expression_of_current_branch ?
-              m_full_expression_evaluations[branch_info->m_condition_index] :
-              m_previous_full_expression};
+      context.add_edges(edge_sb, previous_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      if (context.end_of_thread())
+        context.add_edges(edge_asw, previous_thread_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
 
-      bool const previous_full_expression_is_valid{previous_full_expression};
-      bool just_after_selection_statement = m_finalize_branch_stack.size() > m_protected_finalize_branch_stack_size;
+      if (m_unhandled_condition)
+        condition_handled();
 
-      Dout(dc::branch, "first_full_expression_of_current_branch = " << first_full_expression_of_current_branch);
-      Dout(dc::branch, "previous_full_expression_is_valid = " << previous_full_expression_is_valid);
+      // Reset these flags.
+      m_joined_child_threads = m_saw_empty_child_thread = false;
 
-#ifdef CWDEBUG
-      if (!previous_full_expression_is_valid && !just_after_selection_statement && !m_first_full_expression)
-      {
-        // m_previous_full_expression should only be invalid when we encounter the first full-expression.
-        // After that it should always be equal to the previous full-expression.
-        if (m_full_expression_evaluations.empty())
-          DoutFatal(dc::core, "Unexpected invalid m_previous_full_expression! Current full-expression is " << full_expression);
-        else
-          DoutFatal(dc::core, "Unexpected invalid m_previous_full_expression! Last full-expression is " << *m_full_expression_evaluations.back());
-      }
-#endif
-
-      if (previous_full_expression_is_valid || just_after_selection_statement)
-      {
-#ifdef CWDEBUG
-        Dout(dc::sb_edge|continued_cf, "Generate sequenced-before edges between ");
-        if (previous_full_expression_is_valid)
-        {
-          if (just_after_selection_statement)
-            Dout(dc::continued, "selection statement with last full-expression " << *previous_full_expression);
-          else
-            Dout(dc::continued, *previous_full_expression);
-        }
-        else
-          Dout(dc::continued, " selection statement with no last full-expression in its last branch.");
-        Dout(dc::finish, " and " << full_expression << ".");
-        DebugMarkDownRight;
-        m_first_full_expression = false;
-#endif
-
-        EvaluationCurrentHeadsOfThread previous_nodes;         // With condition when conditional.
-        EvaluationCurrentHeadsOfThread previous_thread_nodes;  // Same but of joined child threads.
-
-        add_previous_nodes(previous_nodes, false);
-        if (context.end_of_thread())    // Did we just join threads?
-          add_previous_nodes(previous_thread_nodes, true);
-
-        if (first_full_expression_of_current_branch)
-        {
-          Condition condition = branch_info->get_current_condition();
-          Dout(dc::branch|dc::sb_edge, "Generate edges between between CONDITIONAL " << *previous_full_expression << " and " << full_expression <<
-              " using boolean expression " << condition << ".");
-          DebugMarkDownRight;
-
-          // Get all head nodes of the last full expression (which is the condition).
-          EvaluationNodePtrs previous_full_expression_nodes =
-              previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-          context.add_edges(edge_sb, previous_full_expression_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition);
-
-          Dout(dc::branch, "Marking that these edges were handled.");
-          branch_info->added_edge_from_condition();
-        }
-
-        context.add_edges(edge_sb, previous_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-        if (context.end_of_thread())
-          context.add_edges(edge_asw, previous_thread_nodes, full_expression_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-      }
       if (context.reset_end_of_thread())
         clean_up_joined_child_threads();
+
       m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
       Dout(dc::fullexpr, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
     }
   }
 }
 
-void Thread::add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of_thread, bool child_threads)
+void Thread::condition_handled()
 {
-  DoutEntering(dc::threads|dc::sb_edge|dc::asw_edge,
-      "Thread::add_previous_nodes(" << current_heads_of_thread << ", " << child_threads << ") of thead " << m_id << ".");
+  Dout(dc::branch, "Marking that unhandled condition of " << m_branch_info_stack.top() << " (thread " << m_id << ") was handled.");
+  m_branch_info_stack.top().added_edge_from_condition();
+  m_unhandled_condition = false;
+}
+
+void Thread::add_unconnected_head_nodes(EvaluationCurrentHeadsOfThread& current_heads_of_thread, bool child_threads)
+{
+  DoutEntering(dc::threads|dc::sb_edge|dc::asw_edge|continued_cf,
+      "Thread::add_unconnected_head_nodes(" << current_heads_of_thread << ", " << child_threads << ") of thread " << m_id << "...");
 
   if (child_threads)
   {
     for_all_joined_child_threads(
         [&current_heads_of_thread](ThreadPtr const& child_thread)
         {
-          child_thread->add_previous_nodes(current_heads_of_thread, false);
+          child_thread->add_unconnected_head_nodes(current_heads_of_thread, false);
+          // It should be impossible that a joined child thread has an unhandled condition;
+          // that would namely imply code like this:
+          // {{{
+          //   if (condition)
+          // }}}
+          //     we_are_here(); // Do this when condition is true.
+          // Which simply is a syntax error...
+          ASSERT(!child_thread->m_unhandled_condition);
         }
     );
+    Dout(dc::finish, "returning " << current_heads_of_thread << '.');
     return;
   }
 
@@ -247,6 +246,7 @@ void Thread::add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of
   while (m_finalize_branch_stack.size() > m_protected_finalize_branch_stack_size)
   {
     BranchInfo& branch_info{m_finalize_branch_stack.top()};
+    Dout(dc::branch, "Handling top of m_finalize_branch_stack: " << branch_info);
 
     // Handle four cases:
     // 0: unconditional edge from condition, or condition == True edge from condition.
@@ -322,8 +322,48 @@ void Thread::add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of
     m_finalize_branch_stack.pop();
   }
 
-  if (m_previous_full_expression)
+  // This will be non-zero if we're inside some selection statement.
+  Dout(dc::branch, "Size of m_branch_info_stack is " << m_branch_info_stack.size() << ".");
+  // Let branch_info point to the inner most selection statement that we're current in, if any.
+  BranchInfo* const branch_info = m_branch_info_stack.empty() ? nullptr : &m_branch_info_stack.top();
+  // Detect if this full-expression is the first full-expression in the current branch.
+  bool first_full_expression_of_current_branch = branch_info && !branch_info->conditional_edge_of_current_branch_added();
+
+#ifdef CWDEBUG
+  if (branch_info)
   {
+    if (first_full_expression_of_current_branch)
+      Dout(dc::branch, "The previous full-expression is the CONDITION " << *m_full_expression_evaluations[branch_info->m_condition_index]);
+    else
+      Dout(dc::branch, "We're inside a selection statement. The previous full-expression is NOT the CONDITION.");
+  }
+#endif
+
+  if (first_full_expression_of_current_branch)
+  {
+    // If this is the first full-expression of a current branch then m_previous_full_expression
+    // is a condition and was moved to m_full_expression_evaluations.
+    std::unique_ptr<Evaluation> const& previous_full_expression{m_full_expression_evaluations[branch_info->m_condition_index]};
+    Condition condition = branch_info->get_current_condition();
+    Dout(dc::branch|dc::sb_edge, "Finding unconnected nodes of CONDITIONAL " << *previous_full_expression << " (with boolean expression " << condition << ").");
+    DebugMarkDownRight;
+
+    // Get all head nodes of the last full expression (which is the condition).
+    EvaluationNodePtrs previous_full_expression_nodes =
+        previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    for (auto&& node_ptr : previous_full_expression_nodes)
+    {
+      ASSERT(node_ptr->thread().get() == this);
+      current_heads_of_thread.emplace_back(node_ptr, condition);
+      ++m_pending_heads;
+    }
+    m_unhandled_condition = true;
+  }
+  else if (m_previous_full_expression &&
+      (!m_joined_child_threads || m_saw_empty_child_thread))    // Do not link from a previous full-expression of this thread when
+                                                                // we created and joined threads in the meantime, unless one of the threads was empty.
+  {
+    Dout(dc::sb_edge, "Finding unconnected nodes of " << *m_previous_full_expression << ".");
     EvaluationNodePtrs node_ptrs{m_previous_full_expression->get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge))};
     for (auto&& node_ptr : node_ptrs)
     {
@@ -332,6 +372,8 @@ void Thread::add_previous_nodes(EvaluationCurrentHeadsOfThread& current_heads_of
       ++m_pending_heads;
     }
   }
+
+  Dout(dc::finish, "returning " << current_heads_of_thread << '.');
 }
 
 void Thread::begin_branch_true(Context& context)
