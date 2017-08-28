@@ -22,7 +22,7 @@ struct Context
   Graph& m_graph;
 
  private:
-  BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
+  //BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
@@ -33,7 +33,7 @@ struct Context
       m_position_handler(ph),
       m_graph(g),
       m_next_thread_id{1},
-      m_current_thread{Thread::create_main_thread(m_full_expression_evaluations)} { }
+      m_current_thread{Thread::create_main_thread(/*m_full_expression_evaluations*/)} { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);

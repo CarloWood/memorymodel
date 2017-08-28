@@ -14,7 +14,7 @@ class NodePtrConditionPair
  public:
   NodePtr const& node() const { return m_node_ptr; }
   Condition const& condition() const { return m_condition; }
-  void connected();
+  //void connected();
 
   NodePtrConditionPair(NodePtr const& node_ptr) : m_node_ptr(node_ptr) { }
   NodePtrConditionPair(NodePtr const& node_ptr, Condition const& condition) : m_node_ptr(node_ptr), m_condition(condition) { }

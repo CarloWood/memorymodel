@@ -20,7 +20,7 @@ void Context::scope_start(bool is_thread)
   m_threads.push(is_thread);
   if (is_thread)
   {
-    m_current_thread = m_current_thread->create_new_thread(m_full_expression_evaluations, m_next_thread_id);
+    m_current_thread = m_current_thread->create_new_thread(/*m_full_expression_evaluations,*/ m_next_thread_id);
     DebugMarkDown;
     Dout(dc::threads, "Created " << m_current_thread << '.');
   }
@@ -215,7 +215,7 @@ void Context::add_edges(
   {
     for (auto&& after_node_ptr : after_node_ptrs)
       m_graph.new_edge(edge_type, before_node_ptr_condition_pair.node(), after_node_ptr, before_node_ptr_condition_pair.condition());
-    before_node_ptr_condition_pair.connected();
+    //before_node_ptr_condition_pair.connected();
   }
 }
 

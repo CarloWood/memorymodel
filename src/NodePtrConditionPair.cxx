@@ -14,7 +14,9 @@ std::ostream& operator<<(std::ostream& os, NodePtrConditionPair const& current_h
   return os;
 }
 
+#if 0
 void NodePtrConditionPair::connected()
 {
   m_node_ptr->thread()->connected();
 }
+#endif

@@ -9,9 +9,9 @@ std::ostream& operator<<(std::ostream& os, Thread const& thread)
 {
   os << "{Thread: m_id:" << thread.m_id <<
     ", m_is_joined:" << thread.m_is_joined <<
-    ", m_pending_heads:" << thread.m_pending_heads <<
+//    ", m_pending_heads:" << thread.m_pending_heads <<
     ", m_joined_child_threads:" << thread.m_joined_child_threads <<
-    ", m_saw_empty_child_thread:" << thread.m_saw_empty_child_thread <<
+//    ", m_saw_empty_child_thread:" << thread.m_saw_empty_child_thread <<
     "}";
   return os;
 }
@@ -29,6 +29,7 @@ void Thread::join_all_threads(id_type next_id)
   for (auto&& child_thread : m_child_threads)
     if (child_thread->id() >= m_batch_id)
       child_thread->joined();
+#if 0
   // Actually erase the child threads, if any.
   if (m_need_erase)
     do_erase();
@@ -40,8 +41,10 @@ void Thread::join_all_threads(id_type next_id)
     if (m_unhandled_condition)
       condition_handled();
   }
+#endif
 }
 
+#if 0
 void Thread::for_all_joined_child_threads(std::function<void(ThreadPtr const&)> const& action)
 {
   DoutEntering(dc::threads, "Thread::for_all_joined_child_threads(...) [this = thread " << m_id << "]");
@@ -74,6 +77,7 @@ void Thread::connected()
     m_parent_thread->do_erase();
   }
 }
+#endif
 
 void Thread::joined()
 {
@@ -83,6 +87,7 @@ void Thread::joined()
   m_parent_thread->m_joined_child_threads = true;
 }
 
+#if 0
 void Thread::joined_and_connected(ThreadPtr const& child_thread_ptr)
 {
   DoutEntering(dc::threads, "Thread::joined_and_connected(" << child_thread_ptr << ") with id " << m_id);
@@ -92,6 +97,7 @@ void Thread::joined_and_connected(ThreadPtr const& child_thread_ptr)
   (*child_thread)->m_erase = true;
   m_need_erase = true;
 }
+#endif
 
 void Thread::do_erase()
 {
@@ -113,39 +119,39 @@ void Thread::do_erase()
   m_need_erase = false;
 }
 
-Thread::Thread(full_expression_evaluations_type& full_expression_evaluations) :
+Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations*/) :
   m_id(0),
-  m_at_beginning_of_child_thread(false),
-  m_finished(false),
+  //m_at_beginning_of_child_thread(false),
+  //m_finished(false),
   m_is_joined(false),
-  m_pending_heads(0),
+  //m_pending_heads(0),
   m_erase(false),
   m_need_erase(false),
-  m_parent_in_true_branch(false),
+  //m_parent_in_true_branch(false),
   m_joined_child_threads(false),
-  m_saw_empty_child_thread(false),
+  //m_saw_empty_child_thread(false),
   m_full_expression_detector_depth(0),
-  m_full_expression_evaluations(full_expression_evaluations),
-  m_unhandled_condition(false),
+  //m_full_expression_evaluations(full_expression_evaluations),
+  //m_unhandled_condition(false),
   m_protected_finalize_branch_stack_size(0)
 {
 }
 
-Thread::Thread(full_expression_evaluations_type& full_expression_evaluations, id_type id, ThreadPtr const& parent_thread) :
+Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations,*/ id_type id, ThreadPtr const& parent_thread) :
   m_id(id),
   m_parent_thread(parent_thread),
-  m_at_beginning_of_child_thread(true),
-  m_finished(false),
+  //m_at_beginning_of_child_thread(true),
+  //m_finished(false),
   m_is_joined(false),
-  m_pending_heads(0),
+  //m_pending_heads(0),
   m_erase(false),
   m_need_erase(false),
-  m_parent_in_true_branch(parent_thread->in_true_branch()),
+  //m_parent_in_true_branch(parent_thread->in_true_branch()),
   m_joined_child_threads(false),
-  m_saw_empty_child_thread(false),
+  //m_saw_empty_child_thread(false),
   m_full_expression_detector_depth(0),
-  m_full_expression_evaluations(full_expression_evaluations),
-  m_unhandled_condition(false),
+  //m_full_expression_evaluations(full_expression_evaluations),
+  //m_unhandled_condition(false),
   m_protected_finalize_branch_stack_size(0)
 {
   ASSERT(m_id > 0);
@@ -154,6 +160,7 @@ Thread::Thread(full_expression_evaluations_type& full_expression_evaluations, id
 void Thread::scope_end()
 {
   DoutEntering(dc::threads, "Thread::scope_end() [this = " << *this << "].");
+#if 0
   if (m_id != 0)        // Nothing to do here for the main thread.
   {
     // Detect possible empty child threads.
@@ -169,8 +176,10 @@ void Thread::scope_end()
       Dout(dc::threads, "Set m_finished.");
     }
   }
+#endif
 }
 
+#if 0
 void Thread::saw_empty_child(ThreadPtr const& child)
 {
   // Erase the child thread entirely.
@@ -179,6 +188,7 @@ void Thread::saw_empty_child(ThreadPtr const& child)
   do_erase();
   m_saw_empty_child_thread = true;
 }
+#endif
 
 void Thread::detect_full_expression_start()
 {
@@ -192,6 +202,7 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
   {
     // full_expression is the evaluation of a full-expression.
     Dout(dc::fullexpr, "Found full-expression with evaluation: " << full_expression);
+#if 0
 
     // An Evaluation is allocated iff when the expression is pointed to by a std::unique_ptr,
     // which are only used as member functions of another Evaluation; hence a full-expression
@@ -242,9 +253,11 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
       m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
       Dout(dc::fullexpr, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
     }
+#endif
   }
 }
 
+#if 0
 void Thread::condition_handled()
 {
   DoutEntering(dc::branch, "Thread::condition_handled() [this is thread " << m_id << "]");
@@ -475,11 +488,13 @@ void Thread::add_unconnected_head_nodes(EvaluationNodePtrConditionPairs& current
 
   Dout(dc::finish, "returning " << current_heads_of_thread << '.');
 }
+#endif
 
 void Thread::begin_branch_true(Context& context)
 {
   DoutEntering(dc::branch, "Thread::begin_branch_true()");
   // Here we are directly after an 'if ()' statement.
+#if 0
   // m_previous_full_expression must be the conditional
   // expression that was tested (and assumed true here).
   ASSERT(m_previous_full_expression);
@@ -489,21 +504,25 @@ void Thread::begin_branch_true(Context& context)
   Dout(dc::fullexpr, "Moving m_previous_full_expression to BranchInfo(): see MOVING...");
   m_branch_info_stack.emplace(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
   Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack, and returning " << conditional_branch << ".");
+#endif
 }
 
 void Thread::begin_branch_false()
 {
   DoutEntering(dc::branch, "Thread::begin_branch_false()");
+#if 0
   Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
   m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
   m_true_branch_joined_child_threads = m_joined_child_threads;
   m_true_branch_saw_empty_child_thread = m_saw_empty_child_thread;
   m_joined_child_threads = m_saw_empty_child_thread = false;
+#endif
 }
 
 void Thread::end_branch()
 {
   DoutEntering(dc::branch, "Thread::end_branch()");
+#if 0
   Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
   if (m_true_branch_joined_child_threads && in_false_branch())
   {
@@ -511,6 +530,7 @@ void Thread::end_branch()
     m_saw_empty_child_thread |= m_true_branch_saw_empty_child_thread;
   }
   m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
+#endif
 
   Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
   m_finalize_branch_stack.push(m_branch_info_stack.top());
