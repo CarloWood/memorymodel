@@ -492,47 +492,27 @@ void Thread::add_unconnected_head_nodes(EvaluationNodePtrConditionPairs& current
 }
 #endif
 
-void Thread::begin_branch_true(Context& context)
+void Thread::begin_branch_true(std::unique_ptr<Evaluation>&& condition, Context& context)
 {
-  DoutEntering(dc::branch, "Thread::begin_branch_true()");
+  DoutEntering(dc::branch, "Thread::begin_branch_true(" << *condition << ")");
   // Here we are directly after an 'if ()' statement.
-#if 0
-  // m_previous_full_expression must be the conditional
-  // expression that was tested (and assumed true here).
-  ASSERT(m_previous_full_expression);
-  Dout(dc::branch, "Adding condition (from previous_full-expression) (" << *m_previous_full_expression << ")...");
-  ConditionalBranch conditional_branch{context.add_condition(m_previous_full_expression)};    // The previous full-expression is a conditional.
+  // `condition` is the conditional expression of a selection statement (and assumed true here).
+  ConditionalBranch conditional_branch{context.add_condition(std::move(condition))};
   // Create a new BranchInfo for this selection statement.
-  Dout(dc::fullexpr, "Moving m_previous_full_expression to BranchInfo(): see MOVING...");
-  m_branch_info_stack.emplace(conditional_branch, m_full_expression_evaluations, std::move(m_previous_full_expression));
-  Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack, and returning " << conditional_branch << ".");
-#endif
+  m_branch_info_stack.emplace(conditional_branch);
+  Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack.");
 }
 
 void Thread::begin_branch_false()
 {
   DoutEntering(dc::branch, "Thread::begin_branch_false()");
-#if 0
-  Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to begin_branch_false(): (see MOVING)");
-  m_branch_info_stack.top().begin_branch_false(std::move(m_previous_full_expression));
-  m_true_branch_joined_child_threads = m_joined_child_threads;
-  m_true_branch_saw_empty_child_thread = m_saw_empty_child_thread;
-  m_joined_child_threads = m_saw_empty_child_thread = false;
-#endif
+  m_branch_info_stack.top().begin_branch_false();
 }
 
 void Thread::end_branch()
 {
   DoutEntering(dc::branch, "Thread::end_branch()");
-#if 0
-  Dout(dc::branch|dc::fullexpr, "Moving m_previous_full_expression to end_branch(): (see MOVING)");
-  if (m_true_branch_joined_child_threads && in_false_branch())
-  {
-    m_joined_child_threads = true;
-    m_saw_empty_child_thread |= m_true_branch_saw_empty_child_thread;
-  }
-  m_branch_info_stack.top().end_branch(std::move(m_previous_full_expression));
-#endif
+  m_branch_info_stack.top().end_branch();
 
   Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
   m_finalize_branch_stack.push(m_branch_info_stack.top());

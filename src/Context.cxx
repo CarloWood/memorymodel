@@ -248,6 +248,9 @@ void Context::add_edges(
       COMMA_DEBUG_ONLY(debug_channel));
 }
 
+//static
+std::vector<std::unique_ptr<Evaluation>> Context::s_condition_evaluations;
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct nodes("NODES");

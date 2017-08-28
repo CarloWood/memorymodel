@@ -27,6 +27,7 @@ struct Context
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
   conditionals_type m_conditionals;                                     // Branch conditionals.
+  static std::vector<std::unique_ptr<Evaluation>> s_condition_evaluations;
 
  public:
   Context(position_handler<iterator_type>& ph, Graph& g) :
@@ -106,10 +107,18 @@ struct Context
     auto existing_entry = m_conditionals.find(condition.get());
     if (existing_entry != m_conditionals.end())
       return existing_entry;
-    auto res = m_conditionals.emplace(condition.get(), Conditional());      // Calling Conditional() creates 'irreversible' a new boolean variable.
+    auto res = m_conditionals.emplace(condition.get(), Conditional()); // Calling Conditional() creates 'irreversible' a new boolean variable.
     // This created a new boolean variable, so the insertion has to be new.
     ASSERT(res.second);
     return res.first;
+  }
+
+  ConditionalBranch add_condition(std::unique_ptr<Evaluation>&& condition)
+  {
+    ConditionalBranch result{add_condition(condition)};
+    // Keep a std::unique_ptr around to stop this Evaluation from being deleted.
+    s_condition_evaluations.emplace_back(std::move(condition));
+    return result;
   }
 };
 

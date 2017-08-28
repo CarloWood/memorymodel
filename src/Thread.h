@@ -98,10 +98,9 @@ class Thread : public AIRefCount
   //void saw_empty_child(ThreadPtr const& child);
 
   // Selection statement events.
-  // The previous full-expression is a condition and we're about to execute the branch that is followed when this condition is true.
-  void begin_branch_true(Context& context);
-  // We're about to execute the branch that is followed when this condition is false (previous full-expression is the last full-expression
-  // of the true-branch here (or the condition if the true-branch is empty).
+  // We're about to execute the branch that is followed when this condition is true.
+  void begin_branch_true(std::unique_ptr<Evaluation>&& condition, Context& context);
+  // We're about to execute the branch that is followed when this condition is false.
   void begin_branch_false();
   // Called immediately after the selection statement.
   void end_branch();

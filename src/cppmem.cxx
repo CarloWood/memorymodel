@@ -526,7 +526,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       }
       else
       {
-        context.current_thread()->begin_branch_true(context);
+        context.current_thread()->begin_branch_true(Evaluation::make_unique(std::move(condition)), context);
         execute_statement(selection_statement.m_if_statement.m_then, context);
         int old_protected_finalize_branch_stack_size = context.current_thread()->protect_finalize_branch_stack();
         if (selection_statement.m_if_statement.m_else)

@@ -5,7 +5,7 @@
 
 std::ostream& operator<<(std::ostream& os, Branch const& branch)
 {
-  os << "iff " << *branch.m_conditional << " == " << (branch.m_conditional_true ? "true" : "false") << '}';
+  os << "iff " << branch.m_conditional->second << " == " << (branch.m_conditional_true ? "true" : "false") << '}';
   return os;
 }
 
