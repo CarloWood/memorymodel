@@ -10,7 +10,7 @@ std::ostream& operator<<(std::ostream& os, Thread const& thread)
   os << "{Thread: m_id:" << thread.m_id <<
     ", m_is_joined:" << thread.m_is_joined <<
 //    ", m_pending_heads:" << thread.m_pending_heads <<
-    ", m_joined_child_threads:" << thread.m_joined_child_threads <<
+//    ", m_joined_child_threads:" << thread.m_joined_child_threads <<
 //    ", m_saw_empty_child_thread:" << thread.m_saw_empty_child_thread <<
     "}";
   return os;
@@ -29,12 +29,12 @@ void Thread::join_all_threads(id_type next_id)
   for (auto&& child_thread : m_child_threads)
     if (child_thread->id() >= m_batch_id)
       child_thread->joined();
-#if 0
   // Actually erase the child threads, if any.
   if (m_need_erase)
     do_erase();
   // Make sure we won't join them again.
   m_batch_id = next_id;
+#if 0
   if (!m_saw_empty_child_thread)
   {
     m_at_beginning_of_child_thread = false;
@@ -84,7 +84,9 @@ void Thread::joined()
   Dout(dc::threads, "Calling joined() for thread with ID " << m_id);
   ASSERT(!m_is_joined);
   m_is_joined = true;
-  m_parent_thread->m_joined_child_threads = true;
+  //m_parent_thread->m_joined_child_threads = true;
+  m_erase = true;
+  m_parent_thread->m_need_erase = true;
 }
 
 #if 0
@@ -128,7 +130,7 @@ Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations*/
   m_erase(false),
   m_need_erase(false),
   //m_parent_in_true_branch(false),
-  m_joined_child_threads(false),
+  //m_joined_child_threads(false),
   //m_saw_empty_child_thread(false),
   m_full_expression_detector_depth(0),
   //m_full_expression_evaluations(full_expression_evaluations),
@@ -147,7 +149,7 @@ Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations,*
   m_erase(false),
   m_need_erase(false),
   //m_parent_in_true_branch(parent_thread->in_true_branch()),
-  m_joined_child_threads(false),
+  //m_joined_child_threads(false),
   //m_saw_empty_child_thread(false),
   m_full_expression_detector_depth(0),
   //m_full_expression_evaluations(full_expression_evaluations),

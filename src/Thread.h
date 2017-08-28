@@ -33,11 +33,11 @@ class Thread : public AIRefCount
   bool m_is_joined;                     // Set when this thread is joined.
   //int m_pending_heads;                  // Number of not-yet-connected heads (added as NodePtrConditionPair, created by add_unconnected_head_nodes).
                                         // This combines the count of unconnected heads of true- and false-branches when needed.
-  bool m_erase;                         // Set on the child thread by a call to joined_and_connected(child). Call do_erase in the parent thread afterwards.
+  bool m_erase;                         // Set on the child thread by a call to joined(). Call do_erase in the parent thread afterwards.
   bool m_need_erase;                    // Set on the parent thread when any of the child threads has m_erase set. Call do_erase.
   //bool const m_parent_in_true_branch;   // Set when we were created in a true-branch of the parent thread.
 
-  bool m_joined_child_threads;          // Set when one or more child threads were just joined. Reset the next full-expression in this thread.
+  //bool m_joined_child_threads;          // Set when one or more child threads were just joined. Reset the next full-expression in this thread.
   //bool m_true_branch_joined_child_threads;// See also the note in add_unconnected_head_nodes.
   //bool m_saw_empty_child_thread;        // Set when the scope of an empty child threads was just closed. Reset the next full-expression in this thread.
   //bool m_true_branch_saw_empty_child_thread;
@@ -54,7 +54,12 @@ class Thread : public AIRefCount
  protected:
   Thread(/*full_expression_evaluations_type& full_expression_evaluations*/);
   Thread(/*full_expression_evaluations_type& full_expression_evaluations,*/ id_type id, ThreadPtr const& parent_thread);
-  ~Thread() { Dout(dc::threads, "Destructing Thread with ID " << m_id); ASSERT(m_id == 0 || (m_is_joined /*&& m_pending_heads == 0*/)); }
+  ~Thread()
+  {
+    Dout(dc::threads, "Destructing Thread with ID " << m_id);
+    ASSERT(m_id == 0 || (m_is_joined /*&& m_pending_heads == 0*/));
+    ASSERT(m_child_threads.empty());
+  }
 
  public:
   // Create the main thread.

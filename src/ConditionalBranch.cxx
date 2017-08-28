@@ -8,5 +8,3 @@ std::ostream& operator<<(std::ostream& os, ConditionalBranch const& conditional_
   os << '{' << *conditional_branch.m_conditional->first << ", " << conditional_branch.m_conditional->second << '}';
   return os;
 }
-
-
