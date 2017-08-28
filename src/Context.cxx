@@ -20,9 +20,6 @@ void Context::scope_start(bool is_thread)
   m_threads.push(is_thread);
   if (is_thread)
   {
-    // Do not create a thread as first thing inside another thread (not supported).
-    ASSERT(!m_beginning_of_thread);
-    m_beginning_of_thread = true;
     m_current_thread = m_current_thread->create_new_thread(m_full_expression_evaluations, m_next_thread_id);
     DebugMarkDown;
     Dout(dc::threads, "Created " << m_current_thread << '.');
@@ -43,23 +40,8 @@ void Context::scope_end()
   if (is_thread)
   {
     DebugMarkUp;
-    Dout(dc::threads, "Thread " << m_current_thread << " ended.");
-    if (m_beginning_of_thread)     // Can happen if thread is empty.
-    {
-      m_beginning_of_thread = false;
-      Dout(dc::threads, "Not setting m_end_of_thread because this thread didn't have any full-expression.");
-      // Erase the current thread entirely.
-      m_current_thread->joined();
-      m_current_thread->parent_thread()->do_erase();
-    }
-    else
-    {
-      m_end_of_thread = true;
-      Dout(dc::threads, "Set m_end_of_thread.");
-    }
+    m_current_thread->scope_end();
     m_current_thread = m_current_thread->parent_thread();
-    // Did we just close a child thread with a full-expression in it, or was it an empty child thread?
-    m_current_thread->closed_child_thread_with_full_expression(m_end_of_thread);
   }
 }
 
@@ -224,16 +206,16 @@ void Context::add_edges(
 
 void Context::add_edges(
     EdgeType edge_type,
-    EvaluationCurrentHeadsOfThread& current_heads_of_thread,
+    EvaluationNodePtrConditionPairs& before_node_ptr_condition_pairs,
     EvaluationNodePtrs const& after_node_ptrs
     COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
 {
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << current_heads_of_thread << ", " << after_node_ptrs << ").");
-  for (auto&& current_head_of_thread : current_heads_of_thread)
+  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_node_ptr_condition_pairs << ", " << after_node_ptrs << ").");
+  for (auto&& before_node_ptr_condition_pair : before_node_ptr_condition_pairs)
   {
     for (auto&& after_node_ptr : after_node_ptrs)
-      m_graph.new_edge(edge_type, current_head_of_thread.node(), after_node_ptr, current_head_of_thread.condition());
-    current_head_of_thread.connected();
+      m_graph.new_edge(edge_type, before_node_ptr_condition_pair.node(), after_node_ptr, before_node_ptr_condition_pair.condition());
+    before_node_ptr_condition_pair.connected();
   }
 }
 

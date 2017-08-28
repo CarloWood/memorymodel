@@ -26,8 +26,6 @@ struct Context
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
-  bool m_beginning_of_thread;                                           // Set to true when a new thread was just started; reset the first full-expression.
-  bool m_end_of_thread;                                                 // Set to true when we just left a threads scope; reset the next full-expression.
   conditionals_type m_conditionals;                                     // Branch conditionals.
 
  public:
@@ -35,8 +33,7 @@ struct Context
       m_position_handler(ph),
       m_graph(g),
       m_next_thread_id{1},
-      m_current_thread{Thread::create_main_thread(m_full_expression_evaluations)},
-      m_beginning_of_thread(false) { }
+      m_current_thread{Thread::create_main_thread(m_full_expression_evaluations)} { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -61,18 +58,6 @@ struct Context
   int number_of_threads() const { return m_next_thread_id; }
   ThreadPtr const& current_thread() const { return m_current_thread; }
   conditionals_type const& conditionals() const { return  m_conditionals; }
-  bool beginning_of_thread() const { return m_beginning_of_thread; }
-  bool end_of_thread() const { return m_end_of_thread; }
-
-  // Get and reset these flags.
-  bool reset_beginning_of_thread() { bool ret = m_beginning_of_thread; m_beginning_of_thread = false; return ret; }
-  bool reset_end_of_thread()
-  {
-    bool ret = m_end_of_thread;
-    m_end_of_thread = false;
-    Dout(dc::threads(ret), "Resetting m_end_of_thread.");
-    return ret;
-  }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);
@@ -89,7 +74,7 @@ struct Context
 
   void add_edges(
       EdgeType edge_type,
-      EvaluationCurrentHeadsOfThread& current_heads_of_thread,
+      EvaluationNodePtrConditionPairs& before_node_ptr_condition_pairs,
       EvaluationNodePtrs const& after_node_ptrs
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
 

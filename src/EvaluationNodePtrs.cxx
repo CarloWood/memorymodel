@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "EvaluationNodePtrs.h"
-#include "CurrentHeadOfThread.h"
+#include "NodePtrConditionPair.h"
 #include "Node.h"
 #include <iostream>
 
@@ -18,15 +18,15 @@ std::ostream& operator<<(std::ostream& os, EvaluationNodePtrs const& evaluation_
   return os << '>';
 }
 
-std::ostream& operator<<(std::ostream& os, EvaluationCurrentHeadsOfThread const& evaluation_current_heads_of_thread)
+std::ostream& operator<<(std::ostream& os, EvaluationNodePtrConditionPairs const& evaluation_node_ptr_condition_pairs)
 {
   os << '<';
   bool first = true;
-  for (auto&& current_head_of_thread : evaluation_current_heads_of_thread)
+  for (auto&& evaluation_node_ptr_condition_pair : evaluation_node_ptr_condition_pairs)
   {
     if (!first)
       os << ", ";
-    os << current_head_of_thread;
+    os << evaluation_node_ptr_condition_pair;
     first = false;
   }
   return os << '>';

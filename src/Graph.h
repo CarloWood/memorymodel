@@ -2,7 +2,7 @@
 
 #include "Node.h"
 #include "debug.h"
-#include "CurrentHeadOfThread.h"
+#include "NodePtrConditionPair.h"
 #include <set>
 #include <stack>
 
@@ -40,7 +40,7 @@ class Graph
 
   // Add a new edge.
   void new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition = Condition());
-  void new_edge(EdgeType edge_type, CurrentHeadOfThread const& tail_current_head_of_thread, NodePtr const& head_node)
+  void new_edge(EdgeType edge_type, NodePtrConditionPair const& tail_current_head_of_thread, NodePtr const& head_node)
   {
     new_edge(edge_type, tail_current_head_of_thread.node(), head_node, tail_current_head_of_thread.condition());
   }

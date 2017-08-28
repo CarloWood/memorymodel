@@ -31,6 +31,7 @@ class BranchInfo
   void end_branch(std::unique_ptr<Evaluation>&& previous_full_expression);
   void added_edge_from_condition() { if (m_in_true_branch) m_edge_to_true_branch_added = true; else m_edge_to_false_branch_added = true; }
 
+  bool in_true_branch() const { return m_in_true_branch; }
   bool conditional_edge_of_current_branch_added() const { return m_in_true_branch ? m_edge_to_true_branch_added : m_edge_to_false_branch_added; }
   Condition get_current_condition() const { return m_condition(m_in_true_branch); }
   Condition get_negated_current_condition() const { return m_condition(!m_in_true_branch); }
