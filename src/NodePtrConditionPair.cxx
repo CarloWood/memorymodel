@@ -13,10 +13,3 @@ std::ostream& operator<<(std::ostream& os, NodePtrConditionPair const& current_h
     os << " with condition " << current_head_of_thread.m_condition << '}';
   return os;
 }
-
-#if 0
-void NodePtrConditionPair::connected()
-{
-  m_node_ptr->thread()->connected();
-}
-#endif

@@ -20,7 +20,7 @@ void Context::scope_start(bool is_thread)
   m_threads.push(is_thread);
   if (is_thread)
   {
-    m_current_thread = m_current_thread->create_new_thread(/*m_full_expression_evaluations,*/ m_next_thread_id);
+    m_current_thread = m_current_thread->create_new_thread(m_next_thread_id);
     DebugMarkDown;
     Dout(dc::threads, "Created " << m_current_thread << '.');
   }

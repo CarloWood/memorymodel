@@ -34,7 +34,7 @@ struct Context
       m_position_handler(ph),
       m_graph(g),
       m_next_thread_id{1},
-      m_current_thread{Thread::create_main_thread(/*m_full_expression_evaluations*/)} { }
+      m_current_thread{Thread::create_main_thread()} { }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
