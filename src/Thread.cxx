@@ -154,9 +154,17 @@ Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations,*
   m_full_expression_detector_depth(0),
   //m_full_expression_evaluations(full_expression_evaluations),
   //m_unhandled_condition(false),
-  m_protected_finalize_branch_stack_size(0)
+  m_protected_finalize_branch_stack_size(0),
+  m_unconnected_heads(parent_thread->m_unconnected_heads)
 {
   ASSERT(m_id > 0);
+}
+
+Thread::~Thread()
+{
+  Dout(dc::threads, "Destructing Thread with ID " << m_id);
+  ASSERT(m_id == 0 || (m_is_joined /*&& m_pending_heads == 0*/));
+  ASSERT(m_child_threads.empty());
 }
 
 void Thread::scope_end()
@@ -204,10 +212,9 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
   {
     // full_expression is the evaluation of a full-expression.
     Dout(dc::fullexpr, "Found full-expression with evaluation: " << full_expression);
-#if 0
 
     // An Evaluation is allocated iff when the expression is pointed to by a std::unique_ptr,
-    // which are only used as member functions of another Evaluation; hence a full-expression
+    // which are only used as member variables of another Evaluation; hence a full-expression
     // which can never be a part of another (full-)expression, will never be allocated.
     ASSERT(!full_expression.is_allocated());
 
@@ -217,6 +224,7 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
 
     if (!full_expression_nodes.empty())
     {
+#if 0
       // Add asw edges.
       if (m_at_beginning_of_child_thread)                       // We found a full-expression; are we at the beginning of a new child thread?
       {
@@ -251,11 +259,13 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
       for (auto&& child_thread : m_child_threads)
         if (child_thread->is_joined())
           Dout(dc::warning, "Thread " << child_thread << " was joined but not connected!");
-
-      m_previous_full_expression = Evaluation::make_unique(std::move(full_expression));
-      Dout(dc::fullexpr, "SET m_previous_full_expression to full_expression (" << *m_previous_full_expression << ").");
-    }
 #endif
+
+      context.add_sb_or_asw_edges(m_unconnected_heads, full_expression_nodes);
+
+      m_unconnected_heads = full_expression.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Dout(dc::fullexpr, "New m_unconnected_heads is: " << m_unconnected_heads << ".");
+    }
   }
 }
 

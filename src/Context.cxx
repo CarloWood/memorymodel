@@ -204,18 +204,17 @@ void Context::add_edges(
       m_graph.new_edge(edge_type, before_node_ptr, after_node_ptr, condition);
 }
 
-void Context::add_edges(
-    EdgeType edge_type,
+void Context::add_sb_or_asw_edges(
     EvaluationNodePtrConditionPairs& before_node_ptr_condition_pairs,
-    EvaluationNodePtrs const& after_node_ptrs
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+    EvaluationNodePtrs const& after_node_ptrs)
 {
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_node_ptr_condition_pairs << ", " << after_node_ptrs << ").");
+  DoutEntering(dc::sb_edge, "Context::add_sb_or_asw_edges(" << before_node_ptr_condition_pairs << ", " << after_node_ptrs << ").");
   for (auto&& before_node_ptr_condition_pair : before_node_ptr_condition_pairs)
   {
+    NodePtr const& before_node_ptr{before_node_ptr_condition_pair.node()};
+    Condition const& condition{before_node_ptr_condition_pair.condition()};
     for (auto&& after_node_ptr : after_node_ptrs)
-      m_graph.new_edge(edge_type, before_node_ptr_condition_pair.node(), after_node_ptr, before_node_ptr_condition_pair.condition());
-    //before_node_ptr_condition_pair.connected();
+      m_graph.new_edge(before_node_ptr->thread()->id() == after_node_ptr->thread()->id() ? edge_sb : edge_asw, before_node_ptr, after_node_ptr, condition);
   }
 }
 

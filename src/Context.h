@@ -73,11 +73,10 @@ struct Context
       COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
       Condition const& condition = Condition());
 
-  void add_edges(
-      EdgeType edge_type,
+  // Add edges of type sb or asw between before_node_ptr_condition_pairs and after_node_ptrs.
+  void add_sb_or_asw_edges(
       EvaluationNodePtrConditionPairs& before_node_ptr_condition_pairs,
-      EvaluationNodePtrs const& after_node_ptrs
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+      EvaluationNodePtrs const& after_node_ptrs);
 
   // Add unconditional edges of type edge_type between heads of before_evaluation and and tails of after_evaluation.
   void add_edges(

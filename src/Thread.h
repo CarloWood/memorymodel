@@ -51,15 +51,12 @@ class Thread : public AIRefCount
   size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
                                                                         //  m_finalize_branch_stack that should not be finalized yet.
 
+  EvaluationNodePtrConditionPairs m_unconnected_heads;  // List of currently unconnected heads with conditions.
+
  protected:
   Thread(/*full_expression_evaluations_type& full_expression_evaluations*/);
   Thread(/*full_expression_evaluations_type& full_expression_evaluations,*/ id_type id, ThreadPtr const& parent_thread);
-  ~Thread()
-  {
-    Dout(dc::threads, "Destructing Thread with ID " << m_id);
-    ASSERT(m_id == 0 || (m_is_joined /*&& m_pending_heads == 0*/));
-    ASSERT(m_child_threads.empty());
-  }
+  ~Thread();
 
  public:
   // Create the main thread.
