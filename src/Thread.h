@@ -31,6 +31,7 @@ class Thread : public AIRefCount
   //bool m_at_beginning_of_child_thread;  // Set to true upon creation when this is a child thread. Reset at the first full-expression.
   //bool m_finished;                      // Set at the end of the scope of this thread when this is a child thread.
   bool m_is_joined;                     // Set when this thread is joined.
+  bool m_own_heads_added_back;          // Temporary variable used in join_all_threads.
   //int m_pending_heads;                  // Number of not-yet-connected heads (added as NodePtrConditionPair, created by add_unconnected_head_nodes).
                                         // This combines the count of unconnected heads of true- and false-branches when needed.
   bool m_erase;                         // Set on the child thread by a call to joined(). Call do_erase in the parent thread afterwards.

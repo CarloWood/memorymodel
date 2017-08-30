@@ -25,6 +25,11 @@ void Thread::start_threads(id_type next_id)
 void Thread::join_all_threads(id_type next_id)
 {
   DoutEntering(dc::threads, "Thread::join_all_threads(" << next_id << ") with m_id = " << m_id);
+  // Assume that all our unconnected heads have been connected to child threads.
+  m_unconnected_heads.clear();
+  // If that is not the case then that child thread will try to pass them back
+  // to use; use this boolean to only allow one child thread to do that.
+  m_own_heads_added_back = false;
   // Join all threads of current batch.
   for (auto&& child_thread : m_child_threads)
     if (child_thread->id() >= m_batch_id)
@@ -84,6 +89,22 @@ void Thread::joined()
   Dout(dc::threads, "Calling joined() for thread with ID " << m_id);
   ASSERT(!m_is_joined);
   m_is_joined = true;
+  // By default pass the remaining unconnected heads to the parent thread.
+  bool pass_to_parent_thread = true;
+  // We need to set m_own_heads_added_back on the parent thread when we were
+  // empty and therefore m_unconnected_heads is still equal to the unconnected
+  // heads of the parent thread.
+  bool empty_thread = !m_unconnected_heads.empty() && m_unconnected_heads[0].node()->thread()->id() == m_parent_thread->id();
+  if (empty_thread)
+  {
+    pass_to_parent_thread = !m_parent_thread->m_own_heads_added_back;   // Only pass parents own heads back once.
+    m_parent_thread->m_own_heads_added_back = true;
+  }
+  if (pass_to_parent_thread)
+  {
+    // Pass remaining unconnected heads to the parent thread.
+    m_parent_thread->m_unconnected_heads += m_unconnected_heads;
+  }
   //m_parent_thread->m_joined_child_threads = true;
   m_erase = true;
   m_parent_thread->m_need_erase = true;

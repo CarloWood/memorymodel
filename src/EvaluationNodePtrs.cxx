@@ -32,8 +32,15 @@ std::ostream& operator<<(std::ostream& os, EvaluationNodePtrConditionPairs const
   return os << '>';
 }
 
+EvaluationNodePtrConditionPairs& EvaluationNodePtrConditionPairs::operator+=(EvaluationNodePtrConditionPairs const& node_ptr_condition_pairs)
+{
+  insert(end(), node_ptr_condition_pairs.begin(), node_ptr_condition_pairs.end());
+  return *this;
+}
+
 EvaluationNodePtrConditionPairs& EvaluationNodePtrConditionPairs::operator+=(EvaluationNodePtrs const& node_ptrs)
 {
+  reserve(size() + node_ptrs.size());
   for (auto&& node_ptr : node_ptrs)
     emplace_back(node_ptr);
   return *this;
