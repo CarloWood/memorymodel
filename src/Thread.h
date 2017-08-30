@@ -48,8 +48,8 @@ class Thread : public AIRefCount
   //std::unique_ptr<Evaluation> m_previous_full_expression;               // The previous full expression.
   std::stack<BranchInfo> m_branch_info_stack;                           // Stack to store BranchInfo for nested branches.
   //bool m_unhandled_condition;                                           // Set when an unconnected condition node has been returned by add_unconnected_head_nodes.
-  std::stack<BranchInfo> m_finalize_branch_stack;                       // Stack to store BranchInfo for branches that need to be finalized.
-  size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
+  //std::stack<BranchInfo> m_finalize_branch_stack;                       // Stack to store BranchInfo for branches that need to be finalized.
+  //size_t m_protected_finalize_branch_stack_size;                        // The number of BranchInfo elements at the beginning of
                                                                         //  m_finalize_branch_stack that should not be finalized yet.
 
   EvaluationNodePtrConditionPairs m_unconnected_heads;  // List of currently unconnected heads with conditions.
@@ -97,12 +97,13 @@ class Thread : public AIRefCount
 
   // Selection statement events.
   // We're about to execute the branch that is followed when this condition is true.
-  void begin_branch_true(std::unique_ptr<Evaluation>&& condition, Context& context);
+  void begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition, Context& context);
   // We're about to execute the branch that is followed when this condition is false.
-  void begin_branch_false();
+  void begin_branch_false(EvaluationNodePtrConditionPairs& unconnected_heads);
   // Called immediately after the selection statement.
-  void end_branch();
+  void end_branch(EvaluationNodePtrConditionPairs& unconnected_heads);
 
+#if 0
   size_t protect_finalize_branch_stack()
   {
     DoutEntering(dc::branch, "Thread::protect_finalize_branch_stack()");
@@ -119,6 +120,7 @@ class Thread : public AIRefCount
     Dout(dc::branch, "Restoring m_protected_finalize_branch_stack_size to previous value (" << old_protected_finalize_branch_stack_size << ").");
     m_protected_finalize_branch_stack_size = old_protected_finalize_branch_stack_size;
   }
+#endif
 
   friend bool operator==(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id == thr2->m_id; }
   friend bool operator!=(ThreadPtr const& thr1, ThreadPtr const& thr2) { return thr1->m_id != thr2->m_id; }

@@ -526,16 +526,17 @@ void execute_statement(ast::statement const& statement, Context& context)
       }
       else
       {
-        context.current_thread()->begin_branch_true(Evaluation::make_unique(std::move(condition)), context);
+        EvaluationNodePtrConditionPairs unconnected_heads;
+        context.current_thread()->begin_branch_true(unconnected_heads, Evaluation::make_unique(std::move(condition)), context);
         execute_statement(selection_statement.m_if_statement.m_then, context);
-        int old_protected_finalize_branch_stack_size = context.current_thread()->protect_finalize_branch_stack();
+        //int old_protected_finalize_branch_stack_size = context.current_thread()->protect_finalize_branch_stack();
         if (selection_statement.m_if_statement.m_else)
         {
-          context.current_thread()->begin_branch_false();
+          context.current_thread()->begin_branch_false(unconnected_heads);
           execute_statement(*selection_statement.m_if_statement.m_else, context);
         }
-        context.current_thread()->unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
-        context.current_thread()->end_branch();
+        //context.current_thread()->unprotect_finalize_branch_stack(old_protected_finalize_branch_stack_size);
+        context.current_thread()->end_branch(unconnected_heads);
       }
       break;
     }

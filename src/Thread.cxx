@@ -89,22 +89,8 @@ void Thread::joined()
   Dout(dc::threads, "Calling joined() for thread with ID " << m_id);
   ASSERT(!m_is_joined);
   m_is_joined = true;
-  // By default pass the remaining unconnected heads to the parent thread.
-  bool pass_to_parent_thread = true;
-  // We need to set m_own_heads_added_back on the parent thread when we were
-  // empty and therefore m_unconnected_heads is still equal to the unconnected
-  // heads of the parent thread.
-  bool empty_thread = !m_unconnected_heads.empty() && m_unconnected_heads[0].node()->thread()->id() == m_parent_thread->id();
-  if (empty_thread)
-  {
-    pass_to_parent_thread = !m_parent_thread->m_own_heads_added_back;   // Only pass parents own heads back once.
-    m_parent_thread->m_own_heads_added_back = true;
-  }
-  if (pass_to_parent_thread)
-  {
-    // Pass remaining unconnected heads to the parent thread.
-    m_parent_thread->m_unconnected_heads += m_unconnected_heads;
-  }
+  // Pass remaining unconnected heads to the parent thread.
+  m_parent_thread->m_unconnected_heads += m_unconnected_heads;
   //m_parent_thread->m_joined_child_threads = true;
   m_erase = true;
   m_parent_thread->m_need_erase = true;
@@ -153,10 +139,10 @@ Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations*/
   //m_parent_in_true_branch(false),
   //m_joined_child_threads(false),
   //m_saw_empty_child_thread(false),
-  m_full_expression_detector_depth(0),
+  m_full_expression_detector_depth(0)
   //m_full_expression_evaluations(full_expression_evaluations),
   //m_unhandled_condition(false),
-  m_protected_finalize_branch_stack_size(0)
+  //m_protected_finalize_branch_stack_size(0)
 {
 }
 
@@ -175,7 +161,7 @@ Thread::Thread(/*full_expression_evaluations_type& full_expression_evaluations,*
   m_full_expression_detector_depth(0),
   //m_full_expression_evaluations(full_expression_evaluations),
   //m_unhandled_condition(false),
-  m_protected_finalize_branch_stack_size(0),
+  //m_protected_finalize_branch_stack_size(0),
   m_unconnected_heads(parent_thread->m_unconnected_heads)
 {
   ASSERT(m_id > 0);
@@ -523,7 +509,7 @@ void Thread::add_unconnected_head_nodes(EvaluationNodePtrConditionPairs& current
 }
 #endif
 
-void Thread::begin_branch_true(std::unique_ptr<Evaluation>&& condition, Context& context)
+void Thread::begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition, Context& context)
 {
   DoutEntering(dc::branch, "Thread::begin_branch_true(" << *condition << ")");
   // Here we are directly after an 'if ()' statement.
@@ -532,22 +518,35 @@ void Thread::begin_branch_true(std::unique_ptr<Evaluation>&& condition, Context&
   // Create a new BranchInfo for this selection statement.
   m_branch_info_stack.emplace(conditional_branch);
   Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack.");
+
+  // Prepare the unconnected heads for the false-branch.
+  unconnected_heads = m_unconnected_heads;
+  unconnected_heads *= m_branch_info_stack.top().get_negated_current_condition();
+
+  // Turn unconnected heads into those of the true-branch.
+  m_unconnected_heads *= m_branch_info_stack.top().get_current_condition();
 }
 
-void Thread::begin_branch_false()
+void Thread::begin_branch_false(EvaluationNodePtrConditionPairs& unconnected_heads)
 {
   DoutEntering(dc::branch, "Thread::begin_branch_false()");
   m_branch_info_stack.top().begin_branch_false();
+
+  // Swap true- and false- branch unconnected heads.
+  unconnected_heads.swap(m_unconnected_heads);
 }
 
-void Thread::end_branch()
+void Thread::end_branch(EvaluationNodePtrConditionPairs& unconnected_heads)
 {
   DoutEntering(dc::branch, "Thread::end_branch()");
   m_branch_info_stack.top().end_branch();
-
-  Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
-  m_finalize_branch_stack.push(m_branch_info_stack.top());
   m_branch_info_stack.pop();
+
+  //Dout(dc::branch, "Moving " << m_branch_info_stack.top() << " from m_branch_info_stack to m_finalize_branch_stack.");
+  //m_finalize_branch_stack.push(m_branch_info_stack.top());
+
+  // Combine true- and false- branch unconnected heads.
+  m_unconnected_heads += unconnected_heads;
 }
 
 #ifdef CWDEBUG

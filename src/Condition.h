@@ -25,5 +25,8 @@ class Condition
   bool conditional() const { return !m_boolean_product.is_one(); }
   boolean::Product const& boolean_product() const { return m_boolean_product; }
 
+  void operator*=(Condition const& condition) { m_boolean_product *= condition.m_boolean_product; }
+
+  friend bool operator!=(Condition const& condition1, Condition const& condition2) { return condition1.m_boolean_product != condition2.m_boolean_product; }
   friend std::ostream& operator<<(std::ostream& os, Condition const& condition);
 };
