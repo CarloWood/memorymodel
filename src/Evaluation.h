@@ -1,6 +1,7 @@
 #pragma once
 
-#include "ast.h"
+#include "ast_tag.h"
+#include "ast_operators.h"
 #include "debug.h"
 #include "EvaluationNodePtrs.h"
 #include "NodePtr.h"

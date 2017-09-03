@@ -43,7 +43,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   int max_count = 0;
   int main_thread_nodes = 0;
   std::vector<int> number_of_nodes(context.number_of_threads(), 0);
-  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
+  for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
   {
     int n = ++number_of_nodes[node->thread()->id()];
     if (node->thread()->is_main_thread())
@@ -67,7 +67,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   out << " ranksep = 0.2;\n";
   out << " nodesep = 0.25;\n";
   out << " fontsize=" << fontsize << " fontname=\"Helvetica\" label=\"\";\n";
-  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
+  for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
   {
     Dout(dc::notice, '"' << *node << '"');
     double posx, posy;
@@ -79,7 +79,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
         " [label=\"" << *node << "\", pos=\"" << posx << ',' << posy << "!\"]"
         " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.25) << "\"][width=\"" << (xscale * 0.6) << "\"];\n";
   }
-  for (NodePtr node = m_nodes.begin(); node != m_nodes.end(); ++node)
+  for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
   {
     //Dout(dc::notice, "LOOP: " << *node);
     for (auto&& end_point : node->get_end_points())

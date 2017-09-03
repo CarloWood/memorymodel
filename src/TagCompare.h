@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ast.h"
+#include "ast_tag.h"
 #include <cassert>
 
 struct TagCompare

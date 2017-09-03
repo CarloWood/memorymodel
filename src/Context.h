@@ -4,11 +4,13 @@
 #include "Symbols.h"
 #include "Locks.h"
 #include "Loops.h"
-#include "Graph.h"
 #include "BranchInfo.h"
 #include "EvaluationNodePtrs.h"
+#include "Thread.h"
+#include "Node.h"
 #include <string>
 
+class Graph;
 using iterator_type = std::string::const_iterator;
 
 struct Context

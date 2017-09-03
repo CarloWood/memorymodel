@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ast_tag.h"
+#include "ast_operators.h"
 #include <iosfwd>
 #include <string>
 #include <vector>
@@ -13,16 +15,6 @@
 #include <boost/optional.hpp>
 
 namespace ast {
-
-struct tag
-{
-  int id;
-  tag() { }
-  explicit tag(int id_) : id(id_) { }
-
-  friend std::ostream& operator<<(std::ostream& os, tag const& tag);
-  friend bool operator!=(tag const& tag1, tag const& tag2) { return tag1.id != tag2.id; }
-};
 
 enum Type { type_bool, type_int, type_atomic_int };
 
@@ -124,15 +116,6 @@ struct primary_expression
 
   bool m_dummy;
 };
-
-enum assignment_operators { ao_eq, ao_mul, ao_div, ao_mod, ao_add, ao_sub, ao_shr, ao_shl, ao_and, ao_xor, ao_or };
-enum equality_operators { eo_eq, eo_ne };
-enum relational_operators { ro_lt, ro_gt, ro_ge, ro_le };
-enum shift_operators { so_shl, so_shr };
-enum additive_operators { ado_add, ado_sub };
-enum multiplicative_operators { mo_mul, mo_div, mo_mod };
-enum unary_operators { uo_inc, uo_dec, uo_dereference, uo_reference, uo_plus, uo_minus, uo_not, uo_invert };
-enum postfix_operators { po_inc, po_dec };
 
 char const* code(assignment_operators op);
 char const* code(equality_operators op);

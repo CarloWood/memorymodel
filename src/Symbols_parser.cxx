@@ -36,11 +36,13 @@ void Symbols::vardecl(ast::memory_location const& memory_location)
   {
     m_impl->atomic_memory_locations.add(memory_location.m_name, memory_location);
     m_impl->atomic_memory_locations_map[memory_location.id] = memory_location.m_name;
+    m_impl->locations.emplace(memory_location.id, memory_location.m_name, Location::atomic);
   }
   else
   {
     m_impl->na_memory_locations.add(memory_location.m_name, memory_location);
     m_impl->na_memory_locations_map[memory_location.id] = memory_location.m_name;
+    m_impl->locations.emplace(memory_location.id, memory_location.m_name, Location::non_atomic);
   }
   m_impl->all_symbols[memory_location.id] = memory_location.m_name;
 }
@@ -51,6 +53,7 @@ void Symbols::mutex_decl(ast::mutex_decl const& mutex_decl)
   m_impl->mutexes.add(mutex_decl.m_name, mutex_decl);
   m_impl->mutexes_map[mutex_decl.id] = mutex_decl.m_name;
   m_impl->all_symbols[mutex_decl.id] = mutex_decl.m_name;
+  m_impl->locations.emplace(mutex_decl.id, mutex_decl.m_name, Location::mutex);
 }
 
 void Symbols::condition_variable_decl(ast::condition_variable_decl const& condition_variable_decl)

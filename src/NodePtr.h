@@ -15,13 +15,13 @@ class NodePtr
 {
  public:
   using container_type = std::set<std::unique_ptr<NodeBase>, NodeOrder>;
+  using iterator_type = container_type::iterator;
 
  private:
-  using iterator_type = container_type::iterator;
   iterator_type m_iterator;
 
  public:
-  NodePtr(iterator_type const& iterator) : m_iterator(iterator) { }
+  explicit NodePtr(iterator_type const& iterator) : m_iterator(iterator) { }
   NodeBase const* operator->() const { return m_iterator->get(); }
   NodeBase const& operator*() const { return *m_iterator->get(); }
   iterator_type get_iterator() const { return m_iterator; }

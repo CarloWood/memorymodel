@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Thread.h"
-#include "ast.h"
+#include "ast_tag.h"
 #include "Evaluation.h"
 #include "Condition.h"
 #include "SBNodePresence.h"
@@ -68,9 +68,6 @@ std::ostream& operator<<(std::ostream& os, EndPointType end_point_type);
 // One side of a given edge.
 class EndPoint
 {
- public:
-  using nodes_type = NodePtr::container_type;   // The container type used in Graph to store Nodes.
-
  private:
   Edge* m_edge;
   EndPointType m_type;

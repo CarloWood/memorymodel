@@ -10,6 +10,7 @@
 #include "Locks.h"
 #include "Loops.h"
 #include "Symbols.h"
+#include "Location.h"
 #include "cppmem_parser.h"
 #include "utils/AIAlert.h"
 #include <libcwd/type_info.h>
@@ -716,19 +717,38 @@ int main(int argc, char* argv[])
   }
 
   //==========================================================================
-  // More stuff...
-
-  //==========================================================================
-  // Generate the .dot file.
+  // Generate the *_opsem.dot file.
 
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
-  std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
+  std::string const basename = source_filename.substr(0, source_filename.find_last_of(".")) + "_opsem";
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
   graph.generate_dot_file(dot_filename, context);
   std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
+
+  //==========================================================================
+  // Brute force approach.
+
+  // Find all memory locations that are involved.
+  NodePtr::iterator_type const nodes_end = graph.end();
+  for (NodePtr node_ptr{graph.begin()}; node_ptr != nodes_end; ++node_ptr)
+  {
+    //Dout(dc::notice, location);
+  }
+
+  // Run over all possible flow-control paths.
+  conditionals_type const& conditionals{context.conditionals()};
+  int number_of_boolean_expressions = conditionals.size();
+  using mask_type = boolean::Expression::mask_type;
+  mask_type permutations_end = (mask_type)1 << number_of_boolean_expressions;
+  Dout(dc::notice, "There " << (permutations_end == 1 ? "is " : "are ") <<
+      permutations_end << " flow-control path permutation" << (permutations_end == 1 ? "" : "s") << ".");
+  for (mask_type permutation = 0; permutation < permutations_end; ++permutation)
+  {
+
+  }
 }
 
 #ifdef CWDEBUG

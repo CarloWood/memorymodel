@@ -3,6 +3,7 @@
 #include "Evaluation.h"
 #include "SBNodePresence.h"
 #include "Context.h"
+#include "NodePtrConditionPair.h"
 #include <algorithm>
 
 std::ostream& operator<<(std::ostream& os, Thread const& thread)

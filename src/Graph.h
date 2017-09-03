@@ -21,13 +21,17 @@ class Graph
 
   void generate_dot_file(std::string const& filename, Context& context) const;
 
+  // Accessor.
+  nodes_type::iterator begin() { return m_nodes.begin(); }
+  nodes_type::iterator end() const { return m_nodes.end(); }
+
  public:
   // Add a new node.
   template<typename NODE, typename ...Args>
   NodePtr new_node(Args&&... args)
   {
     DebugMarkUp;
-    NodePtr node = m_nodes.emplace_hint(m_nodes.end(), new NODE(m_next_node_id++, std::forward<Args>(args)...));
+    NodePtr node{m_nodes.emplace_hint(m_nodes.end(), new NODE(m_next_node_id++, std::forward<Args>(args)...))};
     Dout(dc::nodes, "Created node " << *node << '.');
     return node;
   }
