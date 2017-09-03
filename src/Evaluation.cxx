@@ -366,7 +366,7 @@ void Evaluation::swap_sum()
       Evaluation* unary_value_computation = new Evaluation;
       unary_value_computation->m_allocated = true;
       unary_value_computation->m_lhs = std::move(m_lhs);
-      m_lhs = std::move(std::unique_ptr<Evaluation>(unary_value_computation));
+      m_lhs = std::unique_ptr<Evaluation>(unary_value_computation);
       m_lhs->m_state = unary;
       m_lhs->m_operator.unary = ast::uo_minus;
     }
@@ -575,35 +575,35 @@ void Evaluation::prefix_operator(ast::unary_operators op)
   Dout(dc::finish, *this << '.');
 }
 
-void Evaluation::read(ast::tag tag, Context& context)
+void Evaluation::read(ast::tag tag)
 {
-  context.read(tag, *this);
+  Context::instance().read(tag, *this);
 }
 
-void Evaluation::read(ast::tag tag, std::memory_order mo, Context& context)
+void Evaluation::read(ast::tag tag, std::memory_order mo)
 {
-  context.read(tag, mo, *this);
+  Context::instance().read(tag, mo, *this);
 }
 
-void Evaluation::write(ast::tag tag, Context& context, bool side_effect_sb_value_computation)
+void Evaluation::write(ast::tag tag, bool side_effect_sb_value_computation)
 {
-  context.write(tag, std::move(*this), side_effect_sb_value_computation);
+  Context::instance().write(tag, std::move(*this), side_effect_sb_value_computation);
 }
 
-NodePtr Evaluation::write(ast::tag tag, std::memory_order mo, Context& context)
+NodePtr Evaluation::write(ast::tag tag, std::memory_order mo)
 {
-  return context.write(tag, mo, std::move(*this));
+  return Context::instance().write(tag, mo, std::move(*this));
 }
 
-NodePtr Evaluation::RMW(ast::tag tag, std::memory_order mo, Context& context)
+NodePtr Evaluation::RMW(ast::tag tag, std::memory_order mo)
 {
-  return context.RMW(tag, mo, std::move(*this));
+  return Context::instance().RMW(tag, mo, std::move(*this));
 }
 
 NodePtr Evaluation::compare_exchange_weak(
-    ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context)
+    ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail)
 {
-  return context.compare_exchange_weak(tag, expected, desired, success, fail, std::move(*this));
+  return Context::instance().compare_exchange_weak(tag, expected, desired, success, fail, std::move(*this));
 }
 
 void Evaluation::add_value_computation(NodePtr const& node)
@@ -729,7 +729,7 @@ void Evaluation::unary_operator(ast::unary_operators op)
   Dout(dc::finish, *this << '.');
 }
 
-void Evaluation::destruct(Context& context)
+void Evaluation::destruct()
 {
   std::vector<NodePtr> nodes;
   for_each_node(NodeRequestedType::all,
@@ -740,14 +740,13 @@ void Evaluation::destruct(Context& context)
       COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::notice)
   );
   for (NodePtr node : nodes)
-    context.m_graph.remove_node(node);
+    Context::instance().graph().remove_node(node);
 }
 
 void Evaluation::conditional_operator(
     EvaluationNodePtrs const& before_node_ptrs,
     Evaluation&& true_evaluation,
-    Evaluation&& false_evaluation,
-    Context& context)
+    Evaluation&& false_evaluation)
 {
   EvaluationNodePtrs true_nodes = true_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
   EvaluationNodePtrs false_nodes = false_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
@@ -758,14 +757,14 @@ void Evaluation::conditional_operator(
     if (m_simple.m_literal)
     {
       *this = std::move(true_evaluation);
-      false_evaluation.destruct(context);
-      context.add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      false_evaluation.destruct();
+      Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     else
     {
       *this = std::move(false_evaluation);
-      true_evaluation.destruct(context);
-      context.add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      true_evaluation.destruct();
+      Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
   }
   else
@@ -777,9 +776,9 @@ void Evaluation::conditional_operator(
     m_state = condition;
     m_lhs = make_unique(std::move(true_evaluation));
     m_rhs = make_unique(std::move(false_evaluation));
-    auto condition = context.add_condition(m_condition);
-    context.add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
-    context.add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
+    auto condition = Context::instance().add_condition(m_condition);
+    Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
+    Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
   }
   Dout(dc::finish, *this << '.');
 }

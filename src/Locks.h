@@ -5,5 +5,5 @@
 
 class Locks : public ScopeDetector<ast::unique_lock_decl>
 {
-  void left_scope(ast::unique_lock_decl const& unique_lock_decl, Context& context) override;
+  void left_scope(ast::unique_lock_decl const& unique_lock_decl) override;
 };

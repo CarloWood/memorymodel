@@ -2,7 +2,7 @@
 
 #include "Conditional.h"
 
-struct Evaluation;
+class Evaluation;
 
 // A Branch is a wrapper around a pointer (iterator) to a (unique) Conditional object
 // with an additional member variable that indicates if the condition is true or false.

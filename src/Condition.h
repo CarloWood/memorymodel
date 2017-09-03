@@ -3,7 +3,7 @@
 #include "BooleanExpression.h"
 #include <iosfwd>
 
-class Branch;
+struct Branch;
 
 // The condition under which an edge exists,
 // which might or might not depend on a conditional.

@@ -5,8 +5,6 @@
 #include <utility>
 #include <cstddef>
 
-struct Context;
-
 template<typename AST>
 class ScopeDetector
 {
@@ -15,9 +13,9 @@ class ScopeDetector
   m_asts_type m_asts;
 
  public:
-  void add(AST const& unique_lock_decl, Context const& context);
-  void reset(size_t stack_depth, Context& context);
-  virtual void left_scope(AST const& ast, Context& context) = 0;
+  void add(AST const& unique_lock_decl);
+  void reset(size_t stack_depth);
+  virtual void left_scope(AST const& ast) = 0;
 };
 
 extern template class ScopeDetector<ast::unique_lock_decl>;

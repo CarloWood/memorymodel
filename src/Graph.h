@@ -19,7 +19,7 @@ class Graph
   Graph() :
     m_next_node_id{0} { }
 
-  void generate_dot_file(std::string const& filename, Context& context) const;
+  void generate_dot_file(std::string const& filename) const;
 
   // Accessor.
   nodes_type::iterator begin() { return m_nodes.begin(); }

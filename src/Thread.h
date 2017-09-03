@@ -11,7 +11,6 @@
 #include <functional>
 #include <stack>
 
-struct Context;
 class Evaluation;
 class Thread;
 using ThreadPtr = boost::intrusive_ptr<Thread>;
@@ -63,7 +62,7 @@ class Thread : public AIRefCount
 
   // Called at sequence-points.
   void detect_full_expression_start();
-  void detect_full_expression_end(Evaluation& full_expression, Context& context);
+  void detect_full_expression_end(Evaluation& full_expression);
 
   void start_threads(id_type next_id);
   void join_all_threads(id_type next_id);
@@ -73,7 +72,7 @@ class Thread : public AIRefCount
 
   // Selection statement events.
   // We're about to execute the branch that is followed when this condition is true.
-  void begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition, Context& context);
+  void begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition);
   // We're about to execute the branch that is followed when this condition is false.
   void begin_branch_false(EvaluationNodePtrConditionPairs& unconnected_heads);
   // Called immediately after the selection statement.

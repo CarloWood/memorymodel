@@ -3,8 +3,7 @@
 #include "Condition.h"
 #include <string>
 
-struct Evaluation;
-struct Context;
+class Evaluation;
 
 struct Conditional
 {

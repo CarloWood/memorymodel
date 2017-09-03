@@ -13,7 +13,7 @@ extern channel_ct poshandler;
 NAMESPACE_DEBUG_CHANNELS_END
 #endif
 
-#define LOCATION(tag) "[\e[31m" << context.m_position_handler.location(tag) << "\e[0m]"
+#define LOCATION(tag) "[\e[31m" << Context::instance().get_position_handler().location(tag) << "\e[0m]"
 
 template<typename Iterator>
 struct position_handler

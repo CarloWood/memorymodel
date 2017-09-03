@@ -263,7 +263,7 @@ class Expression
   static Expression one() { Expression result(true); return result; }
 
   friend Expression operator+(Expression const& expression0, Expression const& expression1);
-  Expression& operator+=(Expression const& expression) { *this = std::move(*this + expression); return *this; }
+  Expression& operator+=(Expression const& expression) { *this = *this + expression; return *this; }
   Expression& operator+=(Product const& product);
   Expression operator*(Product const& product) const;
   void simplify();

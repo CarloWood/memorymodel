@@ -11,8 +11,6 @@
 #include <memory>
 #include <cassert>
 
-struct Context;
-
 class Symbols
 {
  public:
@@ -24,8 +22,8 @@ class Symbols
 
  public:
   void add(ast::declaration_statement const& declaration_statement);
-  void scope_start(bool is_thread, Context& context);
-  void scope_end(Context& context);
+  void scope_start(bool is_thread);
+  void scope_end();
   int stack_depth() const { return m_stack.size(); }
   ast::declaration_statement const& find(std::string var_name) const;
 };

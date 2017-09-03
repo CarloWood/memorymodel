@@ -403,8 +403,12 @@ bool Expression::equivalent(Expression const& expression) const
 //static
 Variable::id_type Variable::s_next_id;
 
+namespace {
+
 // The Context singleton.
-static SingletonInstance<Context> dummy __attribute__ ((__unused__));
+SingletonInstance<Context> dummy __attribute__ ((__unused__));
+
+} // namespace
 
 } // namespace boolean
 

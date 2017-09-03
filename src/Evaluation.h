@@ -13,7 +13,6 @@
 #include "tracked.h"
 #endif
 
-struct Context;
 class NodeRequestedType;
 
 enum binary_operators {
@@ -130,18 +129,17 @@ class Evaluation
   void unary_operator(ast::unary_operators op);           // *this = OP *this
   void conditional_operator(EvaluationNodePtrs const& before_node_ptrs,      // *this = *this ? true_evaluation : false_evaluation
                             Evaluation&& true_evaluation,
-                            Evaluation&& false_evaluation,
-                            Context& context);
+                            Evaluation&& false_evaluation);
   void comma_operator(Evaluation&& rhs);
-  void read(ast::tag tag, Context& context);
-  void read(ast::tag tag, std::memory_order mo, Context& context);
+  void read(ast::tag tag);
+  void read(ast::tag tag, std::memory_order mo);
   void add_value_computation(NodePtr const& node);
-  void write(ast::tag tag, Context& context, bool side_effect_sb_value_computation = false);
-  NodePtr write(ast::tag tag, std::memory_order mo, Context& context);
-  NodePtr RMW(ast::tag tag, std::memory_order mo, Context& context);
-  NodePtr compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail, Context& context);
+  void write(ast::tag tag, bool side_effect_sb_value_computation = false);
+  NodePtr write(ast::tag tag, std::memory_order mo);
+  NodePtr RMW(ast::tag tag, std::memory_order mo);
+  NodePtr compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail);
   void add_side_effect(NodePtr const& node);
-  void destruct(Context& context);
+  void destruct();
   void swap_sum();
   void strip_rhs();
 

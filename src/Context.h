@@ -8,35 +8,44 @@
 #include "EvaluationNodePtrs.h"
 #include "Thread.h"
 #include "Node.h"
+#include "Location.h"
+#include "LocationCompare.h"
+#include "utils/Singleton.h"
 #include <string>
+#include <set>
 
 class Graph;
 using iterator_type = std::string::const_iterator;
 
-struct Context
+class Context : public Singleton<Context>
 {
+  friend_Instance;
+
   using threads_final_full_expression_type = std::map<int, std::vector<std::unique_ptr<Evaluation>>>;
 
-  position_handler<iterator_type>& m_position_handler;
+ public:
   Symbols m_symbols;
   Locks m_locks;
   Loops m_loops;
-  Graph& m_graph;
 
  private:
-  //BranchInfo::full_expression_evaluations_type m_full_expression_evaluations;       // List of Evaluations of full expressions that need to be kept around.
+  position_handler<iterator_type>* m_position_handler;
+  Graph* m_graph;
   Thread::id_type m_next_thread_id;                                     // The id to use for the next thread.
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
   conditionals_type m_conditionals;                                     // Branch conditionals.
+  std::set<Location, LocationCompare> m_locations;                      // List of all memory locations used.
   static std::vector<std::unique_ptr<Evaluation>> s_condition_evaluations;
 
+ private:
+  Context() : m_position_handler(nullptr), m_graph(nullptr), m_next_thread_id{1}, m_current_thread{Thread::create_main_thread()} { }
+  ~Context() { }
+  Context(Context const&) = delete;
+
  public:
-  Context(position_handler<iterator_type>& ph, Graph& g) :
-      m_position_handler(ph),
-      m_graph(g),
-      m_next_thread_id{1},
-      m_current_thread{Thread::create_main_thread()} { }
+  // Only call this once.
+  void initialize(position_handler<iterator_type>& ph, Graph& g) { ASSERT(!m_position_handler); m_position_handler = &ph; m_graph = &g; }
 
   // Entering and leaving scopes.
   void scope_start(bool is_thread);
@@ -61,11 +70,16 @@ struct Context
   int number_of_threads() const { return m_next_thread_id; }
   ThreadPtr const& current_thread() const { return m_current_thread; }
   conditionals_type const& conditionals() const { return  m_conditionals; }
+  position_handler<iterator_type>& get_position_handler() const { return *m_position_handler; }
+  Graph& graph() const { return *m_graph; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);
   Evaluation lock(ast::tag mutex);
   Evaluation unlock(ast::tag mutex);
+
+  // Memory locations.
+  void add_location(int id, std::string const& name, Location::Kind kind) { m_locations.emplace(id, name, kind); }
 
   // Add edges of type edge_type between before_node_ptrs and after_node_ptrs with (optional) condition.
   void add_edges(
@@ -211,10 +225,9 @@ struct Context
 struct FullExpressionDetector
 {
   Evaluation& m_full_expression;        // Potential full-expression.
-  Context& m_context;
-  FullExpressionDetector(Evaluation& full_expression, Context& context) :
-      m_full_expression(full_expression), m_context(context)
-    { context.current_thread()->detect_full_expression_start(); }
+  FullExpressionDetector(Evaluation& full_expression) :
+      m_full_expression(full_expression)
+    { Context::instance().current_thread()->detect_full_expression_start(); }
   ~FullExpressionDetector()
-    { m_context.current_thread()->detect_full_expression_end(m_full_expression, m_context); }
+    { Context::instance().current_thread()->detect_full_expression_end(m_full_expression); }
 };

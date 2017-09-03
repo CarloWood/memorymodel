@@ -29,7 +29,7 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
   }
 }
 
-void Graph::generate_dot_file(std::string const& filename, Context& context) const
+void Graph::generate_dot_file(std::string const& filename) const
 {
   std::ofstream out;
   out.open(filename);
@@ -42,7 +42,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
   // Count number of nodes per thread.
   int max_count = 0;
   int main_thread_nodes = 0;
-  std::vector<int> number_of_nodes(context.number_of_threads(), 0);
+  std::vector<int> number_of_nodes(Context::instance().number_of_threads(), 0);
   for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
   {
     int n = ++number_of_nodes[node->thread()->id()];
@@ -51,7 +51,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     else if (n > max_count)
       max_count = n;
   }
-  std::vector<int> depth(context.number_of_threads(), 0);
+  std::vector<int> depth(Context::instance().number_of_threads(), 0);
   depth[0] = main_thread_nodes;
 
   int const fontsize = 14;
@@ -118,7 +118,7 @@ void Graph::generate_dot_file(std::string const& filename, Context& context) con
     }
   }
 
-  conditionals_type const& conditionals{context.conditionals()};
+  conditionals_type const& conditionals{Context::instance().conditionals()};
   if (!conditionals.empty())
   {
     out <<

@@ -2,11 +2,8 @@
 
 #include "ast_tag.h"
 #include "utils/Singleton.h"
-#include "Location.h"
-#include "LocationCompare.h"
 #include <stack>
 #include <map>
-#include <set>
 #include "boost/spirit/include/qi_symbols.hpp"
 
 class Symbols;
@@ -41,7 +38,6 @@ class SymbolsImpl
   qi::symbols<char, ast::tag> unique_locks;
   std::map<int, std::string> unique_locks_map;
   std::map<int, std::string> all_symbols;
-  std::set<Location, LocationCompare> locations;
  private:
   void print(boost::spirit::qi::symbols<char, ast::tag>&) const;
 };

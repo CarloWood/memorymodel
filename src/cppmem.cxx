@@ -21,11 +21,11 @@
 
 std::map<ast::tag, ast::function, TagCompare> functions;
 
-void execute_body(std::string name, ast::statement_seq const& body, Context& context);
-Evaluation execute_expression(ast::assignment_expression const& expression, Context& context);
-Evaluation execute_expression(ast::expression const& expression, Context& context);
+void execute_body(std::string name, ast::statement_seq const& body);
+Evaluation execute_expression(ast::assignment_expression const& expression);
+Evaluation execute_expression(ast::expression const& expression);
 
-void execute_declaration(ast::declaration_statement const& declaration_statement, Context& context)
+void execute_declaration(ast::declaration_statement const& declaration_statement)
 {
   DoutEntering(dc::execute, "execute_declaration(`" << declaration_statement << "`)");
 
@@ -49,7 +49,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
 
   Evaluation full_expression;   // Evaluation (value computation and side-effect) of
                                 // this full-expression.
-  FullExpressionDetector detector(full_expression, context);
+  FullExpressionDetector detector(full_expression);
 
   switch (declaration_statement.m_declaration_statement_node.which())
   {
@@ -58,7 +58,7 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& mutex_decl{boost::get<ast::mutex_decl>(declaration_statement.m_declaration_statement_node)};
       Dout(dc::notice, declaration_statement);
       DebugMarkUp;
-      full_expression = context.lockdecl(mutex_decl);
+      full_expression = Context::instance().lockdecl(mutex_decl);
       break;
     }
     case ast::DS_condition_variable_decl:
@@ -72,8 +72,8 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       auto const& unique_lock_decl{boost::get<ast::unique_lock_decl>(declaration_statement.m_declaration_statement_node)};
       DoutTag(dc::notice, declaration_statement << " [declaration of", declaration_statement.tag());
       DebugMarkUp;
-      full_expression = context.lock(unique_lock_decl.m_mutex);
-      context.m_locks.add(unique_lock_decl, context);
+      full_expression = Context::instance().lock(unique_lock_decl.m_mutex);
+      Context::instance().m_locks.add(unique_lock_decl);
       break;
     }
     case ast::DS_vardecl:
@@ -82,32 +82,32 @@ void execute_declaration(ast::declaration_statement const& declaration_statement
       if (vardecl.m_initial_value)
       {
         // This is a `initializer-clause` - but is this already part of an expression (the expression-statement that is the declaration)?
-        full_expression = execute_expression(*vardecl.m_initial_value, context);
+        full_expression = execute_expression(*vardecl.m_initial_value);
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        full_expression.write(declaration_statement.tag(), context);
+        full_expression.write(declaration_statement.tag());
       }
       else
       {
         Dout(dc::notice, declaration_statement);
         DebugMarkUp;
-        full_expression = context.uninitialized(declaration_statement.tag());
+        full_expression = Context::instance().uninitialized(declaration_statement.tag());
       }
       break;
     }
   }
-  context.m_symbols.add(declaration_statement);
+  Context::instance().m_symbols.add(declaration_statement);
 }
 
-Evaluation execute_condition(ast::expression const& condition, Context& context)
+Evaluation execute_condition(ast::expression const& condition)
 {
   DoutEntering(dc::execute, "execute_condition(`" << condition << "`)");
-  Evaluation result = execute_expression(condition, context);
+  Evaluation result = execute_expression(condition);
   Dout(dc::continued, condition);
   return result;
 }
 
-Evaluation execute_primary_expression(ast::primary_expression const& primary_expression, Context& context)
+Evaluation execute_primary_expression(ast::primary_expression const& primary_expression)
 {
   DoutEntering(dc::execute, "execute_primary_expression(`" << primary_expression << "`)");
 
@@ -136,10 +136,10 @@ Evaluation execute_primary_expression(ast::primary_expression const& primary_exp
         break;
       // Check if that variable wasn't masked by another variable of different type.
       std::string name = parser::Symbols::instance().tag_to_string(tag);           // Actual C++ object of that name in current scope.
-      ast::declaration_statement const& declaration_statement{context.m_symbols.find(name)}; // Declaration of actual object.
+      ast::declaration_statement const& declaration_statement{Context::instance().m_symbols.find(name)}; // Declaration of actual object.
       if (declaration_statement.tag() != tag)                                      // Did the parser make a mistake?
       {
-        std::string position{context.m_position_handler.location(declaration_statement.tag())};
+        std::string position{Context::instance().get_position_handler().location(declaration_statement.tag())};
         if (declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl)
         {
           auto const& vardecl(boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node));
@@ -153,13 +153,13 @@ Evaluation execute_primary_expression(ast::primary_expression const& primary_exp
       // This must be a non-atomic int or bool, or we wouldn't be reading from it.
       assert(declaration_statement.m_declaration_statement_node.which() == ast::DS_vardecl &&
           !boost::get<ast::vardecl>(declaration_statement.m_declaration_statement_node).m_type.is_atomic());
-      result.read(tag, context);
+      result.read(tag);
       break;
     }
     case ast::PE_expression:
     {
       ast::expression const& expression{boost::get<ast::expression>(node)};
-      result = execute_expression(expression, context);
+      result = execute_expression(expression);
       break;
     }
   }
@@ -187,7 +187,7 @@ template<> binary_operators get_operator<ast::multiplicative_expression>(ast::mu
     { return static_cast<binary_operators>(multiplicative_mo_mul + boost::fusion::get<0>(tail)); }
 
 template<typename T>
-Evaluation execute_operator_list_expression(T const& expr, Context& context)
+Evaluation execute_operator_list_expression(T const& expr)
 {
   // Only print Entering.. when there is actually an operator.
   DoutEntering(dc::execute(!expr.m_chained.empty()),
@@ -206,17 +206,17 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
   // <multiplicative_expression>
 
   // A chain, ie x + y + z really is (x + y) + z.
-  Evaluation result = execute_operator_list_expression(expr.m_other_expression, context);
+  Evaluation result = execute_operator_list_expression(expr.m_other_expression);
   for (auto const& tail : expr.m_chained)
   {
-    Evaluation rhs = execute_operator_list_expression(tail, context);
+    Evaluation rhs = execute_operator_list_expression(tail);
     if (std::is_same<T, ast::logical_or_expression>::value ||
         std::is_same<T, ast::logical_and_expression>::value ||
         std::is_same<T, ast::shift_expression>::value)                  // Only as of C++17! Rule 19 of http://en.cppreference.com/w/cpp/language/eval_order
     {
       Dout(dc::sb_edge, "Boolean expression (operator || or &&), or shift expression (operator << || >>)");
       DebugMarkUp;
-      context.add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     }
     result.OP(get_operator<T>(tail), std::move(rhs));
   }
@@ -225,7 +225,7 @@ Evaluation execute_operator_list_expression(T const& expr, Context& context)
 
 // Specialization for boost::fusion::tuple<operators, prev_precedence_type>
 template<typename OPERATORS, typename PREV_PRECEDENCE_TYPE>
-Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple, Context& context)
+Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple)
 {
   // Doesn't really make much sense to print this, as the function being called already prints basically the same info.
   //DoutEntering(dc::execute, "execute_operator_list_expression<" <<
@@ -233,10 +233,10 @@ Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV
   //    type_info_of<PREV_PRECEDENCE_TYPE>().demangled_name() << ">(" << tuple << ").");
 
   // Just unpack the second argument.
-  return execute_operator_list_expression(boost::fusion::get<1>(tuple), context);
+  return execute_operator_list_expression(boost::fusion::get<1>(tuple));
 }
 
-Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Context& context)
+Evaluation execute_postfix_expression(ast::postfix_expression const& expr)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
   DoutEntering(dc::execute(!expr.m_postfix_operators.empty()), "execute_postfix_expression(`" << expr << "`)");
@@ -246,7 +246,7 @@ Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Conte
   auto const& node = expr.m_postfix_expression_node;
   ASSERT(node.which() == ast::PE_primary_expression);
   auto const& primary_expression{boost::get<ast::primary_expression>(node)};
-  result = execute_primary_expression(primary_expression, context);
+  result = execute_primary_expression(primary_expression);
 
   if (!expr.m_postfix_operators.empty())
   {
@@ -261,7 +261,7 @@ Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Conte
     for (auto const& postfix_operator : expr.m_postfix_operators)
     {
       result.postfix_operator(postfix_operator);
-      result.write(tag, context);
+      result.write(tag);
     }
   }
 
@@ -270,7 +270,7 @@ Evaluation execute_postfix_expression(ast::postfix_expression const& expr, Conte
 
 // Specialization for unary_expression.
 template<>
-Evaluation execute_operator_list_expression(ast::unary_expression const& expr, Context& context)
+Evaluation execute_operator_list_expression(ast::unary_expression const& expr)
 {
   // Only print Entering... when we actually have a pre- increment, decrement or unary operator.
   DoutEntering(dc::execute(!expr.m_unary_operators.empty()),
@@ -289,7 +289,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
       auto const& primary_expression{boost::get<ast::primary_expression>(node)};
       // Postfix expressions can only be applied to primary expressions (and PE_tag types to that),
       // but we still have to process the postfix expression ;).
-      result = execute_postfix_expression(expr.m_postfix_expression, context);
+      result = execute_postfix_expression(expr.m_postfix_expression);
 
       // Prefix and unary operators.
       for (auto const& unary_operator : expr.m_unary_operators)
@@ -302,7 +302,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
             THROW_ALERT("Can't use a prefix operator before `[EXPRESSION]`", AIArgs("[EXPRESSION]", primary_expression_node));
           ast::tag const& tag{boost::get<ast::tag>(primary_expression_node)};
           result.prefix_operator(unary_operator);
-          result.write(tag, context, true);
+          result.write(tag, true);
         }
         else
           result.unary_operator(unary_operator);
@@ -313,18 +313,18 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
     {
       auto const& atomic_fetch_add_explicit{boost::get<ast::atomic_fetch_add_explicit>(node)};
       result = atomic_fetch_add_explicit.m_memory_location_id;
-      result.OP(additive_ado_add, execute_expression(atomic_fetch_add_explicit.m_expression, context));
-      NodePtr rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order, context);
-      context.add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      result.OP(additive_ado_add, execute_expression(atomic_fetch_add_explicit.m_expression));
+      NodePtr rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
+      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
     {
       auto const& atomic_fetch_sub_explicit{boost::get<ast::atomic_fetch_sub_explicit>(node)};
       result = atomic_fetch_sub_explicit.m_memory_location_id;
-      result.OP(additive_ado_sub, execute_expression(atomic_fetch_sub_explicit.m_expression, context));
-      NodePtr rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order, context);
-      context.add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      result.OP(additive_ado_sub, execute_expression(atomic_fetch_sub_explicit.m_expression));
+      NodePtr rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
+      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
@@ -337,30 +337,29 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr, C
               atomic_compare_exchange_weak_explicit.m_expected,
               atomic_compare_exchange_weak_explicit.m_desired,
               atomic_compare_exchange_weak_explicit.m_succeed,
-              atomic_compare_exchange_weak_explicit.m_fail,
-              context);
-      context.add_edges(edge_sb, *cew_node.get<CEWNode>()->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+              atomic_compare_exchange_weak_explicit.m_fail);
+      Context::instance().add_edges(edge_sb, *cew_node.get<CEWNode>()->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::PE_load_call:
     {
       auto const& load_call{boost::get<ast::load_call>(node)};
       result = load_call.m_memory_location_id;
-      result.read(load_call.m_memory_location_id, load_call.m_memory_order, context);
+      result.read(load_call.m_memory_location_id, load_call.m_memory_order);
       break;
     }
   }
   return result;
 }
 
-Evaluation execute_expression(ast::assignment_expression const& expression, Context& context)
+Evaluation execute_expression(ast::assignment_expression const& expression)
 {
   DoutEntering(dc::execute, "execute_expression(`" << expression << "`).");
   DebugMarkDown;
 
   Evaluation result;
   // - expression-statement (as part of statement and for-init-statement)
-  FullExpressionDetector detector(result, context);
+  FullExpressionDetector detector(result);
 
   auto const& node = expression.m_assignment_expression_node;
   switch (node.which())
@@ -368,22 +367,22 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     case ast::AE_conditional_expression:
     {
       auto const& conditional_expression{boost::get<ast::conditional_expression>(node)};
-      result = execute_operator_list_expression(conditional_expression.m_logical_or_expression, context);
+      result = execute_operator_list_expression(conditional_expression.m_logical_or_expression);
       if (conditional_expression.m_conditional_expression_tail)
       {
         ast::expression const& expression{boost::fusion::get<0>(conditional_expression.m_conditional_expression_tail.get())};
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
-        Evaluation true_evaluation = execute_expression(expression, context);
-        Evaluation false_evaluation = execute_expression(assignment_expression, context);
+        Evaluation true_evaluation = execute_expression(expression);
+        Evaluation false_evaluation = execute_expression(assignment_expression);
         EvaluationNodePtrs before_node_ptrs = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-        result.conditional_operator(before_node_ptrs, std::move(true_evaluation), std::move(false_evaluation), context);
+        result.conditional_operator(before_node_ptrs, std::move(true_evaluation), std::move(false_evaluation));
       }
       break;
     }
     case ast::AE_register_assignment:
     {
       auto const& register_assignment{boost::get<ast::register_assignment>(node)};
-      result = execute_expression(register_assignment.rhs, context);
+      result = execute_expression(register_assignment.rhs);
       // Assignment to a register doesn't generate a side-effect (we're not really writing to memory),
       // so just leave the result what it is as it represents the full-expression of this assignment.
       break;
@@ -391,32 +390,32 @@ Evaluation execute_expression(ast::assignment_expression const& expression, Cont
     case ast::AE_assignment:
     {
       auto const& assignment{boost::get<ast::assignment>(node)};
-      result = execute_expression(assignment.rhs, context);
+      result = execute_expression(assignment.rhs);
       Dout(dc::valuecomp, "Assignment value computation results in " << result << "; assigned to `" << assignment.lhs << "`.");
-      result.write(assignment.lhs, context, true);
+      result.write(assignment.lhs, true);
       break;
     }
   }
   return result;
 }
 
-Evaluation execute_expression(ast::expression const& expression, Context& context)
+Evaluation execute_expression(ast::expression const& expression)
 {
   DoutEntering(dc::execute(expression.m_chained.size() > 1), "execute_expression(`" << expression << "`).");
   Evaluation result;
   // - expression (as part of noptr-new-declarator, condition, iteration-statement, jump-statement and decltype-specifier)
-  FullExpressionDetector detector(result, context);
-  result = execute_expression(expression.m_assignment_expression, context);
+  FullExpressionDetector detector(result);
+  result = execute_expression(expression.m_assignment_expression);
   for (auto const& assignment_expression : expression.m_chained)
   {
-    Evaluation rhs = execute_expression(assignment_expression, context);
-    context.add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    Evaluation rhs = execute_expression(assignment_expression);
+    Context::instance().add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
     result.comma_operator(std::move(rhs));
   }
   return result;
 }
 
-void execute_statement(ast::statement const& statement, Context& context)
+void execute_statement(ast::statement const& statement)
 {
   auto const& node = statement.m_statement_node;
   switch (node.which())
@@ -426,7 +425,7 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& expression_statement{boost::get<ast::expression_statement>(node)};
       if (expression_statement.m_expression)
       {
-        execute_expression(expression_statement.m_expression.get(), context);
+        execute_expression(expression_statement.m_expression.get());
         Dout(dc::notice, expression_statement);
       }
       break;
@@ -435,14 +434,14 @@ void execute_statement(ast::statement const& statement, Context& context)
     {
       auto const& store_call{boost::get<ast::store_call>(node)};
       Evaluation value;
-      FullExpressionDetector detector(value, context);          // A call to store like: y.store(expr, mo); is a expression statement.
-      value = execute_expression(store_call.m_val, context);
+      FullExpressionDetector detector(value);          // A call to store like: y.store(expr, mo); is a expression statement.
+      value = execute_expression(store_call.m_val);
       Dout(dc::notice, store_call << ";");
       DebugMarkUp;
-      NodePtr write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order, context);
+      NodePtr write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order);
       // Side-effects and value-computations of function arguments are sequenced before the side-effects and value-computations of the function body.
       // The evaluation of the write_node is the function argument passed here (the previous value of 'value' as returned by execute_expression()).
-      context.add_edges(edge_sb, *write_node.get<WriteNode>()->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, *write_node.get<WriteNode>()->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       break;
     }
     case ast::SN_function_call:
@@ -454,59 +453,59 @@ void execute_statement(ast::statement const& statement, Context& context)
 #endif
       auto const& function{functions[function_call.m_function]};
       if (function.m_compound_statement.m_statement_seq)
-        execute_body(function.m_function_name.name, *function.m_compound_statement.m_statement_seq, context);
+        execute_body(function.m_function_name.name, *function.m_compound_statement.m_statement_seq);
       break;
     }
     case ast::SN_wait_call:
     {
       auto const& wait_call{boost::get<ast::wait_call>(node)};
       Dout(dc::notice, "TODO: " << wait_call);
-      //FullExpressionDetector detector(value, context);
+      //FullExpressionDetector detector(value);
       break;
     }
     case ast::SN_notify_all_call:
     {
       auto const& notify_all_call{boost::get<ast::notify_all_call>(node)};
       Dout(dc::notice, "TODO: " << notify_all_call);
-      //FullExpressionDetector detector(value, context);
+      //FullExpressionDetector detector(value);
       break;
     }
     case ast::SN_mutex_lock_call:
     {
       auto const& mutex_lock_call{boost::get<ast::mutex_lock_call>(node)};
       Evaluation value;
-      FullExpressionDetector detector(value, context);
+      FullExpressionDetector detector(value);
       Dout(dc::notice, mutex_lock_call);
       DebugMarkUp;
-      value = context.lock(mutex_lock_call.m_mutex);
+      value = Context::instance().lock(mutex_lock_call.m_mutex);
       break;
     }
     case ast::SN_mutex_unlock_call:
     {
       auto const& mutex_unlock_call{boost::get<ast::mutex_unlock_call>(node)};
       Evaluation value;
-      FullExpressionDetector detector(value, context);
+      FullExpressionDetector detector(value);
       Dout(dc::notice, mutex_unlock_call);
       DebugMarkUp;
-      value = context.unlock(mutex_unlock_call.m_mutex);
+      value = Context::instance().unlock(mutex_unlock_call.m_mutex);
       break;
     }
     case ast::SN_threads:
     {
       auto const& threads{boost::get<ast::threads>(node)};
       // The notation '{{{' begins starting a batch of threads.
-      context.start_threads();
+      Context::instance().start_threads();
       for (auto& statement_seq : threads.m_threads)
-        execute_body("thread", statement_seq, context);
+        execute_body("thread", statement_seq);
       // The notation '}}}' implies that all threads are joined.
-      context.join_all_threads();
+      Context::instance().join_all_threads();
       break;
     }
     case ast::SN_compound_statement:
     {
       auto const& compound_statement{boost::get<ast::compound_statement>(node)};
       if (compound_statement.m_statement_seq)
-        execute_body("compound_statement", *compound_statement.m_statement_seq, context);
+        execute_body("compound_statement", *compound_statement.m_statement_seq);
       break;
     }
     case ast::SN_selection_statement:
@@ -514,28 +513,28 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& selection_statement{boost::get<ast::selection_statement>(node)};
       Dout(dc::notice|continued_cf, "if (");
       Evaluation condition;
-      try { condition = execute_condition(selection_statement.m_if_statement.m_condition, context); }
+      try { condition = execute_condition(selection_statement.m_if_statement.m_condition); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
       if (condition.is_literal())
       {
         Dout(dc::branch, "Selection statement conditional is a literal! Not doing a branch.");
         if (condition.literal_value())
-          execute_statement(selection_statement.m_if_statement.m_then, context);
+          execute_statement(selection_statement.m_if_statement.m_then);
         else if (selection_statement.m_if_statement.m_else)
-          execute_statement(*selection_statement.m_if_statement.m_else, context);
+          execute_statement(*selection_statement.m_if_statement.m_else);
       }
       else
       {
         EvaluationNodePtrConditionPairs unconnected_heads;
-        context.current_thread()->begin_branch_true(unconnected_heads, Evaluation::make_unique(std::move(condition)), context);
-        execute_statement(selection_statement.m_if_statement.m_then, context);
+        Context::instance().current_thread()->begin_branch_true(unconnected_heads, Evaluation::make_unique(std::move(condition)));
+        execute_statement(selection_statement.m_if_statement.m_then);
         if (selection_statement.m_if_statement.m_else)
         {
-          context.current_thread()->begin_branch_false(unconnected_heads);
-          execute_statement(*selection_statement.m_if_statement.m_else, context);
+          Context::instance().current_thread()->begin_branch_false(unconnected_heads);
+          execute_statement(*selection_statement.m_if_statement.m_else);
         }
-        context.current_thread()->end_branch(unconnected_heads);
+        Context::instance().current_thread()->end_branch(unconnected_heads);
       }
       break;
     }
@@ -544,12 +543,12 @@ void execute_statement(ast::statement const& statement, Context& context)
       auto const& iteration_statement{boost::get<ast::iteration_statement>(node)};
       // We only support while () { } at the moment.
       Dout(dc::notice|continued_cf, "while (");
-      try { execute_condition(iteration_statement.m_while_statement.m_condition, context); }
+      try { execute_condition(iteration_statement.m_while_statement.m_condition); }
       catch (std::exception const&) { Dout(dc::finish, ""); throw; }
       Dout(dc::finish, ")");
-      context.m_loops.enter(iteration_statement);
-      execute_statement(iteration_statement.m_while_statement.m_statement, context);
-      context.m_loops.leave(iteration_statement);
+      Context::instance().m_loops.enter(iteration_statement);
+      execute_statement(iteration_statement.m_while_statement.m_statement);
+      Context::instance().m_loops.leave(iteration_statement);
       break;
     }
     case ast::SN_jump_statement:
@@ -560,7 +559,7 @@ void execute_statement(ast::statement const& statement, Context& context)
         case ast::JS_break_statement:
         {
           auto const& break_statement{boost::get<ast::break_statement>(jump_statement.m_jump_statement_node)};
-          context.m_loops.add_break(break_statement);
+          Context::instance().m_loops.add_break(break_statement);
           break;
         }
         case ast::JS_return_statement:
@@ -568,7 +567,7 @@ void execute_statement(ast::statement const& statement, Context& context)
           auto const& return_statement{boost::get<ast::return_statement>(jump_statement.m_jump_statement_node)};
           Dout(dc::notice, return_statement);
           DebugMarkUp;
-          execute_expression(return_statement.m_expression, context);
+          execute_expression(return_statement.m_expression);
           break;
         }
       }
@@ -577,13 +576,13 @@ void execute_statement(ast::statement const& statement, Context& context)
     case ast::SN_declaration_statement:
     {
       auto const& declaration_statement{boost::get<ast::declaration_statement>(node)};
-      execute_declaration(declaration_statement, context);
+      execute_declaration(declaration_statement);
       break;
     }
   }
 }
 
-void execute_body(std::string name, ast::statement_seq const& body, Context& context)
+void execute_body(std::string name, ast::statement_seq const& body)
 {
   if (name != "compound_statement" && name != "thread")
   {
@@ -594,19 +593,19 @@ void execute_body(std::string name, ast::statement_seq const& body, Context& con
       Dout(dc::notice, "void " << name << "()");
     }
   }
-  context.m_symbols.scope_start(name == "thread", context);
+  Context::instance().m_symbols.scope_start(name == "thread");
   for (auto const& statement : body.m_statements)
   {
     try
     {
-      execute_statement(statement, context);
+      execute_statement(statement);
     }
     catch (AIAlert::Error const& alert)
     {
       THROW_ALERT(alert, " in `[STATEMENT]`", AIArgs("[STATEMENT]", statement));
     }
   }
-  context.m_symbols.scope_end(context);
+  Context::instance().m_symbols.scope_end();
 }
 
 int main(int argc, char* argv[])
@@ -663,7 +662,7 @@ int main(int argc, char* argv[])
   }
 
   Graph graph;
-  Context context(position_handler, graph);
+  Context::instance().initialize(position_handler, graph);
 
   std::cout << "Abstract Syntax Tree: " << ast << std::endl;
 
@@ -674,7 +673,7 @@ int main(int argc, char* argv[])
     if (node.which() == ast::DN_declaration_statement)
     {
       ast::declaration_statement& declaration_statement{boost::get<ast::declaration_statement>(node)};
-      execute_declaration(declaration_statement, context);
+      execute_declaration(declaration_statement);
     }
 
   //==========================================================================
@@ -703,7 +702,7 @@ int main(int argc, char* argv[])
   {
     // Execute main()
     if (main_function->m_compound_statement.m_statement_seq)
-      execute_body("main", *main_function->m_compound_statement.m_statement_seq, context);
+      execute_body("main", *main_function->m_compound_statement.m_statement_seq);
   }
   catch (AIAlert::Error const& error)
   {
@@ -724,7 +723,7 @@ int main(int argc, char* argv[])
   std::string const basename = source_filename.substr(0, source_filename.find_last_of(".")) + "_opsem";
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
-  graph.generate_dot_file(dot_filename, context);
+  graph.generate_dot_file(dot_filename);
   std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 
@@ -739,7 +738,7 @@ int main(int argc, char* argv[])
   }
 
   // Run over all possible flow-control paths.
-  conditionals_type const& conditionals{context.conditionals()};
+  conditionals_type const& conditionals{Context::instance().conditionals()};
   int number_of_boolean_expressions = conditionals.size();
   using mask_type = boolean::Expression::mask_type;
   mask_type permutations_end = (mask_type)1 << number_of_boolean_expressions;

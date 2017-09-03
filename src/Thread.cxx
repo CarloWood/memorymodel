@@ -111,7 +111,7 @@ void Thread::detect_full_expression_start()
   ++m_full_expression_detector_depth;
 }
 
-void Thread::detect_full_expression_end(Evaluation& full_expression, Context& context)
+void Thread::detect_full_expression_end(Evaluation& full_expression)
 {
   // An expression that is not part of another full-expression is a full-expression.
   if (--m_full_expression_detector_depth == 0)
@@ -130,7 +130,7 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
 
     if (!full_expression_nodes.empty())
     {
-      context.add_sb_or_asw_edges(m_unconnected_heads, full_expression_nodes);
+      Context::instance().add_sb_or_asw_edges(m_unconnected_heads, full_expression_nodes);
 
       m_unconnected_heads = full_expression.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
       Dout(dc::fullexpr, "New m_unconnected_heads is: " << m_unconnected_heads << ".");
@@ -138,12 +138,12 @@ void Thread::detect_full_expression_end(Evaluation& full_expression, Context& co
   }
 }
 
-void Thread::begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition, Context& context)
+void Thread::begin_branch_true(EvaluationNodePtrConditionPairs& unconnected_heads, std::unique_ptr<Evaluation>&& condition)
 {
   DoutEntering(dc::branch, "Thread::begin_branch_true(" << *condition << ")");
   // Here we are directly after an 'if ()' statement.
   // `condition` is the conditional expression of a selection statement (and assumed true here).
-  ConditionalBranch conditional_branch{context.add_condition(std::move(condition))};
+  ConditionalBranch conditional_branch{Context::instance().add_condition(std::move(condition))};
   // Create a new BranchInfo for this selection statement.
   m_branch_info_stack.emplace(conditional_branch);
   Dout(dc::branch, "Added " << m_branch_info_stack.top() << " to m_branch_info_stack.");
