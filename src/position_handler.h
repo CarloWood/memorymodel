@@ -111,7 +111,7 @@ struct position_handler
   std::string location(Iterator pos) const
   {
     int line, col;
-    boost::iterator_range<Iterator> range{get_line_and_range(pos, line, col)};
+    get_line_and_range(pos, line, col);
     std::stringstream ss;
     ss << m_filename << ':' << line << ':' << col;
     return ss.str();

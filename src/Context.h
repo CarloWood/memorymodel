@@ -9,7 +9,6 @@
 #include "Thread.h"
 #include "Node.h"
 #include "Location.h"
-#include "LocationCompare.h"
 #include "utils/Singleton.h"
 #include <string>
 #include <set>
@@ -35,7 +34,7 @@ class Context : public Singleton<Context>
   ThreadPtr m_current_thread;                                           // The current thread.
   std::stack<bool> m_threads;                                           // Whether or not current scope is a thread.
   conditionals_type m_conditionals;                                     // Branch conditionals.
-  std::set<Location, LocationCompare> m_locations;                      // List of all memory locations used.
+  locations_type m_locations;                                           // List of all memory locations used.
   static std::vector<std::unique_ptr<Evaluation>> s_condition_evaluations;
 
  private:
@@ -72,6 +71,7 @@ class Context : public Singleton<Context>
   conditionals_type const& conditionals() const { return  m_conditionals; }
   position_handler<iterator_type>& get_position_handler() const { return *m_position_handler; }
   Graph& graph() const { return *m_graph; }
+  locations_type const& locations() const { return m_locations; }
 
   // Mutex declaration and (un)locking.
   Evaluation lockdecl(ast::tag mutex);

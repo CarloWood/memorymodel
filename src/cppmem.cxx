@@ -187,6 +187,12 @@ template<> binary_operators get_operator<ast::multiplicative_expression>(ast::mu
     { return static_cast<binary_operators>(multiplicative_mo_mul + boost::fusion::get<0>(tail)); }
 
 template<typename T>
+Evaluation execute_operator_list_expression(T const& expr);
+
+template<typename OPERATORS, typename PREV_PRECEDENCE_TYPE>
+Evaluation execute_operator_list_expression(boost::fusion::tuple<OPERATORS, PREV_PRECEDENCE_TYPE> const& tuple);
+
+template<typename T>
 Evaluation execute_operator_list_expression(T const& expr)
 {
   // Only print Entering.. when there is actually an operator.
@@ -731,10 +737,9 @@ int main(int argc, char* argv[])
   // Brute force approach.
 
   // Find all memory locations that are involved.
-  NodePtr::iterator_type const nodes_end = graph.end();
-  for (NodePtr node_ptr{graph.begin()}; node_ptr != nodes_end; ++node_ptr)
+  for (auto&& location : Context::instance().locations())
   {
-    //Dout(dc::notice, location);
+    Dout(dc::notice, location);
   }
 
   // Run over all possible flow-control paths.
