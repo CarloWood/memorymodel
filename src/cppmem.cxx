@@ -742,6 +742,12 @@ int main(int argc, char* argv[])
     Dout(dc::notice, location);
   }
 
+  // Find all actions that are used.
+  for (auto&& action : graph)
+  {
+    Dout(dc::notice, *action << " works on location " << action->location()); // action is a std::unique_ptr<NodeBase>.
+  }
+
   // Run over all possible flow-control paths.
   conditionals_type const& conditionals{Context::instance().conditionals()};
   int number_of_boolean_expressions = conditionals.size();

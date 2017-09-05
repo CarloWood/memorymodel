@@ -6,6 +6,7 @@
 #include "Condition.h"
 #include "SBNodePresence.h"
 #include "NodePtr.h"
+#include "Location.h"
 #include "utils/ulong_to_base.h"
 #include <boost/intrusive_ptr.hpp>
 #include <string>
@@ -151,7 +152,7 @@ class NodeBase
   // added to the set are marked mutable.
   id_type m_id;                                 // Unique identifier of a node.
   ThreadPtr m_thread;                           // The thread that this node belongs to.
-  ast::tag m_variable;                          // The variable/mutex involved.
+  locations_type::const_iterator m_location;    // The variable/mutex involved.
   mutable SBNodePresence m_connected;           // Signifies existing sequenced-before relationships.
   mutable end_points_type m_end_points;         // End points of all connected edges.
   mutable boolean::Expression m_exists; // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
@@ -159,7 +160,7 @@ class NodeBase
 
  public:
   NodeBase() = default;
-  NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : m_id(next_node_id), m_thread(thread), m_variable(variable), m_exists(true) { }
+  NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable);
   NodeBase(NodeBase const&) = delete;
   NodeBase(NodeBase&&) = delete;
   virtual ~NodeBase() = default;
@@ -193,8 +194,9 @@ class NodeBase
   void sequenced_before_value_computation() const;
 
   // Accessors.
-  ast::tag tag() const { return m_variable; }
-  std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); }
+  ast::tag tag() const { return m_location->tag(); }
+  Location const& location() const { return *m_location; }
+  std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
   ThreadPtr const thread() const { return m_thread; }
   end_points_type const& get_end_points() const { return m_end_points; }
   boolean::Expression const& exists() const { return m_exists; }
@@ -248,7 +250,7 @@ class AtomicReadNode : public ReadNode
 class WriteNode : public NodeBase
 {
  protected:
-  std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_variable.
+  std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_location.
 
  public:
   WriteNode(id_type next_node_id, ThreadPtr const& thread, ast::tag const& variable, Evaluation&& evaluation) :

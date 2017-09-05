@@ -1,11 +1,20 @@
 #include "sys.h"
 #include "Node.h"
 #include "debug_ostream_operators.h"
+#include "Context.h"
 #include "iomanip_dotfile.h"
 #include "utils/is_power_of_two.h"
 #include "utils/macros.h"
 #include "BooleanExpression.h"
 #include <sstream>
+
+NodeBase::NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) :
+  m_id(next_node_id), m_thread(thread), m_exists(true)
+{
+  locations_type const& locations{Context::instance().locations()};
+  m_location = std::find_if(locations.begin(), locations.end(), [variable](Location const& loc) { return loc.id() == variable.id; });
+  ASSERT(m_location != locations.end());
+}
 
 char const* memory_order_str(std::memory_order memory_order)
 {
@@ -76,7 +85,7 @@ std::string RMWNode::type() const
 std::string CEWNode::type() const
 {
   std::string result = "CEW";
-  result += memory_order_str(m_write_memory_order);     // memory order of the RMW operation on success (m_variable == expected).
+  result += memory_order_str(m_write_memory_order);     // memory order of the RMW operation on success (m_location->tag() == expected).
   result += ',';
   result += memory_order_str(m_fail_memory_order);
   return result;

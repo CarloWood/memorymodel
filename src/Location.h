@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast_tag.h"
 #include <string>
 #include <iosfwd>
 #include <set>
@@ -23,7 +24,8 @@ class Location
   Location(int id, std::string const& name, Kind kind) : m_id(id), m_name(name), m_kind(kind) { }
 
   // Accessors.
-  int id() const { return m_id; }
+  //int id() const { return m_id; }
+  ast::tag tag() const { return ast::tag{m_id}; }
   std::string const& name() const { return m_name; }
   Kind kind() const { return m_kind; }
 

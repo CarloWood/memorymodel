@@ -54,7 +54,7 @@ class Thread : public AIRefCount
 
   // Accessors.
   bool is_main_thread() const { return m_id == 0; }
-  id_type id() const { return m_id; }
+  id_type id() const { return m_id; }                                                           // thread_id
   ThreadPtr const& parent_thread() const { ASSERT(m_id > 0); return m_parent_thread; }
   bool is_joined() const { return m_is_joined; }
   bool in_true_branch() const { return !m_branch_info_stack.empty() && m_branch_info_stack.top().in_true_branch(); }
