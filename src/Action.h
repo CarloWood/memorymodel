@@ -46,7 +46,7 @@ class Action
   Action(Action&&) = delete;
   virtual ~Action() = default;
 
-  void add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const;  // const because Actions are stored in a set.
+  void add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;  // const because Actions are stored in a set.
 
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }

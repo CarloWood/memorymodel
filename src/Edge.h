@@ -1,13 +1,13 @@
 #pragma once
 
 #include "debug.h"
-#include "NodePtr.h"
 #include "Condition.h"
 #include "EdgeType.h"
 #include "utils/is_power_of_two.h"
 #include <iosfwd>
 
 class Edge;
+class NodeBase;
 
 enum EndPointType {
   undirected,
@@ -24,11 +24,11 @@ class EndPoint
  private:
   Edge* m_edge;
   EndPointType m_type;
-  NodePtr m_other_node;
+  NodeBase* m_other_node;
   bool m_edge_owner;            // Owns the allocation of m_edge.
 
  public:
-  EndPoint(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) :
+  EndPoint(Edge* edge, EndPointType type, NodeBase* other_node, bool edge_owner) :
       m_edge(edge), m_type(type), m_other_node(other_node), m_edge_owner(edge_owner) { }
   // Move constructor; needed because memory of a std::vector might need reallocation.
   EndPoint(EndPoint&& end_point) :
@@ -45,7 +45,7 @@ class EndPoint
   inline EdgeType edge_type() const;
   Edge* edge() const { return m_edge; }
   EndPointType type() const { return m_type; }
-  NodePtr other_node() const { return m_other_node; }
+  NodeBase* other_node() const { return m_other_node; }
   bool primary_tail(EdgeMaskType edge_mask_type) const;
   bool primary_head(EdgeMaskType edge_mask_type) const;
 
@@ -58,7 +58,7 @@ class Edge
  private:
   EdgeType m_edge_type;
   Condition m_condition;
-  NodePtr m_tail_node;    // The Node from where the edge starts:  tail_node ---> head_node.
+  NodeBase const* m_tail_node;    // The Node from where the edge starts:  tail_node ---> head_node.
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -67,7 +67,7 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type, NodePtr const& tail_node, Condition const& condition) :
+  Edge(EdgeType edge_type, NodeBase const* tail_node, Condition const& condition) :
       m_edge_type(edge_type),
       m_condition(condition),
       m_tail_node(tail_node)

@@ -42,7 +42,7 @@ class NodeBase : public Action
 
   // Add a new edge of type edge_type from tail_node to head_node.
   // Returns true if such an edge did not already exist and a new edge was inserted.
-  static bool add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition);
+  static bool add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition);
   void sequenced_before_side_effect_sequenced_before_value_computation() const;
   void sequenced_before_value_computation() const;
 
@@ -56,7 +56,7 @@ class NodeBase : public Action
   friend std::ostream& operator<<(std::ostream& os, NodeBase const& node);
 
  private:
-  bool add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const;
+  bool add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;
   void update_exists() const;
 };
 

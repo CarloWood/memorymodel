@@ -10,7 +10,7 @@
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  bool success = NodeBase::add_edge(edge_type, tail_node, head_node, condition);
+  bool success = NodeBase::add_edge(edge_type, &*tail_node, &*head_node, condition);
   if (success)  // Successfully added a new edge.
   {
 #ifdef CWDEBUG
@@ -91,8 +91,8 @@ void Graph::generate_dot_file(std::string const& filename) const
 
       std::string color = edge_color(end_point.edge_type());
       Edge* edge = end_point.edge();
-      NodePtr tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
-      NodePtr head_node = ((end_point.type() == tail) ? end_point.other_node() : node);
+      NodeBase const* tail_node = ((end_point.type() == tail) ? &*node : end_point.other_node());
+      NodeBase const* head_node = ((end_point.type() == tail) ? end_point.other_node() : &*node);
       out << "node" << tail_node->name() << " -> "
              "node" << head_node->name() <<
              " [label=<<font color=\"" << color << "\">" << edge->name();

@@ -180,13 +180,13 @@ bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
          *end_point1.m_other_node == *end_point2.m_other_node;
 }
 
-void Action::add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const
+void Action::add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const
 {
   DoutEntering(*dc::edge[type], "Action::add_end_point(" << *edge << ", " << type << ", " << *other_node << ", " << edge_owner << ") [this = " << *this << "]");
   m_end_points.emplace_back(edge, type, other_node, edge_owner);
 }
 
-bool NodeBase::add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const
+bool NodeBase::add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const
 {
   Action::add_end_point(edge, type, other_node, edge_owner);
   end_points_type::iterator begin = m_end_points.begin();
@@ -229,7 +229,7 @@ void NodeBase::update_exists() const
 }
 
 //static
-bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
+bool NodeBase::add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition)
 {
   DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << condition << ")");
   // edge_type may not be composed.
