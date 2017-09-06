@@ -17,6 +17,6 @@ std::string Location::kind_str(Kind kind)
 
 std::ostream& operator<<(std::ostream& os, Location const& location)
 {
-  os << "{id:" << location.m_id << ", \"" << location.m_name << "\", " << location.m_kind << '}';
+  os << "{id:" << location.m_tag.id << ", \"" << location.m_name << "\", " << location.m_kind << '}';
   return os;
 }

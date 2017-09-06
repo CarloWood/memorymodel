@@ -8,14 +8,6 @@
 #include "BooleanExpression.h"
 #include <sstream>
 
-NodeBase::NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) :
-  m_id(next_node_id), m_thread(thread), m_exists(true)
-{
-  locations_type const& locations{Context::instance().locations()};
-  m_location = std::find_if(locations.begin(), locations.end(), [variable](Location const& loc) { return loc.id() == variable.id; });
-  ASSERT(m_location != locations.end());
-}
-
 char const* memory_order_str(std::memory_order memory_order)
 {
   switch (memory_order)
@@ -148,67 +140,6 @@ void CEWNode::print_code(std::ostream& os) const
     os << m_desired;
 }
 
-char const* Edge::name() const
-{
-  switch (m_edge_type)
-  {
-    case edge_sb: return "sb";
-    case edge_asw: return "asw";
-    case edge_dd: return "dd";
-    case edge_cd: return "cd";
-    case edge_rf: return "rf";
-    case edge_tot: return "tot";
-    case edge_mo: return "mo";
-    case edge_sc: return "sc";
-    case edge_lo: return "lo";
-    case edge_hb: return "hb";
-    case edge_vse: return "vse";
-    case edge_vsses: return "vsses";
-    case edge_ithb: return "ithb";
-    case edge_dob: return "dob";
-    case edge_cad: return "cad";
-    case edge_sw: return "sw";
-    case edge_hrs: return "hrs";
-    case edge_rs: return "rs";
-    case edge_dr: return "dr";
-    case edge_ur: return "ur";
-  }
-  return "???";
-}
-
-char const* edge_str(EdgeType edge_type)
-{
-  switch (edge_type)
-  {
-    case edge_sb: return "Sequenced-Before";
-    case edge_asw: return "Additional-Synchronizes-With";
-    case edge_dd: return "Data-Dependency";
-    case edge_cd: return "Control-Dependency";
-    AI_CASE_RETURN(edge_rf);
-    AI_CASE_RETURN(edge_tot);
-    AI_CASE_RETURN(edge_mo);
-    AI_CASE_RETURN(edge_sc);
-    AI_CASE_RETURN(edge_lo);
-    AI_CASE_RETURN(edge_hb);
-    AI_CASE_RETURN(edge_vse);
-    AI_CASE_RETURN(edge_vsses);
-    AI_CASE_RETURN(edge_ithb);
-    AI_CASE_RETURN(edge_dob);
-    AI_CASE_RETURN(edge_cad);
-    AI_CASE_RETURN(edge_sw);
-    AI_CASE_RETURN(edge_hrs);
-    AI_CASE_RETURN(edge_rs);
-    AI_CASE_RETURN(edge_dr);
-    AI_CASE_RETURN(edge_ur);
-  }
-  return "UNKNOWN edge_type";
-}
-
-std::ostream& operator<<(std::ostream& os, EdgeType edge_type)
-{
-  return os << edge_str(edge_type);
-}
-
 char const* end_point_str(EndPointType end_point_type)
 {
   switch (end_point_type)
@@ -295,12 +226,13 @@ void NodeBase::update_exists() const
 bool NodeBase::add_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
   DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << condition << ")");
+  // edge_type may not be composed.
   Edge* new_edge = new Edge(edge_type, tail_node, condition);
   // Call tail first!
-  bool success1 = tail_node->add_end_point(new_edge, is_directed(edge_type) ? tail : undirected, head_node, false);
+  bool success1 = tail_node->add_end_point(new_edge, edge_type.is_directed() ? tail : undirected, head_node, false);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
   // When false is returned, new_edge has been already deleted.
-  bool success2 = head_node->add_end_point(new_edge, is_directed(edge_type) ? head : undirected, tail_node, true);
+  bool success2 = head_node->add_end_point(new_edge, edge_type.is_directed() ? head : undirected, tail_node, true);
   ASSERT(success1 == success2);
   if (success2)
   {

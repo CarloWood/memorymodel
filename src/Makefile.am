@@ -30,8 +30,15 @@ libcppmem_a_SOURCES = \
 		 Graph.h \
 		 NodePtr.cxx \
 		 NodePtr.h \
+		 Action.cxx \
+		 Action.h \
+		 Action.inl \
 		 Node.cxx \
 		 Node.h \
+		 EdgeType.cxx \
+		 EdgeType.h \
+		 Edge.cxx \
+		 Edge.h \
 		 EvaluationNodePtrs.cxx \
 		 EvaluationNodePtrs.h \
 		 Conditional.cxx \

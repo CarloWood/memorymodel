@@ -3,6 +3,8 @@
 #include "Node.h"
 #include "debug.h"
 #include "NodePtrConditionPair.h"
+#include "Action.inl"   // Action::for_actions.
+#include <memory>
 #include <set>
 #include <stack>
 
@@ -18,6 +20,20 @@ class Graph
  public:
   Graph() :
     m_next_node_id{0} { }
+
+  template <typename FOLLOW>
+  void for_actions(
+      FOLLOW follow,                                            // Follow this end point?
+      std::function<bool(Action const&)> const& filter,         // Call found() for this Action?
+      std::function<bool(Action const&)> const& found) const
+  {
+    if (m_nodes.empty())
+      return;
+    Action const& action{**m_nodes.begin()};      // The first Action of the program.
+    if (filter(action))
+      found(action);
+    action.for_actions(follow, filter, found);
+  }
 
   void generate_dot_file(std::string const& filename) const;
 

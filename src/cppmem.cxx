@@ -736,16 +736,58 @@ int main(int argc, char* argv[])
   //==========================================================================
   // Brute force approach.
 
-  // Find all memory locations that are involved.
+  struct FollowOpsemTails
+  {
+    bool operator()(EndPoint const& end_point) const
+    {
+      return end_point.edge()->edge_type().is_opsem() && end_point.primary_tail(edge_opsem);
+    }
+  };
+
+  struct FollowSBHeads
+  {
+    bool operator()(EndPoint const& end_point) const
+    {
+      return end_point.edge()->edge_type() == edge_sb && end_point.primary_head(edge_sb);
+    }
+  };
+
+  FollowOpsemTails follow_opsem_tails;
+
+  // Run over all memory locations.
   for (auto&& location : Context::instance().locations())
   {
-    Dout(dc::notice, location);
-  }
+    Dout(dc::notice, "Considering location " << location);
 
-  // Find all actions that are used.
-  for (auto&& action : graph)
-  {
-    Dout(dc::notice, *action << " works on location " << action->location()); // action is a std::unique_ptr<NodeBase>.
+    // Find all read actions for this location.
+    graph.for_actions(follow_opsem_tails,
+        [&location](Action const& action)       // filter
+        {
+          return action.location() == location && action.is_read();
+        },
+        [&location](Action const& read_action)  // found
+        {
+          FollowSBHeads follow_sb_heads;
+          Dout(dc::notice, "Found read " << read_action);
+
+          // Look for the last write (if any) on the same thread.
+          bool found = read_action.for_actions(follow_sb_heads,
+              [&location](Action const& action)                 // filter
+              {
+                return action.location() == location && action.is_write();
+              },
+              [&read_action](Action const& write_action)        // found
+              {
+                Dout(dc::notice, "* " << write_action);
+                NodeBase::add_edge(edge_rf, write_action, read_action, Condition());
+                return true;                                    // Stop.
+              }
+          );
+          if (!found)
+            Dout(dc::notice, "No previous write.");
+          return false;                         // Continue;
+        }
+    );
   }
 
   // Run over all possible flow-control paths.

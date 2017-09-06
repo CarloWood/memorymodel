@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ast_tag.h"
+#include "TagCompare.h"
 #include <string>
 #include <iosfwd>
 #include <set>
@@ -16,18 +16,19 @@ class Location
   };
 
  private:
-  int m_id;
+  ast::tag m_tag;
   std::string m_name;
   Kind m_kind;
 
  public:
-  Location(int id, std::string const& name, Kind kind) : m_id(id), m_name(name), m_kind(kind) { }
+  Location(int id, std::string const& name, Kind kind) : m_tag(id), m_name(name), m_kind(kind) { }
 
   // Accessors.
-  //int id() const { return m_id; }
-  ast::tag tag() const { return ast::tag{m_id}; }
+  ast::tag tag() const { return m_tag; }
   std::string const& name() const { return m_name; }
   Kind kind() const { return m_kind; }
+  bool operator==(Location const& location) const { return m_tag == location.m_tag; }
+  bool operator==(ast::tag variable) const { return m_tag == variable; }
 
   static std::string kind_str(Kind kind);
   friend std::ostream& operator<<(std::ostream& os, Location const& location);
@@ -39,7 +40,7 @@ struct LocationCompare
 {
   bool operator()(Location const& l1, Location const& l2) const
   {
-    return l1.id() < l2.id();
+    return TagCompare::less(l1.tag(), l2.tag());
   }
 };
 
