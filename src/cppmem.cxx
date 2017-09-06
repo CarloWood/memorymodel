@@ -222,7 +222,7 @@ Evaluation execute_operator_list_expression(T const& expr)
     {
       Dout(dc::sb_edge, "Boolean expression (operator || or &&), or shift expression (operator << || >>)");
       DebugMarkUp;
-      Context::instance().add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, result, rhs);
     }
     result.OP(get_operator<T>(tail), std::move(rhs));
   }
@@ -321,7 +321,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr)
       result = atomic_fetch_add_explicit.m_memory_location_id;
       result.OP(additive_ado_add, execute_expression(atomic_fetch_add_explicit.m_expression));
       NodePtr rmw_node = result.RMW(atomic_fetch_add_explicit.m_memory_location_id, atomic_fetch_add_explicit.m_memory_order);
-      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node);
       break;
     }
     case ast::PE_atomic_fetch_sub_explicit:
@@ -330,7 +330,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr)
       result = atomic_fetch_sub_explicit.m_memory_location_id;
       result.OP(additive_ado_sub, execute_expression(atomic_fetch_sub_explicit.m_expression));
       NodePtr rmw_node = result.RMW(atomic_fetch_sub_explicit.m_memory_location_id, atomic_fetch_sub_explicit.m_memory_order);
-      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, *rmw_node.get<RMWNode>()->get_evaluation(), rmw_node);
       break;
     }
     case ast::PE_atomic_compare_exchange_weak_explicit:
@@ -344,7 +344,7 @@ Evaluation execute_operator_list_expression(ast::unary_expression const& expr)
               atomic_compare_exchange_weak_explicit.m_desired,
               atomic_compare_exchange_weak_explicit.m_succeed,
               atomic_compare_exchange_weak_explicit.m_fail);
-      Context::instance().add_edges(edge_sb, *cew_node.get<CEWNode>()->get_evaluation(), cew_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, *cew_node.get<CEWNode>()->get_evaluation(), cew_node);
       break;
     }
     case ast::PE_load_call:
@@ -380,7 +380,7 @@ Evaluation execute_expression(ast::assignment_expression const& expression)
         ast::assignment_expression const& assignment_expression{boost::fusion::get<1>(conditional_expression.m_conditional_expression_tail.get())};
         Evaluation true_evaluation = execute_expression(expression);
         Evaluation false_evaluation = execute_expression(assignment_expression);
-        EvaluationNodePtrs before_node_ptrs = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+        EvaluationNodePtrs before_node_ptrs = result.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(edge_sb));
         result.conditional_operator(before_node_ptrs, std::move(true_evaluation), std::move(false_evaluation));
       }
       break;
@@ -415,7 +415,7 @@ Evaluation execute_expression(ast::expression const& expression)
   for (auto const& assignment_expression : expression.m_chained)
   {
     Evaluation rhs = execute_expression(assignment_expression);
-    Context::instance().add_edges(edge_sb, result, rhs COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+    Context::instance().add_edges(edge_sb, result, rhs);
     result.comma_operator(std::move(rhs));
   }
   return result;
@@ -447,7 +447,7 @@ void execute_statement(ast::statement const& statement)
       NodePtr write_node = value.write(store_call.m_memory_location_id, store_call.m_memory_order);
       // Side-effects and value-computations of function arguments are sequenced before the side-effects and value-computations of the function body.
       // The evaluation of the write_node is the function argument passed here (the previous value of 'value' as returned by execute_expression()).
-      Context::instance().add_edges(edge_sb, *write_node.get<WriteNode>()->get_evaluation(), write_node COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      Context::instance().add_edges(edge_sb, *write_node.get<WriteNode>()->get_evaluation(), write_node);
       break;
     }
     case ast::SN_function_call:

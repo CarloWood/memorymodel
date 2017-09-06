@@ -105,7 +105,7 @@ void Context::write(ast::tag variable, Evaluation&& evaluation, bool side_effect
                                                                                           // decrement/assignment expression that write_node must be
                                                                                           // sequenced before.
       }
-  COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+  COMMA_DEBUG_ONLY(edge_sb));
   // Fake a (non-existing) pseudo node representing the value-computation after the write node.
   if (side_effect_sb_value_computation)
     write_node_ptr->sequenced_before_value_computation();
@@ -194,11 +194,10 @@ Evaluation Context::unlock(ast::tag mutex)
 void Context::add_edges(
     EdgeType edge_type,
     EvaluationNodePtrs const& before_node_ptrs,
-    EvaluationNodePtrs const& after_node_ptrs
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+    EvaluationNodePtrs const& after_node_ptrs,
     Condition const& condition)
 {
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_node_ptrs << ", " << after_node_ptrs << ", " << condition << ").");
+  DoutEntering(*dc::edge[edge_type], "Context::add_edges(" << edge_type << ", " << before_node_ptrs << ", " << after_node_ptrs << ", " << condition << ").");
   for (auto&& before_node_ptr : before_node_ptrs)
     for (auto&& after_node_ptr : after_node_ptrs)
       m_graph->new_edge(edge_type, before_node_ptr, after_node_ptr, condition);
@@ -221,30 +220,27 @@ void Context::add_sb_or_asw_edges(
 void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
-    NodePtr const& after_node
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+    NodePtr const& after_node)
 {
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << *after_node << ").");
+  DoutEntering(*dc::edge[edge_type], "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << *after_node << ").");
   before_evaluation.for_each_node(NodeRequestedType::heads,
       [this, edge_type, &after_node](NodePtr const& before_node)
       {
         m_graph->new_edge(edge_type, before_node, after_node);
       }
-  COMMA_DEBUG_ONLY(debug_channel));
+  COMMA_DEBUG_ONLY(edge_type));
 }
 
 void Context::add_edges(
     EdgeType edge_type,
     Evaluation const& before_evaluation,
-    Evaluation const& after_evaluation
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel))
+    Evaluation const& after_evaluation)
 {
-  DoutEntering(debug_channel, "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << after_evaluation << ").");
+  DoutEntering(*dc::edge[edge_type], "Context::add_edges(" << edge_type << ", " << before_evaluation << ", " << after_evaluation << ").");
   add_edges(
       edge_type,
-      before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(debug_channel)),
-      after_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(debug_channel))
-      COMMA_DEBUG_ONLY(debug_channel));
+      before_evaluation.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(edge_type)),
+      after_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(edge_type)));
 }
 
 //static

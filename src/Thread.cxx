@@ -125,14 +125,14 @@ void Thread::detect_full_expression_end(Evaluation& full_expression)
     ASSERT(!full_expression.is_allocated());
 
     EvaluationNodePtrs full_expression_nodes =
-        full_expression.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+        full_expression.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(edge_sb));
     Dout(dc::fullexpr, "Found nodes in full-expression: " << full_expression_nodes);
 
     if (!full_expression_nodes.empty())
     {
       Context::instance().add_sb_or_asw_edges(m_unconnected_heads, full_expression_nodes);
 
-      m_unconnected_heads = full_expression.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      m_unconnected_heads = full_expression.get_nodes(NodeRequestedType::heads COMMA_DEBUG_ONLY(edge_sb));
       Dout(dc::fullexpr, "New m_unconnected_heads is: " << m_unconnected_heads << ".");
     }
   }

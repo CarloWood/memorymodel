@@ -85,8 +85,7 @@ class Context : public Singleton<Context>
   void add_edges(
       EdgeType edge_type,
       EvaluationNodePtrs const& before_node_ptrs,
-      EvaluationNodePtrs const& after_node_ptrs
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel),
+      EvaluationNodePtrs const& after_node_ptrs,
       Condition const& condition = Condition());
 
   // Add edges of type sb or asw between before_node_ptr_condition_pairs and after_node_ptrs.
@@ -98,15 +97,13 @@ class Context : public Singleton<Context>
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
-      Evaluation const& after_evaluation
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+      Evaluation const& after_evaluation);
 
   // Add edges of type edge_type between heads of before_evaluation and after_node.
   void add_edges(
       EdgeType edge_type,
       Evaluation const& before_evaluation,
-      NodePtr const& after_node
-      COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel));
+      NodePtr const& after_node);
 
   // Register a branch condition.
   ConditionalBranch add_condition(std::unique_ptr<Evaluation> const& condition)

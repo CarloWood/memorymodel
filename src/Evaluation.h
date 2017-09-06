@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "EvaluationNodePtrs.h"
 #include "NodePtr.h"
+#include "EdgeType.h"
 #include <iosfwd>
 #include <vector>
 #include <set>
@@ -139,7 +140,7 @@ class Evaluation
   NodePtr RMW(ast::tag tag, std::memory_order mo);
   NodePtr compare_exchange_weak(ast::tag tag, ast::tag expected, int desired, std::memory_order success, std::memory_order fail);
   void add_side_effect(NodePtr const& node);
-  void destruct();
+  void destruct(DEBUG_ONLY(EdgeType edge_type));
   void swap_sum();
   void strip_rhs();
 
@@ -147,8 +148,8 @@ class Evaluation
   friend char const* state_str(State state);
 
   void print_on(std::ostream& os) const;
-  void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
-  EvaluationNodePtrs get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const;
+  void for_each_node(NodeRequestedType const& requested_type, std::function<void(NodePtr const&)> const& action COMMA_DEBUG_ONLY(EdgeType edge_type)) const;
+  EvaluationNodePtrs get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(EdgeType edge_type)) const;
 
   // Accessors used to print RMW node labels. See RMWNode::print_code.
   State state() const { return m_state; }

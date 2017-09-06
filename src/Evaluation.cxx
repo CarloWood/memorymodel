@@ -729,7 +729,7 @@ void Evaluation::unary_operator(ast::unary_operators op)
   Dout(dc::finish, *this << '.');
 }
 
-void Evaluation::destruct()
+void Evaluation::destruct(DEBUG_ONLY(EdgeType edge_type))
 {
   std::vector<NodePtr> nodes;
   for_each_node(NodeRequestedType::all,
@@ -737,7 +737,7 @@ void Evaluation::destruct()
       {
         nodes.push_back(node);
       }
-      COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::notice)
+      COMMA_DEBUG_ONLY(edge_type)
   );
   for (NodePtr node : nodes)
     Context::instance().graph().remove_node(node);
@@ -748,8 +748,8 @@ void Evaluation::conditional_operator(
     Evaluation&& true_evaluation,
     Evaluation&& false_evaluation)
 {
-  EvaluationNodePtrs true_nodes = true_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
-  EvaluationNodePtrs false_nodes = false_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+  EvaluationNodePtrs true_nodes = true_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(edge_sb));
+  EvaluationNodePtrs false_nodes = false_evaluation.get_nodes(NodeRequestedType::tails COMMA_DEBUG_ONLY(edge_sb));
   DoutEntering(dc::valuecomp|continued_cf, "Evaluation::conditional_operator(" << true_evaluation << ", " << false_evaluation << ") [this = " << *this << "] ==> ");
   if (m_state == literal)
   {
@@ -757,14 +757,14 @@ void Evaluation::conditional_operator(
     if (m_simple.m_literal)
     {
       *this = std::move(true_evaluation);
-      false_evaluation.destruct();
-      Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      false_evaluation.destruct(DEBUG_ONLY(edge_sb));
+      Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes);
     }
     else
     {
       *this = std::move(false_evaluation);
-      true_evaluation.destruct();
-      Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge));
+      true_evaluation.destruct(DEBUG_ONLY(edge_sb));
+      Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes);
     }
   }
   else
@@ -777,8 +777,8 @@ void Evaluation::conditional_operator(
     m_lhs = make_unique(std::move(true_evaluation));
     m_rhs = make_unique(std::move(false_evaluation));
     auto condition = Context::instance().add_condition(m_condition);
-    Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(true));
-    Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes COMMA_DEBUG_ONLY(DEBUGCHANNELS::dc::sb_edge), condition(false));
+    Context::instance().add_edges(edge_sb, before_node_ptrs, true_nodes, condition(true));
+    Context::instance().add_edges(edge_sb, before_node_ptrs, false_nodes, condition(false));
   }
   Dout(dc::finish, *this << '.');
 }
@@ -802,8 +802,11 @@ char const* name_Evaluation = "Evaluation";
 void Evaluation::for_each_node(
     NodeRequestedType const& requested_type,
     std::function<void(NodePtr const&)> const& action
-    COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
+    COMMA_DEBUG_ONLY(EdgeType edge_type)) const
 {
+#ifdef CWDEBUG
+  libcwd::channel_ct& debug_channel{*DEBUGCHANNELS::dc::edge[edge_type]};
+#endif
   DoutEntering(debug_channel, "Evaluation::for_each_node(" << requested_type << ", ...) [this = " << *this << "].");
   ASSERT(m_state == variable || (m_value_computations.empty() && m_side_effects.empty()));
   Dout(debug_channel, m_state);
@@ -832,7 +835,7 @@ void Evaluation::for_each_node(
           Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
         if (WriteNode const* write_node = node.get<WriteNode>())   // RMW's are stored in m_value_computations and are writes!
-          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       }
       Dout(debug_channel, "Size of m_side_effects = " << m_side_effects.size());
       for (auto&& node : m_side_effects)
@@ -848,46 +851,46 @@ void Evaluation::for_each_node(
           Dout(debug_channel, "Call to action(" << *node << ") was skipped.");
         }
         if (WriteNode const* write_node = node.get<WriteNode>())
-          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+          write_node->get_evaluation()->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       }
       break;
     }
     case pre:
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
     case post:
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
     case unary:
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
     case binary:
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
     case condition:
-      m_condition->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_condition->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
     case comma:
-      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
-      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(debug_channel));
+      m_lhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
+      m_rhs->for_each_node(requested_type, action COMMA_DEBUG_ONLY(edge_type));
       break;
   }
 }
 
-EvaluationNodePtrs Evaluation::get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(libcwd::channel_ct& debug_channel)) const
+EvaluationNodePtrs Evaluation::get_nodes(NodeRequestedType const& requested_type COMMA_DEBUG_ONLY(EdgeType edge_type)) const
 {
-  DoutEntering(debug_channel, "Evaluation::get_nodes(" << requested_type << ") [this = " << *this << "]");
+  DoutEntering(*dc::edge[edge_type], "Evaluation::get_nodes(" << requested_type << ") [this = " << *this << "]");
   EvaluationNodePtrs result;
   for_each_node(requested_type,
       [&result](NodePtr const& node_ptr)
       {
         result.push_back(node_ptr);
       }
-  COMMA_DEBUG_ONLY(debug_channel));
-  Dout(debug_channel, "Returning EvaluationNodePtrs: " << result);
+  COMMA_DEBUG_ONLY(edge_type));
+  Dout(*dc::edge[edge_type], "Returning EvaluationNodePtrs: " << result);
   return result;
 }
 
