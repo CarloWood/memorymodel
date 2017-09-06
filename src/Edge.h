@@ -46,8 +46,8 @@ class EndPoint
   Edge* edge() const { return m_edge; }
   EndPointType type() const { return m_type; }
   NodePtr other_node() const { return m_other_node; }
-  bool primary_tail(EdgeType edge_type) const;
-  bool primary_head(EdgeType edge_type) const;
+  bool primary_tail(EdgeMaskType edge_mask_type) const;
+  bool primary_head(EdgeMaskType edge_mask_type) const;
 
   friend bool operator==(EndPoint const& end_point1, EndPoint const& end_point2);
   friend std::ostream& operator<<(std::ostream& os, EndPoint const& end_point);
@@ -73,7 +73,6 @@ class Edge
       m_tail_node(tail_node)
       COMMA_DEBUG_ONLY(m_id(s_id++))
       {
-        ASSERT(utils::is_power_of_two(edge_type.mask));
         Dout(dc::sb_edge(edge_type == edge_sb)|
              dc::asw_edge(edge_type == edge_asw),
              "Creating " << edge_type << " Edge " << m_id << '.');
@@ -81,7 +80,8 @@ class Edge
 
   EdgeType edge_type() const { return m_edge_type; }
   Condition const& condition() const { return m_condition; }
-  char const* name() const { return m_edge_type.name(); }
+  char const* name() const { return edge_name(m_edge_type); }
+  bool is_opsem() const { return EdgeMaskType{m_edge_type}.is_opsem(); }
 
   inline bool is_conditional() const;
   inline boolean::Expression exists() const;

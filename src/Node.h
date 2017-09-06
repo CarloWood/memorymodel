@@ -4,7 +4,6 @@
 #include "Evaluation.h"
 #include "Condition.h"
 #include "SBNodePresence.h"
-#include "utils/ulong_to_base.h"
 #include <string>
 
 // Base class for all nodes in the graph.
@@ -48,11 +47,6 @@ class NodeBase : public Action
   void sequenced_before_value_computation() const;
 
   // Accessors.
-  ast::tag tag() const { return m_location->tag(); }
-  Location const& location() const { return *m_location; }
-  std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
-  ThreadPtr const thread() const { return m_thread; }
-  end_points_type const& get_end_points() const { return m_end_points; }
   boolean::Expression const& exists() const { return m_exists; }
 
   // Less-than comparator for Graph::m_nodes.

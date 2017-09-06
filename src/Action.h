@@ -4,6 +4,7 @@
 #include "Location.h"
 #include "ast_tag.h"
 #include "Thread.h"
+#include "utils/ulong_to_base.h"
 #include <vector>
 #include <memory>
 
@@ -45,14 +46,15 @@ class Action
   Action(Action&&) = delete;
   virtual ~Action() = default;
 
-  Location const& location() const { return *m_location; }
+  void add_end_point(Edge* edge, EndPointType type, NodePtr const& other_node, bool edge_owner) const;  // const because Actions are stored in a set.
+
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }
 
-  Edge* first_of(EndPointType end_point_type, EdgeType edge_type) const
+  Edge* first_of(EndPointType end_point_type, EdgeMaskType edge_mask_type) const
   {
     for (auto&& end_point : m_end_points)
-      if (end_point.type() == end_point_type && (end_point.edge_type() & edge_type))
+      if (end_point.type() == end_point_type && (end_point.edge_type() & edge_mask_type))
         return end_point.edge();
     return nullptr;
   }
@@ -64,6 +66,11 @@ class Action
     std::function<bool(Action const&)> const& found) const;
 
   // Accessors.
+  std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
+  ThreadPtr const thread() const { return m_thread; }
+  ast::tag tag() const { return m_location->tag(); }
+  Location const& location() const { return *m_location; }
+  end_points_type const& get_end_points() const { return m_end_points; }
   virtual Kind kind() const = 0;
 
   friend std::ostream& operator<<(std::ostream& os, Action const& action);

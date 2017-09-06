@@ -3,49 +3,82 @@
 #include <iosfwd>
 #include <cstdint>
 
-struct EdgeTypePod {
-  uint32_t mask;
+enum EdgeType {
+  edge_sb,
+  edge_asw,
+  edge_dd,
+  edge_cd,
+  edge_rf,
+  edge_tot,
+  edge_mo,
+  edge_sc,
+  edge_lo,
+  edge_hb,
+  edge_vse,
+  edge_vsses,
+  edge_ithb,
+  edge_dob,
+  edge_cad,
+  edge_sw,
+  edge_hrs,
+  edge_rs,
+  edge_dr,
+  edge_ur,
+  edge_bits     // Number of bits in the mask below.
 };
 
-EdgeTypePod const edge_sb    = { 0x1 };        // Sequenced-Before.
-EdgeTypePod const edge_asw   = { 0x2 };        // Additional-Synchronizes-With.
-EdgeTypePod const edge_dd    = { 0x4 };        // Data-Dependency.
-EdgeTypePod const edge_cd    = { 0x8 };        // Control-Dependency.
-EdgeTypePod const edge_opsem = { edge_sb.mask | edge_asw.mask | edge_dd.mask | edge_cd.mask };
-// Next we have several relations that are existentially quantified: for each choice of control-flow paths = { 0x };
-// the program enumerates all possible alternatives of the following:
-EdgeTypePod const edge_rf    = { 0x10 };       // The Reads-From relation, from writes to all the reads that read from them.
-EdgeTypePod const edge_tot   = { 0x20 };       // The TOTal order of the tot model.
-EdgeTypePod const edge_mo    = { 0x40 };       // The Modification Order (or coherence order) over writes to atomic locations, total per location.
-EdgeTypePod const edge_sc    = { 0x80 };       // A total order over the Sequentially Consistent atomic actions.
-EdgeTypePod const edge_lo    = { 0x100 };      // The Lock Order.
-EdgeTypePod const edge_witness = { edge_rf.mask |edge_mo.mask |edge_sc.mask };
-// Finally there are derived relations = { 0x }; calculated by the model from the relations above:
-EdgeTypePod const edge_hb    = { 0x200 };      // Happens-before.
-EdgeTypePod const edge_vse   = { 0x400 };      // Visible side effects.
-EdgeTypePod const edge_vsses = { 0x800 };      // Visible sequences of side effects.
-EdgeTypePod const edge_ithb  = { 0x1000 };     // Inter-thread happens-before.
-EdgeTypePod const edge_dob   = { 0x2000 };     // Dependency-ordered-before.
-EdgeTypePod const edge_cad   = { 0x4000 };     // Carries-a-dependency-to.
-EdgeTypePod const edge_sw    = { 0x8000 };     // Synchronizes-with.
-EdgeTypePod const edge_hrs   = { 0x10000 };    // Hypothetical release sequence.
-EdgeTypePod const edge_rs    = { 0x20000 };    // Release sequence.
-EdgeTypePod const edge_dr    = { 0x40000 };    // Inter-thread data races, unrelated by hb.
-EdgeTypePod const edge_ur    = { 0x80000 };    // Intra-thread unsequenced races = 0x; unrelated by sb.
-EdgeTypePod const edge_undirected = { edge_dr.mask | edge_ur.mask };
+using edge_mask_type = uint32_t;
 
-int const edge_bits = 20;
-
-struct EdgeType : public EdgeTypePod
+constexpr edge_mask_type to_mask(EdgeType edge_type)
 {
-  explicit EdgeType(uint32_t m) { mask = m; }
-  EdgeType(EdgeTypePod pod) { mask = pod.mask; }
-  friend bool operator&(EdgeTypePod edge_type1, EdgeTypePod edge_type2) { return edge_type1.mask & edge_type2.mask; }
-  bool is_opsem() const { return mask & edge_opsem.mask; }
-  bool is_directed() const { return !(mask & edge_undirected.mask); }
-  bool operator==(EdgeTypePod edge_type) const { return mask == edge_type.mask; }
-  char const* color() const;
-  char const* name() const;
+  return edge_mask_type{1} << edge_type;
+}
+
+struct EdgeMaskTypePod {
+  edge_mask_type mask;
 };
+
+EdgeMaskTypePod constexpr edge_mask_sb    = { to_mask(edge_sb) };       // Sequenced-Before.
+EdgeMaskTypePod constexpr edge_mask_asw   = { to_mask(edge_asw) };      // Additional-Synchronizes-With.
+EdgeMaskTypePod constexpr edge_mask_dd    = { to_mask(edge_dd) };       // Data-Dependency.
+EdgeMaskTypePod constexpr edge_mask_cd    = { to_mask(edge_cd) };       // Control-Dependency.
+EdgeMaskTypePod constexpr edge_mask_opsem = { edge_mask_sb.mask | edge_mask_asw.mask | edge_mask_dd.mask | edge_mask_cd.mask };
+// Next we have several relations that are existentially quantified: for each choice of control-flow paths;
+// the program enumerates all possible alternatives of the following:
+EdgeMaskTypePod constexpr edge_mask_rf    = { to_mask(edge_rf) };       // The Reads-From relation, from writes to all the reads that read from them.
+EdgeMaskTypePod constexpr edge_mask_tot   = { to_mask(edge_tot) };      // The TOTal order of the tot model.
+EdgeMaskTypePod constexpr edge_mask_mo    = { to_mask(edge_mo) };       // The Modification Order (or coherence order) over writes to atomic locations, total per location.
+EdgeMaskTypePod constexpr edge_mask_sc    = { to_mask(edge_sc) };       // A total order over the Sequentially Consistent atomic actions.
+EdgeMaskTypePod constexpr edge_mask_lo    = { to_mask(edge_lo) };       // The Lock Order.
+EdgeMaskTypePod constexpr edge_mask_witness = { edge_mask_rf.mask |edge_mask_mo.mask |edge_mask_sc.mask };
+// Finally there are derived relations; calculated by the model from the relations above:
+EdgeMaskTypePod constexpr edge_mask_hb    = { to_mask(edge_hb) };       // Happens-before.
+EdgeMaskTypePod constexpr edge_mask_vse   = { to_mask(edge_vse) };      // Visible side effects.
+EdgeMaskTypePod constexpr edge_mask_vsses = { to_mask(edge_vsses) };    // Visible sequences of side effects.
+EdgeMaskTypePod constexpr edge_mask_ithb  = { to_mask(edge_ithb) };     // Inter-thread happens-before.
+EdgeMaskTypePod constexpr edge_mask_dob   = { to_mask(edge_dob) };      // Dependency-ordered-before.
+EdgeMaskTypePod constexpr edge_mask_cad   = { to_mask(edge_cad) };      // Carries-a-dependency-to.
+EdgeMaskTypePod constexpr edge_mask_sw    = { to_mask(edge_sw) };       // Synchronizes-with.
+EdgeMaskTypePod constexpr edge_mask_hrs   = { to_mask(edge_hrs) };      // Hypothetical release sequence.
+EdgeMaskTypePod constexpr edge_mask_rs    = { to_mask(edge_rs) };       // Release sequence.
+EdgeMaskTypePod constexpr edge_mask_dr    = { to_mask(edge_dr) };       // Inter-thread data races, unrelated by hb.
+EdgeMaskTypePod constexpr edge_mask_ur    = { to_mask(edge_ur) };       // Intra-thread unsequenced races; unrelated by sb.
+EdgeMaskTypePod constexpr edge_mask_undirected = { edge_mask_dr.mask | edge_mask_ur.mask };
+
+struct EdgeMaskType : public EdgeMaskTypePod
+{
+  explicit EdgeMaskType(EdgeType edge_type) { mask = to_mask(edge_type); }
+  EdgeMaskType(EdgeMaskTypePod pod) { mask = pod.mask; }
+  friend bool operator&(EdgeMaskTypePod edge_mask_type1, EdgeMaskTypePod edge_mask_type2) { return edge_mask_type1.mask & edge_mask_type2.mask; }
+  friend bool operator&(EdgeType edge_type, EdgeMaskTypePod edge_mask_type) { return to_mask(edge_type) & edge_mask_type.mask; }
+  friend bool operator&(EdgeMaskTypePod edge_mask_type, EdgeType edge_type) { return to_mask(edge_type) & edge_mask_type.mask; }
+  bool is_opsem() const { return mask & edge_mask_opsem.mask; }
+  bool is_directed() const { return !(mask & edge_mask_undirected.mask); }
+  bool operator==(EdgeMaskTypePod edge_mask_type) const { return mask == edge_mask_type.mask; }
+};
+
+char const* edge_color(EdgeType edge_type);
+char const* edge_name(EdgeType edge_type);
 
 std::ostream& operator<<(std::ostream& os, EdgeType edge_type);
+std::ostream& operator<<(std::ostream& os, EdgeMaskType edge_mask_type);

@@ -740,7 +740,7 @@ int main(int argc, char* argv[])
   {
     bool operator()(EndPoint const& end_point) const
     {
-      return end_point.edge()->edge_type().is_opsem() && end_point.primary_tail(edge_opsem);
+      return end_point.edge()->is_opsem() && end_point.primary_tail(edge_mask_opsem);
     }
   };
 
@@ -748,7 +748,7 @@ int main(int argc, char* argv[])
   {
     bool operator()(EndPoint const& end_point) const
     {
-      return end_point.edge()->edge_type() == edge_sb && end_point.primary_head(edge_sb);
+      return end_point.edge()->edge_type() == edge_sb && end_point.primary_head(edge_mask_sb);
     }
   };
 
@@ -779,7 +779,7 @@ int main(int argc, char* argv[])
               [&read_action](Action const& write_action)        // found
               {
                 Dout(dc::notice, "* " << write_action);
-                NodeBase::add_edge(edge_rf, write_action, read_action, Condition());
+                //NodeBase::add_edge(edge_rf, write_action, read_action, Condition());
                 return true;                                    // Stop.
               }
           );

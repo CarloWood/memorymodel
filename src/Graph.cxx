@@ -89,7 +89,7 @@ void Graph::generate_dot_file(std::string const& filename) const
       if (*end_point.other_node() < *node)
         continue;
 
-      std::string color = end_point.edge_type().color();
+      std::string color = edge_color(end_point.edge_type());
       Edge* edge = end_point.edge();
       NodePtr tail_node = ((end_point.type() == tail) ? node : end_point.other_node());
       NodePtr head_node = ((end_point.type() == tail) ? end_point.other_node() : node);

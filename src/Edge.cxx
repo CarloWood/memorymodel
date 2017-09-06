@@ -10,12 +10,12 @@
 //  o <-- EndPoint type head
 //  B <-- Action
 
-bool EndPoint::primary_tail(EdgeType edge_type) const
+bool EndPoint::primary_tail(EdgeMaskType edge_mask_type) const
 { 
-  return m_type == tail && m_other_node->first_of(head, edge_type) == m_edge;
+  return m_type == tail && m_other_node->first_of(head, edge_mask_type) == m_edge;
 }
 
-bool EndPoint::primary_head(EdgeType edge_type) const
+bool EndPoint::primary_head(EdgeMaskType edge_mask_type) const
 { 
-  return m_type == head && m_other_node->first_of(tail, edge_type) == m_edge;
+  return m_type == head && m_other_node->first_of(tail, edge_mask_type) == m_edge;
 }
