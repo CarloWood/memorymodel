@@ -11,12 +11,11 @@ class NodeBase : public Action
 {
  protected:
   mutable SBNodePresence m_connected;           // Signifies existing sequenced-before relationships.
-  mutable boolean::Expression m_exists;         // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
   static boolean::Expression const s_one;
 
  public:
   NodeBase() = default;
-  NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : Action(next_node_id, thread, variable), m_exists(true) { }
+  NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : Action(next_node_id, thread, variable) { }
 
   virtual bool is_second_mutex_access() const { return false; }
   virtual std::string type() const = 0;
@@ -41,13 +40,9 @@ class NodeBase : public Action
   bool provides_sequenced_after_something() const;
 
   // Add a new edge of type edge_type from tail_node to head_node.
-  // Returns true if such an edge did not already exist and a new edge was inserted.
-  static bool add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition);
+  static void add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition);
   void sequenced_before_side_effect_sequenced_before_value_computation() const;
   void sequenced_before_value_computation() const;
-
-  // Accessors.
-  boolean::Expression const& exists() const { return m_exists; }
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(NodeBase const& node1, NodeBase const& node2) { return node1.m_id < node2.m_id; }
@@ -56,7 +51,6 @@ class NodeBase : public Action
   friend std::ostream& operator<<(std::ostream& os, NodeBase const& node);
 
  private:
-  bool add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;
   void update_exists() const;
 };
 

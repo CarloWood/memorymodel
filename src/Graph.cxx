@@ -10,22 +10,19 @@
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  bool success = NodeBase::add_edge(edge_type, &*tail_node, &*head_node, condition);
-  if (success)  // Successfully added a new edge.
-  {
+  NodeBase::add_edge(edge_type, &*tail_node, &*head_node, condition);
 #ifdef CWDEBUG
-    Dout(dc::notice|continued_cf,
-        "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
-        " from \"" << *tail_node << "\" to \"" << *head_node << "\"");
-    if (condition.conditional())
-      Dout(dc::continued, " with condition " << condition);
-    Dout(dc::finish, ".");
+  Dout(dc::notice|continued_cf,
+      "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
+      " from \"" << *tail_node << "\" to \"" << *head_node << "\"");
+  if (condition.conditional())
+    Dout(dc::continued, " with condition " << condition);
+  Dout(dc::finish, ".");
 #endif
-    if (edge_type == edge_sb)
-    {
-      tail_node->sequenced_before();
-      head_node->sequenced_after();
-    }
+  if (edge_type == edge_sb)
+  {
+    tail_node->sequenced_before();
+    head_node->sequenced_after();
   }
 }
 

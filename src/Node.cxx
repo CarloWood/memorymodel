@@ -180,30 +180,6 @@ bool operator==(EndPoint const& end_point1, EndPoint const& end_point2)
          *end_point1.m_other_node == *end_point2.m_other_node;
 }
 
-void Action::add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const
-{
-  DoutEntering(*dc::edge[type], "Action::add_end_point(" << *edge << ", " << type << ", " << *other_node << ", " << edge_owner << ") [this = " << *this << "]");
-  m_end_points.emplace_back(edge, type, other_node, edge_owner);
-}
-
-bool NodeBase::add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const
-{
-  Action::add_end_point(edge, type, other_node, edge_owner);
-  end_points_type::iterator begin = m_end_points.begin();
-  end_points_type::iterator last = m_end_points.end();
-  end_points_type::iterator iter = --last;      // Point to just added element.
-  while (iter != begin)
-    if (AI_UNLIKELY(*last == *--iter))          // Is added end point equal to already existing one?
-    {
-      // End point already existed.
-      m_end_points.pop_back();
-      ASSERT(false); // FIXME: does this ever happen?
-      return false;
-    }
-  // End point did not already exist.
-  return true;
-}
-
 // A new incoming sequenced-before edge was added.
 void NodeBase::update_exists() const
 {
@@ -229,25 +205,20 @@ void NodeBase::update_exists() const
 }
 
 //static
-bool NodeBase::add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition)
+void NodeBase::add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition)
 {
   DoutEntering(dc::sb_edge, "NodeBase::add_edge(" << edge_type << ", " << *tail_node << ", " << *head_node << ", " << condition << ")");
   // edge_type may not be composed.
   Edge* new_edge = new Edge(edge_type, tail_node, condition);
   bool directed = EdgeMaskType{edge_type}.is_directed();
   // Call tail first!
-  bool success1 = tail_node->add_end_point(new_edge, directed ? tail : undirected, head_node, false);
+  tail_node->add_end_point(new_edge, directed ? tail : undirected, head_node, false);
   // For the sake of memory management, this EndPoint owns the allocated new_edge; so pass 'true'.
   // When false is returned, new_edge has been already deleted.
-  bool success2 = head_node->add_end_point(new_edge, directed ? head : undirected, tail_node, true);
-  ASSERT(success1 == success2);
-  if (success2)
-  {
-    Dout(dc::sb_edge, "ADDED EDGE " << *new_edge);
-    if (edge_type == edge_sb || edge_type == edge_asw)
-      head_node->update_exists();
-  }
-  return success2;
+  head_node->add_end_point(new_edge, directed ? head : undirected, tail_node, true);
+  Dout(dc::sb_edge, "ADDED EDGE " << *new_edge);
+  if (edge_type == edge_sb || edge_type == edge_asw)
+    head_node->update_exists();
 }
 
 //static

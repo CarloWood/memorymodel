@@ -13,6 +13,7 @@
 #include "Location.h"
 #include "cppmem_parser.h"
 #include "utils/AIAlert.h"
+#include "utils/MultiLoop.h"
 #include <libcwd/type_info.h>
 #include <cstdlib>      // std::system
 #include <boost/variant/get.hpp>
@@ -752,42 +753,118 @@ int main(int argc, char* argv[])
     }
   };
 
-  FollowOpsemTails follow_opsem_tails;
+  struct FilterLocationReads
+  {
+    Location const& m_location;
+    FilterLocationReads(Location const& location) : m_location(location) { }
+    bool operator()(Action const& action) { return action.location() == m_location && action.is_read(); }
+  };
+
+  struct FilterLocationWrites
+  {
+    Location const& m_location;
+    FilterLocationWrites(Location const& location) : m_location(location) { }
+    bool operator()(Action const& action) { return action.location() == m_location && action.is_write(); }
+  };
+
+  class ReadAction
+  {
+   private:
+    Action const& m_read_action;
+    Action const* m_write_action;
+
+   public:
+    ReadAction(Action const& read_action) : m_read_action(read_action) { }
+
+    void begin()
+    {
+      Dout(dc::notice, "Calling begin() on ReadAction " << m_read_action);
+      m_write_action = &m_read_action;
+    }
+
+    bool find_next_write_action()
+    {
+      if (m_write_action != &m_read_action)
+        return false;
+      // Look for the last write (if any) on the same thread.
+      FollowSBHeads follow_sb_heads;
+      FilterLocationWrites follow_location_writes(m_read_action.location());
+      boolean::Expression found = m_read_action.for_actions(
+          follow_sb_heads,                                  // Search backwards in the same thread,
+          follow_location_writes,                           // for writes to the same memory location.
+          [this](Action const& write_action)                // if_found
+          {
+            Dout(dc::notice, "Found " << write_action);
+            m_write_action = &write_action;
+            return true;                                    // Stop following edges once we found a write.
+          }
+      );
+      if (!found.is_one())
+        Dout(dc::notice, "Previous write found only when " << found);
+      return !found.is_zero();
+    }
+
+    Action const& write_action() const { return *m_write_action; }
+  };
+
+  class ReadActionsPerLocation
+  {
+   public:
+    using read_actions_type = std::vector<ReadAction>;
+
+   private:
+    Location const& m_location;
+    read_actions_type m_read_actions;
+    int m_previous_read_from_loop_index;
+
+   public:
+    ReadActionsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
+
+    void add_read_action(Action const& read_action) { m_read_actions.emplace_back(read_action); }
+    size_t number_of_read_actions() const { return m_read_actions.size(); }
+    ReadAction& operator[](int read_from_loop_index)
+    {
+      if (m_previous_read_from_loop_index < read_from_loop_index)
+        m_read_actions[read_from_loop_index].begin();
+      m_previous_read_from_loop_index = read_from_loop_index;
+      return m_read_actions[read_from_loop_index];
+    }
+  };
+
+  // A vector of objects representing all read nodes per memory location.
+  std::vector<ReadActionsPerLocation> read_actions_per_location_vector;
 
   // Run over all memory locations.
+  FollowOpsemTails follow_opsem_tails;
   for (auto&& location : Context::instance().locations())
   {
     Dout(dc::notice, "Considering location " << location);
+    read_actions_per_location_vector.emplace_back(location);
+    ReadActionsPerLocation& read_actions_per_location(read_actions_per_location_vector.back());
 
     // Find all read actions for this location.
-    graph.for_actions(follow_opsem_tails,
-        [&location](Action const& action)       // filter
+    FilterLocationReads filter_location_reads(location);
+    graph.for_actions(
+        follow_opsem_tails,                             // Find all nodes (reachable from the first node),
+        filter_location_reads,                          // that are reads of the current memory location.
+        [&read_actions_per_location](Action const& read_action)     // if_found
         {
-          return action.location() == location && action.is_read();
-        },
-        [&location](Action const& read_action)  // found
-        {
-          FollowSBHeads follow_sb_heads;
           Dout(dc::notice, "Found read " << read_action);
-
-          // Look for the last write (if any) on the same thread.
-          bool found = read_action.for_actions(follow_sb_heads,
-              [&location](Action const& action)                 // filter
-              {
-                return action.location() == location && action.is_write();
-              },
-              [&read_action](Action const& write_action)        // found
-              {
-                Dout(dc::notice, "* " << write_action);
-                //NodeBase::add_edge(edge_rf, write_action, read_action, Condition());
-                return true;                                    // Stop.
-              }
-          );
-          if (!found)
-            Dout(dc::notice, "No previous write.");
-          return false;                         // Continue;
+          read_actions_per_location.add_read_action(read_action);
+          return false;                                 // Find all reads.
         }
     );
+
+    Dout(dc::notice, "Number of read actions: " << read_actions_per_location.number_of_read_actions());
+    for (MultiLoop read_from_loop(read_actions_per_location.number_of_read_actions()); !read_from_loop.finished(); read_from_loop.next_loop())
+      for (;;)
+      {
+        ReadAction& read_action{read_actions_per_location[*read_from_loop]};
+        if (!read_action.find_next_write_action())
+          break;
+        read_action.write_action().add_edge_to(edge_rf, read_action, read_action.exists());
+        ++read_from_loop;
+      }
   }
 
   // Run over all possible flow-control paths.

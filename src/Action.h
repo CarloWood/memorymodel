@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 
+// Base class of NodeBase.
 class Action
 {
  public:
@@ -38,6 +39,7 @@ class Action
   locations_type::const_iterator m_location;    // The variable/mutex involved.
   // Graph information.
   mutable end_points_type m_end_points;         // End points of all connected edges.
+  mutable boolean::Expression m_exists;         // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
  
  public:
   Action() = default;
@@ -46,7 +48,7 @@ class Action
   Action(Action&&) = delete;
   virtual ~Action() = default;
 
-  void add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;  // const because Actions are stored in a set.
+  void add_edge_to(EdgeType edge_type, Action const& head) const; // Const because Actions are stored in a set.
 
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }
@@ -59,11 +61,19 @@ class Action
     return nullptr;
   }
 
-  template<typename FOLLOW>     // bool FOLLOW::operator()(EndPoint const&) must exist.
-  bool for_actions(
+  template<class FOLLOW, class FILTER>
+  void for_actions_no_condition(
     FOLLOW follow,
-    std::function<bool(Action const&)> const& filter,
-    std::function<bool(Action const&)> const& found) const;
+    FILTER filter,
+    std::function<bool(Action const&)> const& if_found) const;
+
+  // Returns an expression that is true when something was found.
+  template<class FOLLOW, class FILTER>     // bool FOLLOW::operator()(EndPoint const&) and FILTER::operator()(Action const&) must exist.
+  boolean::Expression for_actions(
+    FOLLOW follow,            // Follow each EndPoint when `bool FOLLOW::operator()(EndPoint const&)` returns true.
+    FILTER filter,            // Call if_found() for each action found after following an edge when `bool FILTER::operator()(Action const&)` returns true.
+                              // Call for_actions() recursively unless if_found returned true (so if if_found wasn't called, then always call for_actions).
+    std::function<bool(Action const&)> const& if_found) const;
 
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
@@ -71,7 +81,11 @@ class Action
   ast::tag tag() const { return m_location->tag(); }
   Location const& location() const { return *m_location; }
   end_points_type const& get_end_points() const { return m_end_points; }
+  boolean::Expression const& exists() const { return m_exists; }
   virtual Kind kind() const = 0;
 
   friend std::ostream& operator<<(std::ostream& os, Action const& action);
+
+ protected:
+  void add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;  // const because Actions are stored in a set.
 };
