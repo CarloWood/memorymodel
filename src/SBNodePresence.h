@@ -68,7 +68,7 @@ class SBNodePresence
 
   bool sequenced_before_pseudo_value_computation() const { return m_sequenced_before_pseudo_value_computation; }
   void set_sequenced_before_pseudo_value_computation() { m_sequenced_before_pseudo_value_computation = true; }
-  boolean::Expression hiding_behind_another(NodeRequestedType const& requested_type);
+  boolean::Expression hiding_behind_another(NodeRequestedType const& requested_type) const;
   boolean::Expression const& provides_sequenced_before_value_computation() const { return m_sequenced_before_value_computation; }
   boolean::Expression const& provides_sequenced_before_side_effect() const { return m_sequenced_before_side_effect; }
   bool provides_sequenced_after_something() const { return m_sequenced_after_something; }

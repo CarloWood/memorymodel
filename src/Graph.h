@@ -14,8 +14,8 @@ class Graph
   using nodes_type = NodePtr::container_type;
 
  private:
-  nodes_type m_nodes;                                   // All nodes, ordered by Node::m_id.
-  NodeBase::id_type m_next_node_id;                     // The id to use for the next node.
+  nodes_type m_nodes;                   // All nodes, ordered by Node::m_id.
+  Action::id_type m_next_node_id;       // The id to use for the next node.
 
  public:
   Graph() :
@@ -26,17 +26,18 @@ class Graph
       FOLLOW follow,            // If if_found() does not return true, then follow each of its EndPoints when
                                 //  `bool FOLLOW::operator()(EndPoint const&)` returns true and repeat.
       FILTER filter,            // Call if_found() for this Action when `bool FILTER::operator()(Action const&)` returns true.
-      std::function<bool(Action const&)> const& if_found) const
+      std::function<bool(Action*)> const& if_found) const
   {
     if (m_nodes.empty())
       return;
-    Action const& action{**m_nodes.begin()};      // The first Action of the program.
-    if (filter(action) && if_found(action))
+    Action* action{m_nodes.begin()->get()};      // The first Action of the program.
+    if (filter(*action) && if_found(action))
       return;
-    action.for_actions_no_condition(follow, filter, if_found);
+    action->for_actions_no_condition(follow, filter, if_found);
   }
 
   void generate_dot_file(std::string const& filename) const;
+  void write_png_file(std::string basename, int appendix = -1) const;
 
   // Accessor.
   nodes_type::iterator begin() { return m_nodes.begin(); }

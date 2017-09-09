@@ -2,7 +2,7 @@
 #include "NodePtr.h"
 #include "Node.h"
 
-bool NodeOrder::operator()(std::unique_ptr<NodeBase> const& ptr1, std::unique_ptr<NodeBase> const& ptr2) const
+bool NodeOrder::operator()(std::unique_ptr<Action> const& ptr1, std::unique_ptr<Action> const& ptr2) const
 {
   return *ptr1 < *ptr2;
 }

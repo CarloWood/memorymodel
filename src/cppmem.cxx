@@ -19,6 +19,7 @@
 #include <boost/variant/get.hpp>
 #include <ostream>
 #include <fstream>
+#include <iomanip>
 
 std::map<ast::tag, ast::function, TagCompare> functions;
 
@@ -615,6 +616,21 @@ void execute_body(std::string name, ast::statement_seq const& body)
   Context::instance().m_symbols.scope_end();
 }
 
+void Graph::write_png_file(std::string basename, int appendix) const
+{
+  if (appendix >= 0)
+  {
+    std::ostringstream oss;
+    oss << '_' << std::setfill('0') << std::setw(3) << appendix;
+    basename += oss.str();
+  }
+  std::string const dot_filename = basename + ".dot";
+  std::string const png_filename = basename + ".png";
+  generate_dot_file(dot_filename);
+  std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
+  std::system(command.c_str());
+}
+
 int main(int argc, char* argv[])
 {
 #ifdef DEBUGGLOBAL
@@ -727,12 +743,8 @@ int main(int argc, char* argv[])
 
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
-  std::string const basename = source_filename.substr(0, source_filename.find_last_of(".")) + "_opsem";
-  std::string const dot_filename = basename + ".dot";
-  std::string const png_filename = basename + ".png";
-  graph.generate_dot_file(dot_filename);
-  std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
-  std::system(command.c_str());
+  std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
+  graph.write_png_file(basename + "_opsem");
 
   //==========================================================================
   // Brute force approach.
@@ -749,8 +761,13 @@ int main(int argc, char* argv[])
   {
     bool operator()(EndPoint const& end_point) const
     {
-      return end_point.edge()->edge_type() == edge_sb && end_point.primary_head(edge_mask_sb);
+      return end_point.edge()->edge_type() == edge_sb && end_point.type() == head;
     }
+  };
+
+  struct FilterAllActions
+  {
+    bool operator()(Action const&) { return true; }
   };
 
   struct FilterLocationReads
@@ -767,104 +784,143 @@ int main(int argc, char* argv[])
     bool operator()(Action const& action) { return action.location() == m_location && action.is_write(); }
   };
 
-  class ReadAction
+  class ReadFrom
   {
    private:
-    Action const& m_read_action;
-    Action const* m_write_action;
+    Action* m_read_action;
+    Action* m_write_action;
+    boolean::Expression m_condition;
 
    public:
-    ReadAction(Action const& read_action) : m_read_action(read_action) { }
+    ReadFrom(Action* read_action) : m_read_action(read_action) { }
 
     void begin()
     {
-      Dout(dc::notice, "Calling begin() on ReadAction " << m_read_action);
-      m_write_action = &m_read_action;
+      Dout(dc::notice, "Calling begin() on ReadFrom " << *m_read_action);
+      m_write_action = m_read_action;
+      m_condition = false;
     }
 
     bool find_next_write_action()
     {
-      if (m_write_action != &m_read_action)
+#ifdef CWDEBUG
+      DoutEntering(dc::notice, "find_next_write_action() on ReadFrom " << *m_read_action);
+      debug::Mark marker;
+#endif
+      if (m_write_action != m_read_action)
+      {
+        Dout(dc::notice, "Exiting because m_write_action = " << *m_write_action);
         return false;
+      }
       // Look for the last write (if any) on the same thread.
+      m_write_action = nullptr;
       FollowSBHeads follow_sb_heads;
-      FilterLocationWrites follow_location_writes(m_read_action.location());
-      boolean::Expression found = m_read_action.for_actions(
+      FilterLocationWrites follow_location_writes(m_read_action->location());
+      m_read_action->for_actions(
           follow_sb_heads,                                  // Search backwards in the same thread,
           follow_location_writes,                           // for writes to the same memory location.
-          [this](Action const& write_action)                // if_found
+          [this](Action* write_action, boolean::Product const& path_condition)  // if_found
           {
-            Dout(dc::notice, "Found " << write_action);
-            m_write_action = &write_action;
+            m_write_action = write_action;                  // Store the next write action that was found.
+            m_condition += path_condition;
+            Dout(dc::notice, "Found " << *write_action << " if " << path_condition << "; m_condition now " << m_condition);
             return true;                                    // Stop following edges once we found a write.
           }
       );
-      if (!found.is_one())
-        Dout(dc::notice, "Previous write found only when " << found);
-      return !found.is_zero();
+      // Eventually the condition of a complete path should be just the product of the indeterminates that matter.
+      ASSERT(m_condition.is_product());
+      return m_write_action != nullptr;
     }
 
-    Action const& write_action() const { return *m_write_action; }
+    Action* read_action() const { return m_read_action; }
+    Action* write_action() const { return m_write_action; }
+
+    boolean::Product const& condition() const { return m_condition.as_product(); }
   };
 
-  class ReadActionsPerLocation
+  class ReadFromsPerLocation
   {
    public:
-    using read_actions_type = std::vector<ReadAction>;
+    using read_froms_type = std::vector<ReadFrom>;
 
    private:
     Location const& m_location;
-    read_actions_type m_read_actions;
+    read_froms_type m_read_froms;
     int m_previous_read_from_loop_index;
 
    public:
-    ReadActionsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
+    ReadFromsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
 
-    void add_read_action(Action const& read_action) { m_read_actions.emplace_back(read_action); }
-    size_t number_of_read_actions() const { return m_read_actions.size(); }
-    ReadAction& operator[](int read_from_loop_index)
+    void add_read_action(Action* read_action) { m_read_froms.emplace_back(read_action); }
+    size_t number_of_read_actions() const { return m_read_froms.size(); }
+    ReadFrom& operator[](int read_from_loop_index)
     {
       if (m_previous_read_from_loop_index < read_from_loop_index)
-        m_read_actions[read_from_loop_index].begin();
+        m_read_froms[read_from_loop_index].begin();
       m_previous_read_from_loop_index = read_from_loop_index;
-      return m_read_actions[read_from_loop_index];
+      return m_read_froms[read_from_loop_index];
     }
   };
 
+  // Check that every node has a boolean product as exists condition.
+  FilterAllActions all_actions;
+  FollowOpsemTails follow_opsem_tails;
+  graph.for_actions(
+      follow_opsem_tails,
+      all_actions,
+      [](Action* action)
+      {
+        Dout(dc::notice, "Testing " << *action);
+        ASSERT(action->exists().is_product());
+        return false;
+      }
+  );
+
   // A vector of objects representing all read nodes per memory location.
-  std::vector<ReadActionsPerLocation> read_actions_per_location_vector;
+  std::vector<ReadFromsPerLocation> read_froms_per_location_vector;
 
   // Run over all memory locations.
-  FollowOpsemTails follow_opsem_tails;
   for (auto&& location : Context::instance().locations())
   {
     Dout(dc::notice, "Considering location " << location);
-    read_actions_per_location_vector.emplace_back(location);
-    ReadActionsPerLocation& read_actions_per_location(read_actions_per_location_vector.back());
+    read_froms_per_location_vector.emplace_back(location);
+    ReadFromsPerLocation& read_froms_per_location(read_froms_per_location_vector.back());
 
     // Find all read actions for this location.
     FilterLocationReads filter_location_reads(location);
     graph.for_actions(
         follow_opsem_tails,                             // Find all nodes (reachable from the first node),
         filter_location_reads,                          // that are reads of the current memory location.
-        [&read_actions_per_location](Action const& read_action)     // if_found
+        [&read_froms_per_location](Action* read_action) // if_found
         {
-          Dout(dc::notice, "Found read " << read_action);
-          read_actions_per_location.add_read_action(read_action);
+          Dout(dc::notice, "Found read " << *read_action);
+          read_froms_per_location.add_read_action(read_action);
           return false;                                 // Find all reads.
         }
     );
 
-    Dout(dc::notice, "Number of read actions: " << read_actions_per_location.number_of_read_actions());
-    for (MultiLoop read_from_loop(read_actions_per_location.number_of_read_actions()); !read_from_loop.finished(); read_from_loop.next_loop())
-      for (;;)
-      {
-        ReadAction& read_action{read_actions_per_location[*read_from_loop]};
-        if (!read_action.find_next_write_action())
-          break;
-        read_action.write_action().add_edge_to(edge_rf, read_action, read_action.exists());
-        ++read_from_loop;
-      }
+    int rf_candidate = 0;
+    size_t number_of_read_actions = read_froms_per_location.number_of_read_actions();
+    Dout(dc::notice, "Number of read actions: " << number_of_read_actions);
+    if (number_of_read_actions > 0)
+      for (MultiLoop read_from_loop(read_froms_per_location.number_of_read_actions()); !read_from_loop.finished(); read_from_loop.next_loop())
+        for (;;)
+        {
+          ReadFrom& read_from{read_froms_per_location[*read_from_loop]};
+          if (!read_from.find_next_write_action())
+            break;
+          read_from.write_action()->add_edge_to(edge_rf, read_from.read_action(), read_from.condition());
+          if (read_from_loop.inner_loop())
+          {
+            graph.write_png_file(basename + "_rf", rf_candidate++);
+            read_from_loop.breaks(read_froms_per_location.number_of_read_actions());
+            break;
+          }
+          ++read_from_loop;
+        }
+
+    //FIXME, remove this. Only do first variable for now.
+    break;
   }
 
   // Run over all possible flow-control paths.

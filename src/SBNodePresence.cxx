@@ -34,7 +34,7 @@ void SBNodePresence::set_sequenced_after_something()
   m_sequenced_after_something = true;
 }
 
-boolean::Expression SBNodePresence::hiding_behind_another(NodeRequestedType const& requested_type)
+boolean::Expression SBNodePresence::hiding_behind_another(NodeRequestedType const& requested_type) const
 {
   switch (requested_type.type())
   {

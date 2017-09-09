@@ -273,8 +273,10 @@ class Expression
   bool is_literal() const { return m_sum_of_products[0].is_literal(); }
   bool is_zero() const { return m_sum_of_products[0].is_zero(); }
   bool is_one() const { return m_sum_of_products[0].is_one(); }
+  bool is_product() const { return m_sum_of_products.size() == 1; }
   bool equivalent(Expression const& expression) const;
   std::string as_html_string() const;
+  Product const& as_product() const { ASSERT(is_product()); return m_sum_of_products[0]; }
 
   friend std::ostream& operator<<(std::ostream& os, Expression const& expression);
   friend bool operator==(Expression const& expression1, Expression const& expression2) { return expression1.m_sum_of_products == expression2.m_sum_of_products; }

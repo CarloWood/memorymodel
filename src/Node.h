@@ -3,62 +3,13 @@
 #include "Action.h"
 #include "Evaluation.h"
 #include "Condition.h"
-#include "SBNodePresence.h"
 #include <string>
 
-// Base class for all nodes in the graph.
-class NodeBase : public Action
-{
- protected:
-  mutable SBNodePresence m_connected;           // Signifies existing sequenced-before relationships.
-  static boolean::Expression const s_one;
-
- public:
-  NodeBase() = default;
-  NodeBase(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : Action(next_node_id, thread, variable) { }
-
-  virtual bool is_second_mutex_access() const { return false; }
-  virtual std::string type() const = 0;
-  virtual void print_code(std::ostream& os) const = 0;
-  virtual NodeProvidedType provided_type() const = 0;
-
- public:
-  // Called on the tail-node of a new (conditional) sb edge.
-  void sequenced_before() const;
-
-  // Called on the head-node of a new (conditional) sb edge.
-  void sequenced_after() const;
-
-  // Returns true when this node is not of the requested type (ie, any, value-computation or side-effect)
-  // or is not a head or tail (if requested) for that type, and is neither hiding behind another
-  // node of such type. However, hiding might be set to a boolean expression that is not TRUE (1),
-  // if this node is hiding conditionally behind the requested type.
-  bool matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const;
-
-  boolean::Expression const& provides_sequenced_before_value_computation() const;
-  boolean::Expression const& provides_sequenced_before_side_effect() const;
-  bool provides_sequenced_after_something() const;
-
-  // Add a new edge of type edge_type from tail_node to head_node.
-  static void add_edge(EdgeType edge_type, NodeBase const* tail_node, NodeBase const* head_node, Condition const& condition);
-  void sequenced_before_side_effect_sequenced_before_value_computation() const;
-  void sequenced_before_value_computation() const;
-
-  // Less-than comparator for Graph::m_nodes.
-  friend bool operator<(NodeBase const& node1, NodeBase const& node2) { return node1.m_id < node2.m_id; }
-  friend bool operator==(NodeBase const& node1, NodeBase const& node2) { return node1.m_id == node2.m_id; }
-
-  friend std::ostream& operator<<(std::ostream& os, NodeBase const& node);
-
- private:
-  void update_exists() const;
-};
-
 // Base class for value-computation nodes.
-class ReadNode : public NodeBase
+class ReadNode : public Action
 {
  public:
-  using NodeBase::NodeBase;
+  using Action::Action;
 
   // Interface implementation.
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation; }
@@ -91,14 +42,14 @@ class AtomicReadNode : public ReadNode
 };
 
 // Base class for [value-computation/]side-effect nodes that write m_evaluation to their memory location.
-class WriteNode : public NodeBase
+class WriteNode : public Action
 {
  protected:
   std::unique_ptr<Evaluation> m_evaluation;     // The value written to m_location.
 
  public:
   WriteNode(id_type next_node_id, ThreadPtr const& thread, ast::tag const& variable, Evaluation&& evaluation) :
-    NodeBase(next_node_id, thread, variable), m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
+    Action(next_node_id, thread, variable), m_evaluation(Evaluation::make_unique(std::move(evaluation))) { }
 
   // Accessors.
   Evaluation* get_evaluation() { return m_evaluation.get(); }
@@ -133,10 +84,10 @@ class AtomicWriteNode : public WriteNode
   Kind kind() const override { return atomic_store; }
 };
 
-class MutexDeclNode : public NodeBase
+class MutexDeclNode : public Action
 {
  public:
-  using NodeBase::NodeBase;
+  using Action::Action;
 
   // Interface implementation.
   std::string type() const override;
@@ -154,10 +105,10 @@ class MutexReadNode : public NAReadNode
   void print_code(std::ostream& os) const override;
 };
 
-class MutexLockNode : public NodeBase
+class MutexLockNode : public Action
 {
  public:
-  using NodeBase::NodeBase;
+  using Action::Action;
 
   // Interface implementation.
   std::string type() const override;
@@ -167,10 +118,10 @@ class MutexLockNode : public NodeBase
   Kind kind() const override { return lock; }
 };
 
-class MutexUnlockNode : public NodeBase
+class MutexUnlockNode : public Action
 {
  public:
-  using NodeBase::NodeBase;
+  using Action::Action;
 
   // Interface implementation.
   std::string type() const override;

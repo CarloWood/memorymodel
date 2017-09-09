@@ -4,11 +4,12 @@
 #include "Location.h"
 #include "ast_tag.h"
 #include "Thread.h"
+#include "SBNodePresence.h"
 #include "utils/ulong_to_base.h"
 #include <vector>
 #include <memory>
 
-// Base class of NodeBase.
+// Base class for all nodes in the graph.
 class Action
 {
  public:
@@ -38,8 +39,10 @@ class Action
   ThreadPtr m_thread;                           // The thread that this action belongs to.
   locations_type::const_iterator m_location;    // The variable/mutex involved.
   // Graph information.
-  mutable end_points_type m_end_points;         // End points of all connected edges.
-  mutable boolean::Expression m_exists;         // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
+  end_points_type m_end_points;                 // End points of all connected edges.
+  boolean::Expression m_exists;                 // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
+  SBNodePresence m_connected;                   // Signifies existing sequenced-before relationships.
+  static boolean::Expression const s_one;
  
  public:
   Action() = default;
@@ -48,7 +51,27 @@ class Action
   Action(Action&&) = delete;
   virtual ~Action() = default;
 
-  void add_edge_to(EdgeType edge_type, Action const& head) const; // Const because Actions are stored in a set.
+  // Add a new edge of type edge_type from this Action node to head, that exists if condition is true.
+  void add_edge_to(EdgeType edge_type, Action* head_node, Condition const& condition = Condition());
+
+  // Called on the tail-node of a new (conditional) sb edge.
+  void sequenced_before();
+
+  // Called on the head-node of a new (conditional) sb edge.
+  void sequenced_after();
+
+  // Returns true when this node is not of the requested type (ie, any, value-computation or side-effect)
+  // or is not a head or tail (if requested) for that type, and is neither hiding behind another
+  // node of such type. However, hiding might be set to a boolean expression that is not TRUE (1),
+  // if this node is hiding conditionally behind the requested type.
+  bool matches(NodeRequestedType const& requested_type, boolean::Expression& hiding) const;
+
+  boolean::Expression const& provides_sequenced_before_value_computation() const;
+  boolean::Expression const& provides_sequenced_before_side_effect() const;
+  bool provides_sequenced_after_something() const;
+
+  void sequenced_before_side_effect_sequenced_before_value_computation();
+  void sequenced_before_value_computation();
 
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }
@@ -65,15 +88,16 @@ class Action
   void for_actions_no_condition(
     FOLLOW follow,
     FILTER filter,
-    std::function<bool(Action const&)> const& if_found) const;
+    std::function<bool(Action*)> const& if_found) const;
 
   // Returns an expression that is true when something was found.
   template<class FOLLOW, class FILTER>     // bool FOLLOW::operator()(EndPoint const&) and FILTER::operator()(Action const&) must exist.
-  boolean::Expression for_actions(
+  void for_actions(
     FOLLOW follow,            // Follow each EndPoint when `bool FOLLOW::operator()(EndPoint const&)` returns true.
     FILTER filter,            // Call if_found() for each action found after following an edge when `bool FILTER::operator()(Action const&)` returns true.
                               // Call for_actions() recursively unless if_found returned true (so if if_found wasn't called, then always call for_actions).
-    std::function<bool(Action const&)> const& if_found) const;
+    std::function<bool(Action*, boolean::Product const&)> const& if_found,
+    boolean::Product const& path_condition = boolean::Product{true}) const;     // The product of the edge conditions encountered.
 
   // Accessors.
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
@@ -82,10 +106,21 @@ class Action
   Location const& location() const { return *m_location; }
   end_points_type const& get_end_points() const { return m_end_points; }
   boolean::Expression const& exists() const { return m_exists; }
-  virtual Kind kind() const = 0;
 
+  virtual Kind kind() const = 0;
+  virtual bool is_second_mutex_access() const { return false; }
+  virtual std::string type() const = 0;
+  virtual void print_code(std::ostream& os) const = 0;
+  virtual NodeProvidedType provided_type() const = 0;
+
+  // Less-than comparator for Graph::m_nodes.
+  friend bool operator<(Action const& action1, Action const& action2) { return action1.m_id < action2.m_id; }
+  friend bool operator==(Action const& action1, Action const& action2) { return action1.m_id == action2.m_id; }
+
+  void print_node_label_on(std::ostream& os) const;
   friend std::ostream& operator<<(std::ostream& os, Action const& action);
 
  protected:
-  void add_end_point(Edge* edge, EndPointType type, NodeBase const* other_node, bool edge_owner) const;  // const because Actions are stored in a set.
+  void add_end_point(Edge* edge, EndPointType type, Action* other_node, bool edge_owner);
+  void update_exists();
 };

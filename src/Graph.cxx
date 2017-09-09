@@ -10,7 +10,7 @@
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  NodeBase::add_edge(edge_type, &*tail_node, &*head_node, condition);
+  tail_node->add_edge_to(edge_type, &*head_node, condition);
 #ifdef CWDEBUG
   Dout(dc::notice|continued_cf,
       "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
@@ -28,6 +28,8 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
 
 void Graph::generate_dot_file(std::string const& filename) const
 {
+  DoutEntering(dc::notice, "Graph::generate_dot_file(\"" << filename << "\"");
+
   std::ofstream out;
   out.open(filename);
   if (!out)
@@ -88,8 +90,8 @@ void Graph::generate_dot_file(std::string const& filename) const
 
       std::string color = edge_color(end_point.edge_type());
       Edge* edge = end_point.edge();
-      NodeBase const* tail_node = ((end_point.type() == tail) ? &*node : end_point.other_node());
-      NodeBase const* head_node = ((end_point.type() == tail) ? end_point.other_node() : &*node);
+      Action const* tail_node = ((end_point.type() == tail) ? &*node : end_point.other_node());
+      Action const* head_node = ((end_point.type() == tail) ? end_point.other_node() : &*node);
       out << "node" << tail_node->name() << " -> "
              "node" << head_node->name() <<
              " [label=<<font color=\"" << color << "\">" << edge->name();
