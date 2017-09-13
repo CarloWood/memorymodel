@@ -10,7 +10,7 @@
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  tail_node->add_edge_to(edge_type, &*head_node, condition);
+  tail_node->add_edge_to(edge_type, &*head_node, condition.boolean_product());
 #ifdef CWDEBUG
   Dout(dc::notice|continued_cf,
       "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
@@ -75,7 +75,12 @@ void Graph::generate_dot_file(std::string const& filename) const
     posy = 1.0 + yscale * (max_count + --depth[thread]);
     out << "node" << node->name() <<
         " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
-        " [label=\"" << *node << "\", pos=\"" << posx << ',' << posy << "!\"]"
+        " [label=\"";
+#ifdef CWDEBUG
+    // Print sequence number of node.
+    out << node->sequence_number() << ':';
+#endif
+    out << *node << "\", pos=\"" << posx << ',' << posy << "!\"]"
         " [margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"" << (yscale * 0.25) << "\"][width=\"" << (xscale * 0.6) << "\"];\n";
   }
   for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
@@ -96,10 +101,11 @@ void Graph::generate_dot_file(std::string const& filename) const
              "node" << head_node->name() <<
              " [label=<<font color=\"" << color << "\">" << edge->name();
 #ifdef CWDEBUG
-      out << edge->id();
+      // Print id of the edge to show in what order edges have been created.
+      //out << edge->id();
 #endif
       if (edge->is_conditional())
-        out << ':' << edge->exists().as_html_string();
+        out << ':' << edge->condition().to_string(true);
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
                "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }

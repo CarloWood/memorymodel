@@ -18,10 +18,10 @@ class Condition
                                         // or its negation thereof (the other branch of the conditional that it represents).
 
  public:
-  Condition() : m_boolean_product(1) { }
+  Condition() : m_boolean_product(true) { }
   Condition(Branch const&);
 
-  void reset() { m_boolean_product = 1; }
+  void reset() { m_boolean_product = true; }
   bool conditional() const { return !m_boolean_product.is_one(); }
   boolean::Product const& boolean_product() const { return m_boolean_product; }
 

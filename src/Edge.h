@@ -39,6 +39,15 @@ class EndPoint
   {
     end_point.m_edge_owner = false;
   }
+  EndPoint& operator=(EndPoint&& end_point)
+  {
+    m_edge = end_point.m_edge;
+    m_type = end_point.m_type;
+    m_other_node = end_point.m_other_node;
+    m_edge_owner = end_point.m_edge_owner;
+    end_point.m_edge_owner = false;
+    return *this;
+  }
   inline ~EndPoint();
 
   // Accessors.
@@ -57,7 +66,7 @@ class Edge
 {
  private:
   EdgeType m_edge_type;
-  Condition m_condition;
+  boolean::Product m_condition;
   Action* m_tail_node;  // The Node from where the edge starts:  tail_node ---> head_node.
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
@@ -67,7 +76,7 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type, Action* tail_node, Condition const& condition) :
+  Edge(EdgeType edge_type, Action* tail_node, boolean::Product const& condition) :
       m_edge_type(edge_type),
       m_condition(condition),
       m_tail_node(tail_node)
@@ -79,7 +88,7 @@ class Edge
       }
 
   EdgeType edge_type() const { return m_edge_type; }
-  Condition const& condition() const { return m_condition; }
+  boolean::Product const& condition() const { return m_condition; }
   char const* name() const { return edge_name(m_edge_type); }
   bool is_opsem() const { return EdgeMaskType{m_edge_type}.is_opsem(); }
 

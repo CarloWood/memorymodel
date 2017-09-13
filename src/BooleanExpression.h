@@ -143,6 +143,8 @@ class Product
   // Zero = { empty_mask, full_mask }
   // One = { full_mask, empty_mask }
   Product(bool literal) : m_variables(literal ? full_mask : empty_mask), m_negation(~m_variables) { }
+  // Assign a literal to the Product.
+  Product& operator=(bool literal) { m_variables = literal ? full_mask : empty_mask; m_negation = ~m_variables; return *this; }
 
   // Construct a Product that represents just one variable.
   Product(Variable variable, bool negated = false) : m_variables(~to_mask(variable.m_id)), m_negation(negated ? full_mask : m_variables) { }

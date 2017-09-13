@@ -5,9 +5,12 @@
 #include "ast_tag.h"
 #include "Thread.h"
 #include "SBNodePresence.h"
+#include "ActionSet.h"
 #include "utils/ulong_to_base.h"
 #include <vector>
 #include <memory>
+
+class Graph;
 
 // Base class for all nodes in the graph.
 class Action
@@ -42,8 +45,13 @@ class Action
   end_points_type m_end_points;                 // End points of all connected edges.
   boolean::Expression m_exists;                 // Whether or not this node exists. Set to true until an incoming edge is added and then updated.
   SBNodePresence m_connected;                   // Signifies existing sequenced-before relationships.
-  static boolean::Expression const s_one;
- 
+  static boolean::Expression const s_expression_one;
+  static boolean::Product const s_product_one;
+
+  // Post opsem stuff.
+  int m_sequence_number;                        // Some over all ordering number (n) such that if A--sb/asw-->B than n_A < n_B.
+  ActionSet m_prior_actions;                    // Actions from which this action is reachable through SB and ASW edges.
+
  public:
   Action() = default;
   Action(id_type next_node_id, ThreadPtr const& thread, ast::tag variable);
@@ -52,7 +60,10 @@ class Action
   virtual ~Action() = default;
 
   // Add a new edge of type edge_type from this Action node to head, that exists if condition is true.
-  void add_edge_to(EdgeType edge_type, Action* head_node, Condition const& condition = Condition());
+  void add_edge_to(EdgeType edge_type, Action* head_node, boolean::Product const& condition = s_product_one);
+
+  // Delete edge added before by add_edge_to.
+  void delete_edge_to(EdgeType edge_type, Action* head_node);
 
   // Called on the tail-node of a new (conditional) sb edge.
   void sequenced_before();
@@ -100,12 +111,18 @@ class Action
     boolean::Product const& path_condition = boolean::Product{true}) const;     // The product of the edge conditions encountered.
 
   // Accessors.
+  id_type id() const { return m_id; }
   std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
   ThreadPtr const thread() const { return m_thread; }
   ast::tag tag() const { return m_location->tag(); }
   Location const& location() const { return *m_location; }
   end_points_type const& get_end_points() const { return m_end_points; }
   boolean::Expression const& exists() const { return m_exists; }
+
+  // Post opsem stuff.
+  static void initialize_post_opsem(Graph const& graph, std::vector<Action*>& topological_ordered_actions);
+  int sequence_number() const { return m_sequence_number; }
+  bool is_sequenced_before(Action const& action) const { return action.m_prior_actions.includes(*this); }
 
   virtual Kind kind() const = 0;
   virtual bool is_second_mutex_access() const { return false; }
@@ -124,3 +141,5 @@ class Action
   void add_end_point(Edge* edge, EndPointType type, Action* other_node, bool edge_owner);
   void update_exists();
 };
+
+#include "ActionSet.inl"

@@ -12,6 +12,8 @@
 #include "Symbols.h"
 #include "Location.h"
 #include "cppmem_parser.h"
+#include "FollowOpsemTails.h"
+#include "FilterAllActions.h"
 #include "utils/AIAlert.h"
 #include "utils/MultiLoop.h"
 #include <libcwd/type_info.h>
@@ -739,17 +741,9 @@ int main(int argc, char* argv[])
   }
 
   //==========================================================================
-  // Generate the *_opsem.dot file.
-
-  std::string const path = filepath;
-  std::string const source_filename = path.substr(path.find_last_of("/") + 1);
-  std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
-  graph.write_png_file(basename + "_opsem");
-
-  //==========================================================================
   // Brute force approach.
 
-  struct FollowOpsemTails
+  struct FollowUniqueOpsemTails
   {
     bool operator()(EndPoint const& end_point) const
     {
@@ -765,18 +759,6 @@ int main(int argc, char* argv[])
     }
   };
 
-  struct FilterAllActions
-  {
-    bool operator()(Action const&) { return true; }
-  };
-
-  struct FilterLocationReads
-  {
-    Location const& m_location;
-    FilterLocationReads(Location const& location) : m_location(location) { }
-    bool operator()(Action const& action) { return action.location() == m_location && action.is_read(); }
-  };
-
   struct FilterLocationWrites
   {
     Location const& m_location;
@@ -784,89 +766,102 @@ int main(int argc, char* argv[])
     bool operator()(Action const& action) { return action.location() == m_location && action.is_write(); }
   };
 
-  class ReadFrom
+  class ReadFromLoop
   {
    private:
     Action* m_read_action;
-    Action* m_write_action;
-    boolean::Expression m_condition;
+    using write_actions_type = std::map<Action*, boolean::Expression>;
+    write_actions_type m_write_actions;         // More than one write might be found depending on conditions.
 
    public:
-    ReadFrom(Action* read_action) : m_read_action(read_action) { }
+    ReadFromLoop(Action* read_action) : m_read_action(read_action) { }
 
     void begin()
     {
-      Dout(dc::notice, "Calling begin() on ReadFrom " << *m_read_action);
-      m_write_action = m_read_action;
-      m_condition = false;
+      Dout(dc::notice, "Calling begin() on ReadFromLoop for read action " << *m_read_action);
+      m_write_actions.clear();
     }
 
     bool find_next_write_action()
     {
 #ifdef CWDEBUG
-      DoutEntering(dc::notice, "find_next_write_action() on ReadFrom " << *m_read_action);
+      DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
       debug::Mark marker;
 #endif
-      if (m_write_action != m_read_action)
+      if (!m_write_actions.empty())
       {
-        Dout(dc::notice, "Exiting because m_write_action = " << *m_write_action);
+        Dout(dc::notice, "Exiting because m_write_actions is not empty().");
         return false;
       }
       // Look for the last write (if any) on the same thread.
-      m_write_action = nullptr;
       FollowSBHeads follow_sb_heads;
       FilterLocationWrites follow_location_writes(m_read_action->location());
+      bool created_or_updated = false;
       m_read_action->for_actions(
           follow_sb_heads,                                  // Search backwards in the same thread,
           follow_location_writes,                           // for writes to the same memory location.
-          [this](Action* write_action, boolean::Product const& path_condition)  // if_found
+          [this, &created_or_updated](Action* write_action, boolean::Product const& path_condition)  // if_found
           {
-            m_write_action = write_action;                  // Store the next write action that was found.
-            m_condition += path_condition;
-            Dout(dc::notice, "Found " << *write_action << " if " << path_condition << "; m_condition now " << m_condition);
+            auto res = m_write_actions.emplace(write_action, path_condition);   // Store the next write action that was found.
+            if (!res.second)
+              res.first->second += path_condition;                              // Update its condition if it already existed.
+            created_or_updated = true;
+            Dout(dc::notice, "Found " << *write_action << " if " << path_condition << "; condition now " << m_write_actions[write_action]);
             return true;                                    // Stop following edges once we found a write.
           }
       );
+#ifdef CWDEBUG
       // Eventually the condition of a complete path should be just the product of the indeterminates that matter.
-      ASSERT(m_condition.is_product());
-      return m_write_action != nullptr;
+      for (auto&& write_action_condition_pair : m_write_actions)
+        ASSERT(write_action_condition_pair.second.is_product());
+#endif
+      return created_or_updated;
     }
 
-    Action* read_action() const { return m_read_action; }
-    Action* write_action() const { return m_write_action; }
+    void delete_edge()
+    {
+      // Delete any edges that were added in the last call to add_edge (if any).
+      for (auto&& write_action_condition_pair : m_write_actions)
+        write_action_condition_pair.first->delete_edge_to(edge_rf, m_read_action);
+    }
 
-    boolean::Product const& condition() const { return m_condition.as_product(); }
+    void add_edge()
+    {
+      for (auto&& write_action_condition_pair : m_write_actions)
+        write_action_condition_pair.first->add_edge_to(edge_rf, m_read_action, write_action_condition_pair.second.as_product());
+    }
   };
 
-  class ReadFromsPerLocation
+  class ReadFromLoopsPerLocation
   {
    public:
-    using read_froms_type = std::vector<ReadFrom>;
+    using read_from_loops_type = std::vector<ReadFromLoop>;
 
    private:
     Location const& m_location;
-    read_froms_type m_read_froms;
+    read_from_loops_type m_read_from_loops;
     int m_previous_read_from_loop_index;
 
    public:
-    ReadFromsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
+    ReadFromLoopsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
 
-    void add_read_action(Action* read_action) { m_read_froms.emplace_back(read_action); }
-    size_t number_of_read_actions() const { return m_read_froms.size(); }
-    ReadFrom& operator[](int read_from_loop_index)
+    void add_read_action(Action* read_action) { m_read_from_loops.emplace_back(read_action); }
+    size_t number_of_read_actions() const { return m_read_from_loops.size(); }
+    // Called when at the top of loop read_from_loop_index. Returns true when this loop was just entered.
+    bool top_begin(int read_from_loop_index)
     {
-      if (m_previous_read_from_loop_index < read_from_loop_index)
-        m_read_froms[read_from_loop_index].begin();
+      bool begin = m_previous_read_from_loop_index < read_from_loop_index;
       m_previous_read_from_loop_index = read_from_loop_index;
-      return m_read_froms[read_from_loop_index];
+      return begin;
     }
+    ReadFromLoop& operator[](int read_from_loop_index) { return m_read_from_loops[read_from_loop_index]; }
   };
 
   // Check that every node has a boolean product as exists condition.
   FilterAllActions all_actions;
-  FollowOpsemTails follow_opsem_tails;
+  FollowUniqueOpsemTails follow_unique_opsem_tails;
   graph.for_actions(
-      follow_opsem_tails,
+      follow_unique_opsem_tails,
       all_actions,
       [](Action* action)
       {
@@ -876,51 +871,75 @@ int main(int argc, char* argv[])
       }
   );
 
+  // Initialize m_sequence_number and m_sequenced_before of all Action nodes.
+  std::vector<Action*> topological_ordered_actions;
+  Action::initialize_post_opsem(graph, topological_ordered_actions);
+
+  // Generate the *_opsem.dot file.
+  std::string const path = filepath;
+  std::string const source_filename = path.substr(path.find_last_of("/") + 1);
+  std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
+  graph.write_png_file(basename + "_opsem");
+
   // A vector of objects representing all read nodes per memory location.
-  std::vector<ReadFromsPerLocation> read_froms_per_location_vector;
+  std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;
 
   // Run over all memory locations.
   for (auto&& location : Context::instance().locations())
   {
     Dout(dc::notice, "Considering location " << location);
-    read_froms_per_location_vector.emplace_back(location);
-    ReadFromsPerLocation& read_froms_per_location(read_froms_per_location_vector.back());
+    read_from_loops_per_location_vector.emplace_back(location);
+    ReadFromLoopsPerLocation& read_from_loops_per_location(read_from_loops_per_location_vector.back());
 
-    // Find all read actions for this location.
-    FilterLocationReads filter_location_reads(location);
-    graph.for_actions(
-        follow_opsem_tails,                             // Find all nodes (reachable from the first node),
-        filter_location_reads,                          // that are reads of the current memory location.
-        [&read_froms_per_location](Action* read_action) // if_found
-        {
-          Dout(dc::notice, "Found read " << *read_action);
-          read_froms_per_location.add_read_action(read_action);
-          return false;                                 // Find all reads.
-        }
-    );
+    // Find all read actions for this location in topological order (their m_sequence_number).
+    for (Action* action : topological_ordered_actions)
+      if (action->location() == location && action->is_read())
+      {
+        Dout(dc::notice, "Found read " << *action);
+        read_from_loops_per_location.add_read_action(action);
+      }
 
     int rf_candidate = 0;
-    size_t number_of_read_actions = read_froms_per_location.number_of_read_actions();
+    size_t number_of_read_actions = read_from_loops_per_location.number_of_read_actions();
     Dout(dc::notice, "Number of read actions: " << number_of_read_actions);
-    if (number_of_read_actions > 0)
-      for (MultiLoop read_from_loop(read_froms_per_location.number_of_read_actions()); !read_from_loop.finished(); read_from_loop.next_loop())
-        for (;;)
+    for (MultiLoop ml(number_of_read_actions); !ml.finished(); ml.next_loop())
+      for (;;)
+      {
+        ReadFromLoop& read_from_loop{read_from_loops_per_location[*ml]};
+
+        // Each read_from_loop basically has the following structure:
+        //
+        // begin();
+        // while (find_next_write_action())
+        // {
+        //   add_edge();
+        //   ... <next for loop or inner loop body>...
+        //   delete_edge();
+        // }
+        //
+        // Hence find_next_write_action() finds the first write action that we read from
+        // when begin() was just called, otherwise advances to the next iteration, and
+        // returns false when there no write action (left).
+
+        if (ml() == 0)                          // If we just entered this loop, call begin().
+          read_from_loop.begin();
+        else
+          read_from_loop.delete_edge();         // Otherwise remove the edge that was added the previous loop.
+
+        if (!read_from_loop.find_next_write_action())
+          break;
+
+        read_from_loop.add_edge();
+
+        if (ml.inner_loop())
         {
-          ReadFrom& read_from{read_froms_per_location[*read_from_loop]};
-          if (!read_from.find_next_write_action())
-            break;
-          read_from.write_action()->add_edge_to(edge_rf, read_from.read_action(), read_from.condition());
-          if (read_from_loop.inner_loop())
-          {
-            graph.write_png_file(basename + "_rf", rf_candidate++);
-            read_from_loop.breaks(read_froms_per_location.number_of_read_actions());
-            break;
-          }
-          ++read_from_loop;
+          graph.write_png_file(basename + "_rf", rf_candidate++);
+          ml.breaks(read_from_loops_per_location.number_of_read_actions());
+          break;
         }
 
-    //FIXME, remove this. Only do first variable for now.
-    break;
+        ++ml;
+      }
   }
 
   // Run over all possible flow-control paths.

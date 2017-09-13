@@ -154,7 +154,7 @@ std::ostream& operator<<(std::ostream& os, Edge const& edge)
   os << '{';
   Debug(os << edge.m_id << "; ");
   os << edge.m_edge_type << "; " << *edge.m_tail_node;
-  if (edge.m_condition.conditional())
+  if (!edge.m_condition.is_one())       // Conditional edge?
     os << "; " << edge.m_condition;
   os << '}';
   return os;

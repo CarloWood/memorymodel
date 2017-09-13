@@ -1,6 +1,9 @@
 #include "sys.h"
 #include "Action.h"
 #include "Context.h"
+#include "FollowOpsemTails.h"
+#include "FilterAllActions.h"
+#include "Graph.h"
 #include "utils/macros.h"
 #include "iomanip_dotfile.h"
 
@@ -44,7 +47,7 @@ std::ostream& operator<<(std::ostream& os, Action const& action)
   return os;
 }
 
-Action::Action(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : m_id(next_node_id), m_thread(thread), m_exists(true)
+Action::Action(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : m_id(next_node_id), m_thread(thread), m_exists(true), m_sequence_number(0)
 {
 #ifdef CWDEBUG
   locations_type const& locations{Context::instance().locations()};
@@ -98,7 +101,7 @@ void Action::update_exists()
       end_point.other_node()->update_exists();
 }
 
-void Action::add_edge_to(EdgeType edge_type, Action* head_node, Condition const& condition)
+void Action::add_edge_to(EdgeType edge_type, Action* head_node, boolean::Product const& condition)
 {
   DoutEntering(*dc::edge[edge_type], "Action::add_edge_to(" << edge_type << ", " << *head_node << ", " << condition << ") [this = " << *this << "]");
   Edge* new_edge = new Edge(edge_type, this, condition);
@@ -112,21 +115,47 @@ void Action::add_edge_to(EdgeType edge_type, Action* head_node, Condition const&
     head_node->update_exists();
 }
 
+void Action::delete_edge_to(EdgeType edge_type, Action* head_node)
+{
+  ASSERT(!(edge_type == edge_sb || edge_type == edge_asw));
+  m_end_points.erase(
+      std::remove_if(
+        m_end_points.begin(),
+        m_end_points.end(),
+        [edge_type, head_node](EndPoint const& end_point)
+        {
+          return end_point.other_node() == head_node && end_point.edge_type() == edge_type;
+        }
+      ),
+      m_end_points.end());
+  head_node->m_end_points.erase(
+      std::remove_if(
+        head_node->m_end_points.begin(),
+        head_node->m_end_points.end(),
+        [edge_type, this](EndPoint const& end_point)
+        {
+          return end_point.other_node() == this && end_point.edge_type() == edge_type;
+        }
+      ),
+      head_node->m_end_points.end());
+}
+
 //static
-boolean::Expression const Action::s_one(1);
+boolean::Expression const Action::s_expression_one(true);
+boolean::Product const Action::s_product_one(true);
 
 boolean::Expression const& Action::provides_sequenced_before_value_computation() const
 {
   if (provided_type().type() == NodeProvidedType::side_effect)
     return m_connected.provides_sequenced_before_value_computation();
-  return s_one;
+  return s_expression_one;
 }
 
 boolean::Expression const& Action::provides_sequenced_before_side_effect() const
 {
   if (provided_type().type() == NodeProvidedType::value_computation)
     return m_connected.provides_sequenced_before_side_effect();
-  return s_one;
+  return s_expression_one;
 }
 
 // Called on the tail-node of a new (conditional) sb edge.
@@ -144,7 +173,7 @@ void Action::sequenced_before()
     {
       Dout(dc::sb_edge, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->condition() << "'.");
       // Get condition of this edge.
-      boolean::Product edge_conditional(end_point.edge()->condition().boolean_product());
+      boolean::Product edge_conditional(end_point.edge()->condition());
       // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
       // OR everything.
       sequenced_before_value_computation += end_point.other_node()->provides_sequenced_before_value_computation() * edge_conditional;
@@ -264,3 +293,56 @@ bool Action::matches(NodeRequestedType const& requested_type, boolean::Expressio
 
   return true;
 }
+
+//static
+void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& topological_ordered_actions)
+{
+  // Number all actions in a smart way.
+  int sequence_number = 0;
+  FollowOpsemTails follow_opsem_tails;
+  FilterAllActions all_actions;
+  graph.for_actions(
+      follow_opsem_tails,
+      all_actions,
+      [&sequence_number, &topological_ordered_actions](Action* action)
+      {
+        DoutEntering(dc::for_action, "if_found(" << *action << ")");
+        // This happens for if() statements without else; ie
+        // if (A) x=1; y=1;
+        // will lead to:
+        //    a
+        //    |\ A
+        //  _ | \          where if the edge to b is followed first will cause
+        //  A |  b Wna x   the sequence number on c to be set before the edge
+        //    | /          from a to c is followed.
+        //    |/
+        //    v
+        //    c Wna y
+        if (action->m_sequence_number != 0)
+          return true;
+        for (auto&& end_point : action->m_end_points)
+          if (end_point.type() == head && end_point.edge()->is_opsem())
+          {
+            end_point.other_node()->m_prior_actions.add(action->m_prior_actions);
+            end_point.other_node()->m_prior_actions.add(*action);
+            if (end_point.other_node()->m_sequence_number == 0)
+            {
+              Dout(dc::for_action, "Returning true because " << *end_point.other_node() << " still has sequence number of 0.");
+              return true;
+            }
+          }
+        Dout(dc::for_action, "Setting sequence number on " << *action);
+        ASSERT(action->m_sequence_number == 0);
+        action->m_sequence_number = ++sequence_number;
+        topological_ordered_actions.push_back(action);
+        Dout(dc::for_action, "Returning false");
+        return false;
+      }
+  );
+}
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct for_action("FORACTION");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

@@ -30,9 +30,13 @@ libcppmem_a_SOURCES = \
 		 Graph.h \
 		 NodePtr.cxx \
 		 NodePtr.h \
+		 FollowOpsemTails.h \
+		 FilterAllActions.h \
 		 Action.cxx \
 		 Action.h \
 		 Action.inl \
+		 ActionSet.h \
+		 ActionSet.inl \
 		 Node.cxx \
 		 Node.h \
 		 EdgeType.cxx \
