@@ -30,8 +30,15 @@ libcppmem_a_SOURCES = \
 		 Graph.h \
 		 NodePtr.cxx \
 		 NodePtr.h \
+		 FollowOpsemHeads.h \
 		 FollowOpsemTails.h \
 		 FilterAllActions.h \
+		 FilterLocation.h \
+		 FollowSBHeads.h \
+		 FollowUniqueOpsemTails.h \
+		 ReadFromLoopsPerLocation.h \
+		 ReadFromLoop.cxx \
+		 ReadFromLoop.h \
 		 Action.cxx \
 		 Action.h \
 		 Action.inl \

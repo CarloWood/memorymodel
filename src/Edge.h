@@ -67,7 +67,9 @@ class Edge
  private:
   EdgeType m_edge_type;
   boolean::Product m_condition;
-  Action* m_tail_node;  // The Node from where the edge starts:  tail_node ---> head_node.
+  Action* m_tail_node;          // The Node from where the edge starts:  tail_node ---> head_node.
+  int m_visited;                // A helper variable used post opsem.
+
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
   static int s_id;
@@ -79,7 +81,8 @@ class Edge
   Edge(EdgeType edge_type, Action* tail_node, boolean::Product const& condition) :
       m_edge_type(edge_type),
       m_condition(condition),
-      m_tail_node(tail_node)
+      m_tail_node(tail_node),
+      m_visited(0)
       COMMA_DEBUG_ONLY(m_id(s_id++))
       {
         Dout(dc::sb_edge(edge_type == edge_sb)|
@@ -94,6 +97,10 @@ class Edge
 
   inline bool is_conditional() const;
   inline boolean::Expression exists() const;
+
+  // Post opsem stuff.
+  void visited(int visited_generation) { m_visited = visited_generation; }
+  bool is_visited(int visited_generation) const { return m_visited == visited_generation; }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }

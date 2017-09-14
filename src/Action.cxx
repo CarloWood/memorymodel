@@ -341,6 +341,14 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
   );
 }
 
+bool Action::is_fully_visited(int visited_generation) const
+{
+  for (auto&& end_point : m_end_points)
+    if (end_point.type() == tail && end_point.edge_type() == edge_asw && !end_point.edge()->is_visited(visited_generation))
+      return false;
+  return true;
+}
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct for_action("FORACTION");

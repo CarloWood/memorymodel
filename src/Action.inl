@@ -1,5 +1,7 @@
 #pragma once
 
+#include <libcwd/type_info.h>
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 extern channel_ct for_action;
@@ -12,7 +14,9 @@ void Action::for_actions_no_condition(
   FILTER filter,
   std::function<bool(Action*)> const& if_found) const
 {
-  DoutEntering(dc::for_action, "Action::for_actions_no_condition(...) [this = " << *this << "].");
+  DoutEntering(dc::for_action, "Action::for_actions_no_condition<" <<
+      type_info_of<FOLLOW>().demangled_name() << ", " <<
+      type_info_of<FILTER>().demangled_name() << ">(...) [this = " << *this << "].");
   for (auto&& end_point : m_end_points)
     if (follow(end_point))
     {
@@ -45,7 +49,9 @@ void Action::for_actions(
   std::function<bool(Action*, boolean::Product const&)> const& if_found,
   boolean::Product const& path_condition) const
 {
-  DoutEntering(dc::for_action, "Action::for_actions<>(..., " << path_condition << ") [this = " << *this << "].");
+  DoutEntering(dc::for_action, "Action::for_actions<" <<
+      type_info_of<FOLLOW>().demangled_name() << ", " <<
+      type_info_of<FILTER>().demangled_name() << ">(..., " << path_condition << ") [this = " << *this << "].");
   for (auto&& end_point : m_end_points)
     if (follow(end_point))
     {
@@ -54,7 +60,8 @@ void Action::for_actions(
       new_path_condition *= end_point.edge()->condition();
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};
-      Dout(dc::for_action, "Following the edge from " << *this << " to " << *other_node << "; condition is now " << new_path_condition);
+      Dout(dc::for_action, "Following the " << end_point.edge_type() << " edge from node " << name() <<
+          " to node " << other_node->name() << "; condition is now " << new_path_condition);
       // Is this the type of action that we're looking for?
       if (filter(*other_node))
       {

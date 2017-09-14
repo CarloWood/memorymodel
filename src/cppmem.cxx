@@ -13,6 +13,8 @@
 #include "Location.h"
 #include "cppmem_parser.h"
 #include "FollowOpsemTails.h"
+#include "FollowUniqueOpsemTails.h"
+#include "ReadFromLoopsPerLocation.h"
 #include "FilterAllActions.h"
 #include "utils/AIAlert.h"
 #include "utils/MultiLoop.h"
@@ -743,120 +745,6 @@ int main(int argc, char* argv[])
   //==========================================================================
   // Brute force approach.
 
-  struct FollowUniqueOpsemTails
-  {
-    bool operator()(EndPoint const& end_point) const
-    {
-      return end_point.edge()->is_opsem() && end_point.primary_tail(edge_mask_opsem);
-    }
-  };
-
-  struct FollowSBHeads
-  {
-    bool operator()(EndPoint const& end_point) const
-    {
-      return end_point.edge()->edge_type() == edge_sb && end_point.type() == head;
-    }
-  };
-
-  struct FilterLocationWrites
-  {
-    Location const& m_location;
-    FilterLocationWrites(Location const& location) : m_location(location) { }
-    bool operator()(Action const& action) { return action.location() == m_location && action.is_write(); }
-  };
-
-  class ReadFromLoop
-  {
-   private:
-    Action* m_read_action;
-    using write_actions_type = std::map<Action*, boolean::Expression>;
-    write_actions_type m_write_actions;         // More than one write might be found depending on conditions.
-
-   public:
-    ReadFromLoop(Action* read_action) : m_read_action(read_action) { }
-
-    void begin()
-    {
-      Dout(dc::notice, "Calling begin() on ReadFromLoop for read action " << *m_read_action);
-      m_write_actions.clear();
-    }
-
-    bool find_next_write_action()
-    {
-#ifdef CWDEBUG
-      DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
-      debug::Mark marker;
-#endif
-      if (!m_write_actions.empty())
-      {
-        Dout(dc::notice, "Exiting because m_write_actions is not empty().");
-        return false;
-      }
-      // Look for the last write (if any) on the same thread.
-      FollowSBHeads follow_sb_heads;
-      FilterLocationWrites follow_location_writes(m_read_action->location());
-      bool created_or_updated = false;
-      m_read_action->for_actions(
-          follow_sb_heads,                                  // Search backwards in the same thread,
-          follow_location_writes,                           // for writes to the same memory location.
-          [this, &created_or_updated](Action* write_action, boolean::Product const& path_condition)  // if_found
-          {
-            auto res = m_write_actions.emplace(write_action, path_condition);   // Store the next write action that was found.
-            if (!res.second)
-              res.first->second += path_condition;                              // Update its condition if it already existed.
-            created_or_updated = true;
-            Dout(dc::notice, "Found " << *write_action << " if " << path_condition << "; condition now " << m_write_actions[write_action]);
-            return true;                                    // Stop following edges once we found a write.
-          }
-      );
-#ifdef CWDEBUG
-      // Eventually the condition of a complete path should be just the product of the indeterminates that matter.
-      for (auto&& write_action_condition_pair : m_write_actions)
-        ASSERT(write_action_condition_pair.second.is_product());
-#endif
-      return created_or_updated;
-    }
-
-    void delete_edge()
-    {
-      // Delete any edges that were added in the last call to add_edge (if any).
-      for (auto&& write_action_condition_pair : m_write_actions)
-        write_action_condition_pair.first->delete_edge_to(edge_rf, m_read_action);
-    }
-
-    void add_edge()
-    {
-      for (auto&& write_action_condition_pair : m_write_actions)
-        write_action_condition_pair.first->add_edge_to(edge_rf, m_read_action, write_action_condition_pair.second.as_product());
-    }
-  };
-
-  class ReadFromLoopsPerLocation
-  {
-   public:
-    using read_from_loops_type = std::vector<ReadFromLoop>;
-
-   private:
-    Location const& m_location;
-    read_from_loops_type m_read_from_loops;
-    int m_previous_read_from_loop_index;
-
-   public:
-    ReadFromLoopsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
-
-    void add_read_action(Action* read_action) { m_read_from_loops.emplace_back(read_action); }
-    size_t number_of_read_actions() const { return m_read_from_loops.size(); }
-    // Called when at the top of loop read_from_loop_index. Returns true when this loop was just entered.
-    bool top_begin(int read_from_loop_index)
-    {
-      bool begin = m_previous_read_from_loop_index < read_from_loop_index;
-      m_previous_read_from_loop_index = read_from_loop_index;
-      return begin;
-    }
-    ReadFromLoop& operator[](int read_from_loop_index) { return m_read_from_loops[read_from_loop_index]; }
-  };
-
   // Check that every node has a boolean product as exists condition.
   FilterAllActions all_actions;
   FollowUniqueOpsemTails follow_unique_opsem_tails;
@@ -892,13 +780,18 @@ int main(int argc, char* argv[])
     ReadFromLoopsPerLocation& read_from_loops_per_location(read_from_loops_per_location_vector.back());
 
     // Find all read actions for this location in topological order (their m_sequence_number).
+    // Also reset the visited flags.
     for (Action* action : topological_ordered_actions)
+    {
       if (action->location() == location && action->is_read())
       {
         Dout(dc::notice, "Found read " << *action);
         read_from_loops_per_location.add_read_action(action);
       }
+    }
 
+    int visited_generation = 0;
+    bool new_writes_found = false;
     int rf_candidate = 0;
     size_t number_of_read_actions = read_from_loops_per_location.number_of_read_actions();
     Dout(dc::notice, "Number of read actions: " << number_of_read_actions);
@@ -919,22 +812,27 @@ int main(int argc, char* argv[])
         //
         // Hence find_next_write_action() finds the first write action that we read from
         // when begin() was just called, otherwise advances to the next iteration, and
-        // returns false when there no write action (left).
+        // returns false when there are no write action (left).
 
         if (ml() == 0)                          // If we just entered this loop, call begin().
           read_from_loop.begin();
         else
           read_from_loop.delete_edge();         // Otherwise remove the edge that was added the previous loop.
 
-        if (!read_from_loop.find_next_write_action())
+        if (!read_from_loop.find_next_write_action(read_from_loops_per_location, ++visited_generation))
           break;
 
-        read_from_loop.add_edge();
+        if (read_from_loop.add_edge())
+          new_writes_found = true;
 
         if (ml.inner_loop())
         {
-          graph.write_png_file(basename + "_rf", rf_candidate++);
-          ml.breaks(read_from_loops_per_location.number_of_read_actions());
+          if (new_writes_found)
+          {
+            graph.write_png_file(basename + "_rf", rf_candidate++);
+            ml.breaks(read_from_loops_per_location.number_of_read_actions());
+            new_writes_found = false;
+          }
           break;
         }
 
