@@ -776,7 +776,7 @@ int main(int argc, char* argv[])
   for (auto&& location : Context::instance().locations())
   {
     Dout(dc::notice, "Considering location " << location);
-    read_from_loops_per_location_vector.emplace_back(location);
+    read_from_loops_per_location_vector.emplace_back();
     ReadFromLoopsPerLocation& read_from_loops_per_location(read_from_loops_per_location_vector.back());
 
     // Find all read actions for this location in topological order (their m_sequence_number).
@@ -838,6 +838,8 @@ int main(int argc, char* argv[])
 
         ++ml;
       }
+    // FIXME: for now break so we only do one variable.
+    break;
   }
 
   // Run over all possible flow-control paths.

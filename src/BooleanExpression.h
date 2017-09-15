@@ -187,8 +187,11 @@ class Product
     //      1            1           1            0           -  *  T =  -         1           1
     //      1            1           1            1           -  *  - =  -         1           1
     //
+    mask_type is_false = ~m_variables & ~product.m_variables & (m_negation ^ product.m_negation) ? full_mask : empty_mask;
     m_negation = (~m_variables & m_negation) | (~product.m_variables & product.m_negation) | (product.m_variables & m_negation) | (m_variables & product.m_negation);
     m_variables &= product.m_variables;
+    m_negation |= is_false;
+    m_variables &= ~is_false;
     return *this;
   }
 

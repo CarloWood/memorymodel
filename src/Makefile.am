@@ -94,18 +94,18 @@ boolean_permutations_test_SOURCES = boolean_permutations_test.cxx
 
 boolean_simplification_test_SOURCES = boolean_simplification_test.cxx
 
-libcppmem_a_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
+libcppmem_a_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
 
-cppmem_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
+cppmem_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 cppmem_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la @BOOST_UNIT_TEST_FRAMEWORK_LIB@
 
-cppmem_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
+cppmem_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 cppmem_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-boolean_permutations_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
+boolean_permutations_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 boolean_permutations_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-boolean_simplification_test_CXXFLAGS = -fmax-errors=1 @LIBCWD_FLAGS@
+boolean_simplification_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 boolean_simplification_test_LDADD = libcppmem.a ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 # --------------- Maintainer's Section

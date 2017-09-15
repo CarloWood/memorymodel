@@ -11,12 +11,11 @@ class ReadFromLoopsPerLocation
   using read_from_loops_type = std::vector<ReadFromLoop>;
 
  private:
-  Location const& m_location;
   read_from_loops_type m_read_from_loops;
   int m_previous_read_from_loop_index;
 
  public:
-  ReadFromLoopsPerLocation(Location const& location) : m_location(location), m_previous_read_from_loop_index(-1) { }
+  ReadFromLoopsPerLocation() : m_previous_read_from_loop_index(-1) { }
 
   void add_read_action(Action* read_action)
   {

@@ -4,19 +4,29 @@
 #include "debug.h"
 #include "BooleanExpression.h"
 #include <map>
+#include <deque>
 
 class ReadFromLoopsPerLocation;
 
 class ReadFromLoop
 {
- private:
-  Action* m_read_action;
   using write_actions_type = std::map<Action*, boolean::Expression>;
-  write_actions_type m_write_actions;         // More than one write might be found depending on conditions.
-  bool m_first_iteration;                     // Set to true upon the first iteration of this loop.
+  using queued_actions_type = std::deque<std::pair<Action*, boolean::Product>>;
+
+ private:
+  Action* m_read_action;                        // The read action that we're looping over all possible write actions that it Read-Froms.
+  bool m_first_iteration;                       // Set to true upon the first iteration of this loop.
+  write_actions_type m_write_actions;           // More than one write might be found depending on conditions.
+  queued_actions_type m_queued_actions;         // Write actions found that couldn't be processed immediately because they happen
+                                                // under the same condition(s) as what we found so far.
 
  public:
   ReadFromLoop(Action* read_action) : m_read_action(read_action) { }
+  ReadFromLoop(ReadFromLoop&& read_from_loop) :
+    m_read_action(read_from_loop.m_read_action),
+    m_first_iteration(read_from_loop.m_first_iteration),
+    m_write_actions(std::move(read_from_loop.m_write_actions)),
+    m_queued_actions(std::move(read_from_loop.m_queued_actions)) { }
 
   void begin()
   {
@@ -44,4 +54,7 @@ class ReadFromLoop
     }
     return new_edges;
   }
+
+ private:
+  void store_write(Action* write_action, boolean::Product path_condition, boolean::Expression& found_write);
 };

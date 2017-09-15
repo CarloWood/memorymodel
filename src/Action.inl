@@ -27,17 +27,14 @@ void Action::for_actions_no_condition(
       if (filter(*other_node))
       {
         Dout(dc::for_action, "Calling if_found(" << *other_node << ")");
+        DebugMarkDownRight;
         if (if_found(other_node))
         {
-          Dout(dc::for_action, "Continuing with next end_point, if any...");
+          Dout(dc::for_action, "Continuing with next end_point of node " << name() << ", if any...");
           continue;
         }
       }
-#ifdef CWDEBUG
-      else
-        Dout(dc::for_action, "Skipping node " << *other_node << " because it was filtered.");
-#endif
-      Dout(dc::for_action, "Going deeper...");
+      Dout(dc::for_action, "Following edges of node " << other_node->name() << "...");
       other_node->for_actions_no_condition(follow, filter, if_found);
     }
 }
@@ -60,23 +57,25 @@ void Action::for_actions(
       new_path_condition *= end_point.edge()->condition();
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};
-      Dout(dc::for_action, "Following the " << end_point.edge_type() << " edge from node " << name() <<
-          " to node " << other_node->name() << "; condition is now " << new_path_condition);
+#ifdef CWDEBUG
+      Dout(dc::for_action|continued_cf, "Following the " << end_point.edge_type() << " edge from node " << name() <<
+          " to node " << other_node->name());
+      if (!end_point.edge()->condition().is_one())
+        Dout(dc::continued, "; condition is now " << new_path_condition);
+      Dout(dc::finish, ".");
+#endif
       // Is this the type of action that we're looking for?
       if (filter(*other_node))
       {
         Dout(dc::for_action, "Calling if_found(" << *other_node << ", " << new_path_condition << ")");
+        DebugMarkDownRight;
         if (if_found(other_node, new_path_condition))
         {
-          Dout(dc::for_action, "Continuing with next end_point, if any...");
+          Dout(dc::for_action, "Continuing with next end_point of node " << name() << ", if any...");
           continue;
         }
       }
-#ifdef CWDEBUG
-      else
-        Dout(dc::for_action, "Skipping node " << *other_node << " because it was filtered.");
-#endif
-      Dout(dc::for_action, "Going deeper...");
+      Dout(dc::for_action, "Following edges of node " << other_node->name() << "...");
       other_node->for_actions(follow, filter, if_found, new_path_condition);
     }
 }

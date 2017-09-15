@@ -102,7 +102,7 @@ void Graph::generate_dot_file(std::string const& filename) const
              " [label=<<font color=\"" << color << "\">" << edge->name();
 #ifdef CWDEBUG
       // Print id of the edge to show in what order edges have been created.
-      //out << edge->id();
+      out << edge->id();
 #endif
       if (edge->is_conditional())
         out << ':' << edge->condition().to_string(true);
