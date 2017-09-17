@@ -36,8 +36,8 @@ class Graph
     action->for_actions_no_condition(follow, filter, if_found);
   }
 
-  void generate_dot_file(std::string const& filename) const;
-  void write_png_file(std::string basename, int appendix = -1) const;
+  void generate_dot_file(std::string const& filename, std::vector<Action*> const& topological_ordered_actions) const;
+  void write_png_file(std::string basename, std::vector<Action*> const& topological_ordered_actions, int appendix = -1) const;
 
   // Accessor.
   nodes_type::iterator begin() { return m_nodes.begin(); }

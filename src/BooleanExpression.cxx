@@ -142,7 +142,7 @@ Expression operator+(Expression const& expression0, Expression const& expression
   {
     // Zip the two vectors into eachother so the result is still ordered.
     size_t term_of_input[2] = { 0, 0 }; // The current indices into the vector m_sum_of_products of both inputs.
-    int largest_input;                        // Which input has currently the "largest_input" term of m_sum_of_products.
+    int largest_input;                  // Which input has currently the "largest_input" term of m_sum_of_products.
     do
     {
       // Sort large to small (many variables to few), so that when simplify() removes variables from
@@ -402,6 +402,11 @@ bool Expression::equivalent(Expression const& expression) const
 
 //static
 Variable::id_type Variable::s_next_id;
+
+//static
+Expression Expression::s_zero(false);
+//static
+Expression Expression::s_one(true);
 
 namespace {
 

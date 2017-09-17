@@ -44,12 +44,12 @@ boolean::Expression SBNodePresence::hiding_behind_another(NodeRequestedType cons
       return m_sequenced_before_value_computation + m_sequenced_before_side_effect;
     case NodeRequestedType::tails_:
       if (m_sequenced_after_something)
-        return boolean::Expression::one();
+        return boolean::Expression{true};
       /*fall-through*/
     case NodeRequestedType::all_: ;     // Avoid compiler warning.
       /*fall-through*/
   }
-  return boolean::Expression::zero();
+  return boolean::Expression{false};
 }
 
 bool NodeRequestedType::matches(NodeProvidedType const& provided_type) const

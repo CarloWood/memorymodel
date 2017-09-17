@@ -1,8 +1,7 @@
 #pragma once
 
-#include <libcwd/type_info.h>
-
 #ifdef CWDEBUG
+#include <libcwd/type_info.h>
 NAMESPACE_DEBUG_CHANNELS_START
 extern channel_ct for_action;
 NAMESPACE_DEBUG_CHANNELS_END
@@ -22,7 +21,7 @@ void Action::for_actions_no_condition(
     {
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};
-      Dout(dc::for_action, "Following edge from " << *this << " to " << *other_node);
+      Dout(dc::for_action, "Following edge from " << name() << " to " << other_node->name() << '.');
       // Is this the type of action that we're looking for?
       if (filter(*other_node))
       {

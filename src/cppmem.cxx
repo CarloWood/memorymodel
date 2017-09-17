@@ -18,12 +18,14 @@
 #include "FilterAllActions.h"
 #include "utils/AIAlert.h"
 #include "utils/MultiLoop.h"
-#include <libcwd/type_info.h>
 #include <cstdlib>      // std::system
 #include <boost/variant/get.hpp>
 #include <ostream>
 #include <fstream>
 #include <iomanip>
+#ifdef CWDEBUG
+#include <libcwd/type_info.h>
+#endif
 
 std::map<ast::tag, ast::function, TagCompare> functions;
 
@@ -620,7 +622,7 @@ void execute_body(std::string name, ast::statement_seq const& body)
   Context::instance().m_symbols.scope_end();
 }
 
-void Graph::write_png_file(std::string basename, int appendix) const
+void Graph::write_png_file(std::string basename, std::vector<Action*> const& topological_ordered_actions, int appendix) const
 {
   if (appendix >= 0)
   {
@@ -630,8 +632,11 @@ void Graph::write_png_file(std::string basename, int appendix) const
   }
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
-  generate_dot_file(dot_filename);
-  std::string command = "dot "/*-Kneato */"-Tpng -o " + png_filename + " " + dot_filename;
+  generate_dot_file(dot_filename, topological_ordered_actions);
+  std::string command = "dot ";
+  if (Context::instance().number_of_threads() > 1)
+    command += "-Kneato ";
+  command += "-Tpng -o " + png_filename + " " + dot_filename;
   std::system(command.c_str());
 }
 
@@ -767,7 +772,7 @@ int main(int argc, char* argv[])
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
   std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
-  graph.write_png_file(basename + "_opsem");
+  graph.write_png_file(basename + "_opsem", topological_ordered_actions);
 
   // A vector of objects representing all read nodes per memory location.
   std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;
@@ -829,11 +834,9 @@ int main(int argc, char* argv[])
         {
           if (new_writes_found)
           {
-            graph.write_png_file(basename + "_rf", rf_candidate++);
-            ml.breaks(read_from_loops_per_location.number_of_read_actions());
+            graph.write_png_file(basename + "_rf", topological_ordered_actions, rf_candidate++);
             new_writes_found = false;
           }
-          break;
         }
 
         ++ml;

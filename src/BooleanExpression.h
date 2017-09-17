@@ -197,6 +197,13 @@ class Product
 
   Product operator*(Product const& rhs) const { Product result(*this); result *= rhs; return result; }
 
+  void negate()
+  {
+    mask_type is_literal = (m_variables ^ m_negation) == full_mask ? full_mask : empty_mask;
+    m_negation ^= (is_literal | ~m_variables);
+    m_variables ^= is_literal;
+  }
+
   // Zero = { empty_mask, full_mask }
   // One = { full_mask, empty_mask }
   bool is_literal() const { return (m_variables ^ m_negation) == full_mask; }
@@ -229,6 +236,8 @@ class Expression
  private:
   using sum_of_products_type = std::vector<Product>;
   sum_of_products_type m_sum_of_products;       // Elements must have a unique set of variables (Product::m_variables) and be ordered.
+  static Expression s_zero;
+  static Expression s_one;
 
   static mask_type grayToBinary64(mask_type num)
   {
@@ -261,16 +270,19 @@ class Expression
   Expression() { }
   Expression(Expression&& expression) : m_sum_of_products(std::move(expression.m_sum_of_products)) { }
   Expression& operator=(Expression&& expression) { m_sum_of_products = std::move(expression.m_sum_of_products); return *this; }
+  Expression& operator=(Product const& product) { m_sum_of_products.resize(1); m_sum_of_products[0] = product; return *this; }
+  Expression& operator=(bool literal) { m_sum_of_products.resize(1); m_sum_of_products[0] = Product{literal}; return *this; }
   explicit Expression(Product const& product) : m_sum_of_products(1, product) { }
   Expression(bool literal) : m_sum_of_products(1, Product(literal)) { }
   Expression copy() const { Expression result; result.m_sum_of_products = m_sum_of_products; return result; }
-  static Expression zero() { Expression result(false); return result; }
-  static Expression one() { Expression result(true); return result; }
+  static Expression const& zero() { return s_zero; }
+  static Expression const& one() { return s_one; }
 
   friend Expression operator+(Expression const& expression0, Expression const& expression1);
   Expression& operator+=(Expression const& expression) { *this = *this + expression; return *this; }
   Expression& operator+=(Product const& product);
   Expression operator*(Product const& product) const;
+  Expression& operator*=(Product const& product);
   void simplify();
   void sanity_check() const;
 

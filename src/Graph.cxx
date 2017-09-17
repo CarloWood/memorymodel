@@ -26,7 +26,7 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
   }
 }
 
-void Graph::generate_dot_file(std::string const& filename) const
+void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> const& topological_ordered_actions) const
 {
   DoutEntering(dc::notice, "Graph::generate_dot_file(\"" << filename << "\"");
 
@@ -38,20 +38,37 @@ void Graph::generate_dot_file(std::string const& filename) const
     return;
   }
 
-  // Count number of nodes per thread.
   int max_count = 0;
-  int main_thread_nodes = 0;
-  std::vector<int> number_of_nodes(Context::instance().number_of_threads(), 0);
-  for (NodePtr node{m_nodes.begin()}; node != m_nodes.end(); ++node)
+  std::vector<int> vertical_position(1, 0);                                                     // As function of sequence number.
+  std::vector<int> pos_of_last_node(Context::instance().number_of_threads(), -1);               // Position of last node of a thread as function of thread id.
+  std::vector<Action*> action_of_last_node(Context::instance().number_of_threads(), nullptr);   // Last node of a thread as function of thread id.
+  for (Action* action : topological_ordered_actions)
   {
-    int n = ++number_of_nodes[node->thread()->id()];
-    if (node->thread()->is_main_thread())
-      ++main_thread_nodes;
-    else if (n > max_count)
-      max_count = n;
+    // Action are ordered as follows:
+    // pos: seq.nr:
+    //  0   1
+    //  1   2
+    //  2   3
+    //  3        4   7
+    //  4        5   8   10
+    //  5        6   9
+    //  6            11
+    //  7   12
+    //  8   13
+    // where the node of each thread is as high as possible,
+    // but below (vertically) nodes that they are sequenced after.
+    // Ie, here, 4 and 7 are sequenced after 3, 10 is sequenced
+    // after 7 and 12 is sequenced after 11.
+    Thread::id_type thread_id = action->thread()->id();
+    int pos = ++pos_of_last_node[thread_id];
+    for (Thread::id_type tid = 0; tid < Context::instance().number_of_threads(); ++tid)
+      if (tid != thread_id && action_of_last_node[tid] && action_of_last_node[tid]->is_sequenced_before(*action))
+        pos = std::max(pos, pos_of_last_node[tid] + 1);
+    pos_of_last_node[thread_id] = pos;
+    action_of_last_node[thread_id] = action;
+    vertical_position.push_back(pos);
+    max_count = std::max(max_count, pos);
   }
-  std::vector<int> depth(Context::instance().number_of_threads(), 0);
-  depth[0] = main_thread_nodes;
 
   int const fontsize = 14;
   int const edge_label_fontsize = 10;
@@ -72,7 +89,7 @@ void Graph::generate_dot_file(std::string const& filename) const
     double posx, posy;
     int thread = node->thread()->id();
     posx = 1.0 + xscale * thread;
-    posy = 1.0 + yscale * (max_count + --depth[thread]);
+    posy = 1.0 + yscale * (max_count - vertical_position[node->sequence_number()]);
     out << "node" << node->name() <<
         " [shape=plaintext, fontname=\"Helvetica\", fontsize=" << fontsize << "]"
         " [label=\"";

@@ -243,7 +243,7 @@ void Action::sequenced_before_side_effect_sequenced_before_value_computation()
   // any other node yet, so their condition is 1.
   //
   // Bottom line, we NEVER want to add a tail to the "Rna x=".
-  m_connected.update_sequenced_before_value_computation(true, boolean::Expression::one());
+  m_connected.update_sequenced_before_value_computation(true, boolean::Expression{true});
 #ifdef CWDEBUG
   for (auto&& end_point : m_end_points)
     if (end_point.edge_type() == edge_sb && end_point.type() == head)
@@ -297,6 +297,7 @@ bool Action::matches(NodeRequestedType const& requested_type, boolean::Expressio
 //static
 void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& topological_ordered_actions)
 {
+  DoutEntering(dc::notice, "Action::initialize_post_opsem(...)");
   // Number all actions in a smart way.
   int sequence_number = 0;
   FollowOpsemTails follow_opsem_tails;
@@ -321,10 +322,14 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
         if (action->m_sequence_number != 0)
           return true;
         for (auto&& end_point : action->m_end_points)
-          if (end_point.type() == head && end_point.edge()->is_opsem())
+          if (end_point.type() == tail && end_point.edge()->is_opsem())
           {
             end_point.other_node()->m_prior_actions.add(action->m_prior_actions);
             end_point.other_node()->m_prior_actions.add(*action);
+          }
+        for (auto&& end_point : action->m_end_points)
+          if (end_point.type() == head && end_point.edge()->is_opsem())
+          {
             if (end_point.other_node()->m_sequence_number == 0)
             {
               Dout(dc::for_action, "Returning true because " << *end_point.other_node() << " still has sequence number of 0.");

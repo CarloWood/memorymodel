@@ -42,6 +42,7 @@ class ReadFromLoop
     // Delete any edges that were added in the last call to add_edge (if any).
     for (auto&& write_action_condition_pair : m_write_actions)
       write_action_condition_pair.first->delete_edge_to(edge_rf, m_read_action);
+    m_write_actions.clear();
   }
 
   bool add_edge()
@@ -56,5 +57,5 @@ class ReadFromLoop
   }
 
  private:
-  void store_write(Action* write_action, boolean::Product path_condition, boolean::Expression& found_write);
+  bool store_write(Action* write_action, boolean::Product path_condition, boolean::Expression& found_write, bool queue);
 };
