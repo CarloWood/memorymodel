@@ -16,6 +16,7 @@
 #include "FollowUniqueOpsemTails.h"
 #include "ReadFromLoopsPerLocation.h"
 #include "FilterAllActions.h"
+#include "boolean-expression/TruthProduct.h"
 #include "utils/AIAlert.h"
 #include "utils/MultiLoop.h"
 #include <cstdlib>      // std::system
@@ -622,7 +623,7 @@ void execute_body(std::string name, ast::statement_seq const& body)
   Context::instance().m_symbols.scope_end();
 }
 
-void Graph::write_png_file(std::string basename, std::vector<Action*> const& topological_ordered_actions, int appendix) const
+void Graph::write_png_file(std::string basename, std::vector<Action*> const& topological_ordered_actions, boolean::Expression const& valid, int appendix) const
 {
   if (appendix >= 0)
   {
@@ -632,7 +633,7 @@ void Graph::write_png_file(std::string basename, std::vector<Action*> const& top
   }
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
-  generate_dot_file(dot_filename, topological_ordered_actions);
+  generate_dot_file(dot_filename, topological_ordered_actions, valid);
   std::string command = "dot ";
   if (Context::instance().number_of_threads() > 1)
     command += "-Kneato ";
@@ -772,7 +773,7 @@ int main(int argc, char* argv[])
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
   std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
-  graph.write_png_file(basename + "_opsem", topological_ordered_actions);
+  graph.write_png_file(basename + "_opsem", topological_ordered_actions, true);
 
   // A vector of objects representing all read nodes per memory location.
   std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;
@@ -834,7 +835,15 @@ int main(int argc, char* argv[])
         {
           if (new_writes_found)
           {
-            graph.write_png_file(basename + "_rf", topological_ordered_actions, rf_candidate++);
+            // Calculate under which condition this graph is valid.
+            // The graph is valid when every read has a read-from edge when it exists.
+            boolean::Expression valid{true};
+            for (unsigned int read_loop = 0; read_loop < number_of_read_actions; ++read_loop)
+            {
+              ReadFromLoop& read_from_loop{read_from_loops_per_location[read_loop]};
+              valid = valid.times(read_from_loop.have_write()(boolean::TruthProduct{read_from_loop.have_read().as_product()}));
+            }
+            graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, rf_candidate++);
             new_writes_found = false;
           }
         }

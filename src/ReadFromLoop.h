@@ -2,7 +2,7 @@
 
 #include "Action.h"
 #include "debug.h"
-#include "BooleanExpression.h"
+#include "boolean-expression/BooleanExpression.h"
 #include <map>
 #include <deque>
 
@@ -19,6 +19,7 @@ class ReadFromLoop
   write_actions_type m_write_actions;           // More than one write might be found depending on conditions.
   queued_actions_type m_queued_actions;         // Write actions found that couldn't be processed immediately because they happen
                                                 // under the same condition(s) as what we found so far.
+  boolean::Expression m_have_write;             // The condition under which m_read_action has a Read-From edge.
 
  public:
   ReadFromLoop(Action* read_action) : m_read_action(read_action) { }
@@ -27,6 +28,9 @@ class ReadFromLoop
     m_first_iteration(read_from_loop.m_first_iteration),
     m_write_actions(std::move(read_from_loop.m_write_actions)),
     m_queued_actions(std::move(read_from_loop.m_queued_actions)) { }
+
+  boolean::Expression const& have_write() const { return m_have_write; }
+  boolean::Expression const& have_read() const { return m_read_action->exists(); }
 
   void begin()
   {
@@ -47,12 +51,19 @@ class ReadFromLoop
 
   bool add_edge()
   {
+    // This function can add more than one edge: edges that are
+    // mutual exclusive depending on which branches are taken.
+    // Set m_have_write to the boolean expression under which
+    // we have a Read-From edge.
+    m_have_write = false;
     bool new_edges = false;
     for (auto&& write_action_condition_pair : m_write_actions)
     {
       new_edges = true;
-      write_action_condition_pair.first->add_edge_to(edge_rf, m_read_action, write_action_condition_pair.second.as_product());
+      write_action_condition_pair.first->add_edge_to(edge_rf, m_read_action, write_action_condition_pair.second.copy());
+      m_have_write += write_action_condition_pair.second * write_action_condition_pair.first->exists().as_product();
     }
+    Dout(dc::notice, "Setting \"" << m_read_action->name() << "\"::m_have_write set to " << m_have_write << '.');
     return new_edges;
   }
 

@@ -5,7 +5,7 @@
 #include "iomanip_dotfile.h"
 #include "utils/is_power_of_two.h"
 #include "utils/macros.h"
-#include "BooleanExpression.h"
+#include "boolean-expression/BooleanExpression.h"
 #include <sstream>
 
 char const* memory_order_str(std::memory_order memory_order)

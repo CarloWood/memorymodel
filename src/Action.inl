@@ -53,7 +53,7 @@ void Action::for_actions(
     {
       // The condition under which we can follow this path up to and including this edge.
       boolean::Product new_path_condition{path_condition};
-      new_path_condition *= end_point.edge()->condition();
+      new_path_condition *= end_point.edge()->condition().as_product();
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};
 #ifdef CWDEBUG

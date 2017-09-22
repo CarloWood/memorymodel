@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BooleanExpression.h"
+#include "boolean-expression/BooleanExpression.h"
 #include <iosfwd>
 
 class NodeProvidedType

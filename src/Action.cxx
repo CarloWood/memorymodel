@@ -101,10 +101,10 @@ void Action::update_exists()
       end_point.other_node()->update_exists();
 }
 
-void Action::add_edge_to(EdgeType edge_type, Action* head_node, boolean::Product const& condition)
+void Action::add_edge_to(EdgeType edge_type, Action* head_node, boolean::Expression&& condition)
 {
   DoutEntering(*dc::edge[edge_type], "Action::add_edge_to(" << edge_type << ", " << *head_node << ", " << condition << ") [this = " << *this << "]");
-  Edge* new_edge = new Edge(edge_type, this, condition);
+  Edge* new_edge = new Edge(edge_type, this, std::move(condition));
   bool directed = EdgeMaskType{edge_type}.is_directed();
   // Call tail first!
   add_end_point(new_edge, directed ? tail : undirected, head_node, false);
@@ -173,7 +173,7 @@ void Action::sequenced_before()
     {
       Dout(dc::sb_edge, "Found tail EndPoint " << end_point << " with condition '" << end_point.edge()->condition() << "'.");
       // Get condition of this edge.
-      boolean::Product edge_conditional(end_point.edge()->condition());
+      boolean::Product edge_conditional(end_point.edge()->condition().as_product());
       // Get the provides boolean expressions from the other node and AND them with the condition of that edge.
       // OR everything.
       sequenced_before_value_computation += end_point.other_node()->provides_sequenced_before_value_computation() * edge_conditional;

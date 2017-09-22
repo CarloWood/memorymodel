@@ -61,7 +61,7 @@ class Action
   virtual ~Action() = default;
 
   // Add a new edge of type edge_type from this Action node to head, that exists if condition is true.
-  void add_edge_to(EdgeType edge_type, Action* head_node, boolean::Product const& condition = s_product_one);
+  void add_edge_to(EdgeType edge_type, Action* head_node, boolean::Expression&& condition = boolean::Expression{true});
 
   // Delete edge added before by add_edge_to.
   void delete_edge_to(EdgeType edge_type, Action* head_node);

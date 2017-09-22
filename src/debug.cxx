@@ -1,9 +1,11 @@
 #include "sys.h"
 #include "debug.h"
-#include "Evaluation.h"
-#include "ast.h"
 
 #ifdef CWDEBUG
+#include "Evaluation.h"
+#include "ast.h"
+#include "boolean-expression/BooleanExpression.h"
+
 std::ostream& operator<<(std::ostream& os, std::memory_order mo)
 {
   switch (mo)
@@ -36,6 +38,11 @@ void gdb_print_evaluation(Evaluation const&& evaluation)
 }
 
 void gdb_print_expression(ast::expression const&& expression)
+{
+  std::cout << expression << std::endl;
+}
+
+void gdb_print_boolean_expression(boolean::Expression const&& expression)
 {
   std::cout << expression << std::endl;
 }

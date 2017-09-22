@@ -10,3 +10,7 @@
 	path = utils
 	url = https://github.com/CarloWood/ai-utils.git
 	branch = master
+[submodule "boolean-expression"]
+	path = boolean-expression
+	url = https://github.com/CarloWood/boolean-expression.git
+	branch = master

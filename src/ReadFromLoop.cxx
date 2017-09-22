@@ -19,8 +19,9 @@ bool ReadFromLoop::store_write(Action* write_action, boolean::Product path_condi
   Dout(dc::notice, "Actual condition under which path from " << write_action->name() << " --> " << m_read_action->name() << " exists: " << path_condition);
   if ((found_write * path_condition).is_zero())
   {
+    Dout(dc::notice, "Keeping write because found_write = " << found_write << " and (" << found_write << ") * " << path_condition  << " = " << (found_write * path_condition) << '.');
     found_write += path_condition;                                      // Update the condition under which we found writes.
-    Dout(dc::notice, "found_write is now " << found_write);
+    Dout(dc::notice, "Updated found_write to " << found_write);
   }
   else
   {
@@ -90,11 +91,6 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
         }
     );
     m_first_iteration = false;
-#ifdef CWDEBUG
-    // Eventually the condition of a complete path should be just the product of the indeterminates that matter.
-    for (auto&& write_action_condition_pair : m_write_actions)
-      ASSERT(write_action_condition_pair.second.is_product());
-#endif
   }
   else
   {

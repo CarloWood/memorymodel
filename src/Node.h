@@ -169,4 +169,4 @@ class CEWNode : public AtomicWriteNode
 
 //inline
 bool Edge::is_conditional() const { return !m_condition.is_one(); }
-boolean::Expression Edge::exists() const { return m_tail_node->exists() * m_condition; }
+boolean::Expression Edge::exists() const { return m_condition * m_tail_node->exists().as_product(); }

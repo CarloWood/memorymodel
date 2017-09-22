@@ -66,7 +66,7 @@ class Edge
 {
  private:
   EdgeType m_edge_type;
-  boolean::Product m_condition;
+  boolean::Expression m_condition;
   Action* m_tail_node;          // The Node from where the edge starts:  tail_node ---> head_node.
   int m_visited;                // A helper variable used post opsem.
 
@@ -78,9 +78,9 @@ class Edge
 #endif
 
  public:
-  Edge(EdgeType edge_type, Action* tail_node, boolean::Product const& condition) :
+  Edge(EdgeType edge_type, Action* tail_node, boolean::Expression&& condition) :
       m_edge_type(edge_type),
-      m_condition(condition),
+      m_condition(std::move(condition)),
       m_tail_node(tail_node),
       m_visited(0)
       COMMA_DEBUG_ONLY(m_id(s_id++))
@@ -91,7 +91,7 @@ class Edge
       }
 
   EdgeType edge_type() const { return m_edge_type; }
-  boolean::Product const& condition() const { return m_condition; }
+  boolean::Expression const& condition() const { return m_condition; }
   char const* name() const { return edge_name(m_edge_type); }
   bool is_opsem() const { return EdgeMaskType{m_edge_type}.is_opsem(); }
 

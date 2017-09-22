@@ -10,7 +10,7 @@
 
 void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const& head_node, Condition const& condition)
 {
-  tail_node->add_edge_to(edge_type, &*head_node, condition.boolean_product());
+  tail_node->add_edge_to(edge_type, &*head_node, boolean::Expression{condition.boolean_product()});
 #ifdef CWDEBUG
   Dout(dc::notice|continued_cf,
       "Graph::new_edge: added new edge " << *tail_node->get_end_points().back().edge() <<
@@ -26,7 +26,7 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
   }
 }
 
-void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> const& topological_ordered_actions) const
+void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> const& topological_ordered_actions, boolean::Expression const& valid) const
 {
   DoutEntering(dc::notice, "Graph::generate_dot_file(\"" << filename << "\"");
 
@@ -122,7 +122,7 @@ void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> 
       out << edge->id();
 #endif
       if (edge->is_conditional())
-        out << ':' << edge->condition().to_string(true);
+        out << ':' << html << edge->condition();
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
                "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }
@@ -146,6 +146,17 @@ void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> 
         "      <TD>" << conditional.second.id_name() << "</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
       out << html << *conditional.first;
+      out <<
+        "</FONT></TD>\n"
+        "      </TR>\n";
+    }
+    if (!valid.is_one())
+    {
+      out <<
+        "      <TR>\n"
+        "      <TD>Valid</TD>\n"
+        "      <TD><FONT COLOR=\"black\">";
+      out << html << valid;
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";
