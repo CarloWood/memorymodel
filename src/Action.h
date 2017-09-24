@@ -126,7 +126,7 @@ class Action
   bool is_sequenced_before(Action const& action) const { return action.m_prior_actions.includes(*this); }
   void set_read_from_loop_index(int read_from_loop_index) { m_read_from_loop_index = read_from_loop_index; }
   int get_read_from_loop_index() const { return m_read_from_loop_index; }
-  bool is_fully_visited(int visited_generation) const;
+  boolean::Expression is_fully_visited(int visited_generation, boolean::Product const& path_condition) const;
 
   virtual Kind kind() const = 0;
   virtual bool is_second_mutex_access() const { return false; }

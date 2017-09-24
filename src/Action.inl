@@ -49,10 +49,11 @@ void Action::for_actions(
       type_info_of<FOLLOW>().demangled_name() << ", " <<
       type_info_of<FILTER>().demangled_name() << ">(..., " << path_condition << ") [this = " << *this << "].");
   for (auto&& end_point : m_end_points)
-    if (follow(end_point))
+    if (follow(end_point, path_condition))
     {
       // The condition under which we can follow this path up to and including this edge.
       boolean::Product new_path_condition{path_condition};
+      new_path_condition *= follow.is_fully_visited().as_product();
       new_path_condition *= end_point.edge()->condition().as_product();
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};

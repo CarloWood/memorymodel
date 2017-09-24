@@ -57,6 +57,9 @@ class EndPoint
   Action* other_node() const { return m_other_node; }
   bool primary_tail(EdgeMaskType edge_mask_type) const;
   bool primary_head(EdgeMaskType edge_mask_type) const;
+#ifdef CWDEBUG
+  Action* current_node() const;
+#endif
 
   friend bool operator==(EndPoint const& end_point1, EndPoint const& end_point2);
   friend std::ostream& operator<<(std::ostream& os, EndPoint const& end_point);
@@ -67,8 +70,9 @@ class Edge
  private:
   EdgeType m_edge_type;
   boolean::Expression m_condition;
-  Action* m_tail_node;          // The Node from where the edge starts:  tail_node ---> head_node.
-  int m_visited;                // A helper variable used post opsem.
+  Action* m_tail_node;                  // The Node from where the edge starts:  tail_node ---> head_node.
+  int m_visited;                        // A helper variable used post opsem.
+  boolean::Expression m_visited_condition; // The condition under which this edge is visited.
 
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.
@@ -99,8 +103,27 @@ class Edge
   inline boolean::Expression exists() const;
 
   // Post opsem stuff.
-  void visited(int visited_generation) { m_visited = visited_generation; }
-  bool is_visited(int visited_generation) const { return m_visited == visited_generation; }
+  void visited(int visited_generation, boolean::Product const& path_condition)
+  {
+    if (m_visited != visited_generation)
+    {
+      Dout(dc::visited, "Setting m_visited_condition to " << path_condition << " because new visited_generation " <<
+          visited_generation << " is unequal old value " << m_visited);
+      m_visited_condition = path_condition;
+      m_visited = visited_generation;
+    }
+    else
+    {
+      Dout(dc::visited|continued_cf, "Updating m_visited_condition from " << m_visited_condition << ' ');
+      m_visited_condition += path_condition;
+      Dout(dc::finish, "to " << m_visited_condition);
+    }
+  }
+  bool is_visited(int visited_generation, boolean::Product const& path_condition) const
+  {
+    return m_visited == visited_generation && !(m_visited_condition * path_condition).is_zero();
+  }
+  boolean::Expression const& visited_condition() const { return m_visited_condition; }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }

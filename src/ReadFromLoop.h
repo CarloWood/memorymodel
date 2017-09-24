@@ -11,7 +11,7 @@ class ReadFromLoopsPerLocation;
 class ReadFromLoop
 {
   using write_actions_type = std::map<Action*, boolean::Expression>;
-  using queued_actions_type = std::deque<std::pair<Action*, boolean::Product>>;
+  using queued_actions_type = std::deque<std::pair<Action*, boolean::Expression>>;
 
  private:
   Action* m_read_action;                        // The read action that we're looping over all possible write actions that it Read-Froms.
@@ -68,5 +68,5 @@ class ReadFromLoop
   }
 
  private:
-  bool store_write(Action* write_action, boolean::Product path_condition, boolean::Expression& found_write, bool queue);
+  bool store_write(Action* write_action, boolean::Expression&& condition, boolean::Expression& found_write, bool queue);
 };

@@ -22,7 +22,7 @@ class Graph
     m_next_node_id{0} { }
 
   template <class FOLLOW, class FILTER>
-  void for_actions(             // Starting with the first Action of the program call if_found(action) when filter returns true;
+  void for_actions_no_condition(// Starting with the first Action of the program call if_found(action) when filter returns true;
       FOLLOW follow,            // If if_found() does not return true, then follow each of its EndPoints when
                                 //  `bool FOLLOW::operator()(EndPoint const&)` returns true and repeat.
       FILTER filter,            // Call if_found() for this Action when `bool FILTER::operator()(Action const&)` returns true.

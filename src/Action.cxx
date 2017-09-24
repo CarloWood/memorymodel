@@ -302,7 +302,7 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
   int sequence_number = 0;
   FollowOpsemTails follow_opsem_tails;
   FilterAllActions all_actions;
-  graph.for_actions(
+  graph.for_actions_no_condition(
       follow_opsem_tails,
       all_actions,
       [&sequence_number, &topological_ordered_actions](Action* action)
@@ -346,16 +346,30 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
   );
 }
 
-bool Action::is_fully_visited(int visited_generation) const
+boolean::Expression Action::is_fully_visited(int visited_generation, boolean::Product const& path_condition) const
 {
+  boolean::Expression result{true};
   for (auto&& end_point : m_end_points)
-    if (end_point.type() == tail && end_point.edge_type() == edge_asw && !end_point.edge()->is_visited(visited_generation))
-      return false;
-  return true;
+    if (end_point.type() == tail && end_point.edge_type() == edge_asw)
+    {
+      if (end_point.edge()->is_visited(visited_generation, path_condition))
+      {
+        Dout(dc::visited, "The edge to " << end_point.other_node()->name() << " is visited under condition " << end_point.edge()->visited_condition());
+        result = result.times(end_point.edge()->visited_condition());
+        Dout(dc::visited, "  result is now " << result);
+      }
+      else
+      {
+        Dout(dc::visited, "The edge to " << end_point.other_node()->name() << " wasn't visited yet.");
+        return false;
+      }
+    }
+  return result;
 }
 
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct for_action("FORACTION");
+channel_ct visited("VISITED");
 NAMESPACE_DEBUG_CHANNELS_END
 #endif

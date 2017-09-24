@@ -754,7 +754,7 @@ int main(int argc, char* argv[])
   // Check that every node has a boolean product as exists condition.
   FilterAllActions all_actions;
   FollowUniqueOpsemTails follow_unique_opsem_tails;
-  graph.for_actions(
+  graph.for_actions_no_condition(
       follow_unique_opsem_tails,
       all_actions,
       [](Action* action)

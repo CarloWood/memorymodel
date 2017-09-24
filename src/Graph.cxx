@@ -122,7 +122,7 @@ void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> 
       out << edge->id();
 #endif
       if (edge->is_conditional())
-        out << ':' << html << edge->condition();
+        out << ':' << edge->condition().as_html_string();
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
                "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
     }
@@ -156,7 +156,7 @@ void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> 
         "      <TR>\n"
         "      <TD>Valid</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
-      out << html << valid;
+      out << valid.as_html_string();
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";
