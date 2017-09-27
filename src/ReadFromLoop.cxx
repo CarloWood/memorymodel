@@ -1,7 +1,6 @@
 #include "sys.h"
 #include "ReadFromLoop.h"
 #include "FollowVisitedOpsemHeads.h"
-#include "FilterLocation.h"
 #include "ReadFromLoopsPerLocation.h"
 #include "Action.inl"
 
@@ -45,7 +44,7 @@ bool ReadFromLoop::store_write(Action* write_action, boolean::Expression&& condi
   return true;
 }
 
-bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_from_loops_per_location, int visited_generation)
+bool ReadFromLoop::find_next_write_action(int visited_generation)
 {
 #ifdef CWDEBUG
   DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
@@ -55,31 +54,30 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
   struct ReadFromIfFoundData
   {
     boolean::Expression found_write;    // Boolean expression under which we found a write.
-    bool at_end_of_loop;
-    ReadFromLoopsPerLocation const& read_from_loops_per_location;
-    boolean::Expression new_path_condition;
+    bool have_sequenced_before_writes;  // Set to true when we found one or more write on the same or joined threads.
+    bool at_end_of_loop;                // Set to true when all writes have been found.
 
-    ReadFromIfFoundData(ReadFromLoopsPerLocation const& read_from_loops_per_location_) :
+    ReadFromIfFoundData() :
       found_write(false),
-      at_end_of_loop(true),
-      read_from_loops_per_location(read_from_loops_per_location_) { }
+      have_sequenced_before_writes(false),
+      at_end_of_loop(true) { }
   };
-  ReadFromIfFoundData data(read_from_loops_per_location);
+  ReadFromIfFoundData data;
   if (m_first_iteration)
   {
     ASSERT(m_queued_actions.empty());
     // Look for the last write (if any) on the same thread.
-    FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, visited_generation, data.new_path_condition);
+    FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, visited_generation);
     follow_visited_opsem_heads.process_queued(
-        [this, &data](Action* action, boolean::Product const& path_condition)  // if_found
+        [this, &data](Action* action, boolean::Expression&& path_condition)  // if_found
         {
-          Dout(dc::notice, "ReadFromLoop::find_next_write_action: path_condition = " << path_condition << "; new_path_condition = " << data.new_path_condition);
+          Dout(dc::notice, "ReadFromLoop::find_next_write_action: path_condition = " << path_condition);
           if (action->is_write())
           {
             Dout(dc::notice|continued_cf, "Found write " << *action << " if " << path_condition);
-            store_write(action, boolean::Expression{path_condition}, data.found_write, true);
+            store_write(action, std::move(path_condition), data.found_write, true);
             Dout(dc::finish, ".");
-            data.at_end_of_loop = false;
+            data.have_sequenced_before_writes = true;
           }
           return true;  // Stop following edges once we found a sequenced before action for the same memory locaton.
         }
@@ -88,7 +86,7 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
   }
   else
   {
-    data.at_end_of_loop = m_queued_actions.empty();
+    data.have_sequenced_before_writes = !m_queued_actions.empty();
     for (queued_actions_type::iterator queued_action = m_queued_actions.begin(); queued_action != m_queued_actions.end();)
     {
       Dout(dc::notice|continued_cf, "Found queued write " << *queued_action->first << " if " << queued_action->second);
@@ -99,6 +97,11 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
       else
         ++queued_action;
     }
+  }
+  if (!data.have_sequenced_before_writes)
+  {
+
+    data.at_end_of_loop = true;
   }
   return !data.at_end_of_loop;
 }

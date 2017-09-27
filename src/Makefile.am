@@ -31,7 +31,7 @@ libcppmem_a_SOURCES = \
 		 NodePtr.cxx \
 		 NodePtr.h \
 		 FilterAllActions.h \
-		 FilterLocation.h \
+		 FilterWriteLocation.h \
 		 FollowOpsemTails.h \
 		 FollowUniqueOpsemTails.h \
 		 FollowVisitedOpsemHeads.cxx \

@@ -42,39 +42,40 @@ template<class FOLLOW, class FILTER>
 void Action::for_actions(
   FOLLOW& follow,
   FILTER filter,
-  std::function<bool(Action*, boolean::Product const&)> const& if_found,
-  boolean::Product const& path_condition) const
+  std::function<bool(Action*, boolean::Expression&&)> const& if_found,
+  boolean::Expression const& path_condition) const
 {
   DoutEntering(dc::for_action, "Action::for_actions<" <<
       type_info_of<FOLLOW>().demangled_name() << ", " <<
       type_info_of<FILTER>().demangled_name() << ">(..., " << path_condition << ") [this = " << *this << "].");
   for (auto&& end_point : m_end_points)
-    if (follow(end_point, path_condition))
+  {
+    boolean::Expression current_path_condition{path_condition.copy()};
+    if (follow(end_point, current_path_condition))
     {
-      // The condition under which we can follow this path up to and including this edge.
-      boolean::Product new_path_condition{path_condition};
-      new_path_condition *= end_point.edge()->condition().as_product();
       // The node that we find on the other end of the edge.
       Action* other_node{end_point.other_node()};
 #ifdef CWDEBUG
       Dout(dc::for_action|continued_cf, "Following the " << end_point.edge_type() << " edge from node " << name() <<
           " to node " << other_node->name());
       if (!end_point.edge()->condition().is_one())
-        Dout(dc::continued, "; condition is now " << new_path_condition);
+        Dout(dc::continued, "; condition is now " << current_path_condition);
       Dout(dc::finish, ".");
 #endif
       // Is this the type of action that we're looking for?
       if (filter(*other_node))
       {
-        Dout(dc::for_action, "Calling if_found(" << *other_node << ", " << new_path_condition << ")");
+        Dout(dc::for_action, "Calling if_found(" << *other_node << ", " << current_path_condition << ")");
         DebugMarkDownRight;
-        if (if_found(other_node, new_path_condition))
+        // If if_found returns false than current_path_condition was NOT moved.
+        if (if_found(other_node, std::move(current_path_condition)))
         {
           Dout(dc::for_action, "Continuing with next end_point of node " << name() << ", if any...");
           continue;
         }
       }
       Dout(dc::for_action, "Following edges of node " << other_node->name() << "...");
-      other_node->for_actions(follow, filter, if_found, new_path_condition);
+      other_node->for_actions(follow, filter, if_found, current_path_condition);
     }
+  }
 }

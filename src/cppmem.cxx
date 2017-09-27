@@ -853,7 +853,7 @@ int main(int argc, char* argv[])
         else
           read_from_loop.delete_edge();         // Otherwise remove the edge that was added the previous loop.
 
-        if (!read_from_loop.find_next_write_action(read_from_loops_per_location, ++visited_generation))
+        if (!read_from_loop.find_next_write_action(++visited_generation))
           break;
 
         if (read_from_loop.add_edge())

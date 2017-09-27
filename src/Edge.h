@@ -103,16 +103,15 @@ class Edge
   inline boolean::Expression exists() const;
 
   // Post opsem stuff.
-  void visited(int visited_generation, boolean::Product const& path_condition)
+  void visited(int visited_generation, boolean::Expression const& path_condition)
   {
     // Multiply the path_condition so far with the condition of this edge.
-    boolean::Product path_condition_including_edge{m_condition.as_product()};
-    path_condition_including_edge *= path_condition;
+    boolean::Expression path_condition_including_edge{path_condition * m_condition.as_product()};
     if (m_visited != visited_generation)
     {
       Dout(dc::visited, "Setting m_visited_condition to " << path_condition_including_edge << " because new visited_generation " <<
           visited_generation << " is unequal old value " << m_visited);
-      m_visited_condition = path_condition_including_edge;
+      m_visited_condition = std::move(path_condition_including_edge);
       m_visited = visited_generation;
     }
     else

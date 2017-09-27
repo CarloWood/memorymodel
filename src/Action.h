@@ -108,8 +108,8 @@ class Action
     FOLLOW& follow,     // Follow each EndPoint when `bool FOLLOW::operator()(EndPoint const&)` returns true.
     FILTER filter,      // Call if_found() for each action found after following an edge when `bool FILTER::operator()(Action const&)` returns true.
                         // Call for_actions() recursively unless if_found returned true (so if if_found wasn't called, then always call for_actions).
-    std::function<bool(Action*, boolean::Product const&)> const& if_found,
-    boolean::Product const& path_condition = boolean::Product{true}) const;     // The product of the edge conditions encountered.
+    std::function<bool(Action*, boolean::Expression&&)> const& if_found,
+    boolean::Expression const& path_condition) const;   // The product of the edge conditions encountered.
 
   // Accessors.
   id_type id() const { return m_id; }

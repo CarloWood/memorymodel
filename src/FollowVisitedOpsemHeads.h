@@ -1,5 +1,7 @@
 #pragma once
 #include "Edge.h"
+#include "Action.h"
+#include <set>
 
 // This class follows sb and asw edges 'upstream' (bottom to top) while keeping track
 // of the condition under which the Read node that we started from will see the
@@ -75,20 +77,27 @@
 
 struct FollowVisitedOpsemHeads
 {
-  using queued_type = std::vector<Action*>;
+  struct SequenceNumberCompare
+  {
+    bool operator()(Action* action1, Action* action2)
+    {
+      return action1->sequence_number() > action2->sequence_number();
+    }
+  };
+  using queued_type = std::set<Action*, SequenceNumberCompare>;
 
  private:
   int m_visited_generation;
   queued_type m_queued;
   Action* m_read_node;
-  boolean::Expression& m_new_path_condition;
 
  public:
-  FollowVisitedOpsemHeads(Action* read_node, int visited_generation, boolean::Expression& new_path_condition) :
-      m_visited_generation(visited_generation), m_queued(1, read_node), m_read_node(read_node), m_new_path_condition(new_path_condition) { }
+  FollowVisitedOpsemHeads(Action* read_node, int visited_generation) :
+      m_visited_generation(visited_generation), m_queued{read_node}, m_read_node(read_node) { }
 
-  void process_queued(std::function<bool(Action*, boolean::Product const&)> const& if_found);
+  void process_queued(std::function<bool(Action*, boolean::Expression&&)> const& if_found);
 
   // Should we follow the edge of this end_point, that is only reached when path_condition?
-  bool operator()(EndPoint const& end_point, boolean::Product const& path_condition);
+  // Returns true and adjusts path_condition if so.
+  bool operator()(EndPoint const& end_point, boolean::Expression& path_condition);
 };
