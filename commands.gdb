@@ -11,3 +11,7 @@ end
 define pev
 call gdb_print_evaluation($arg0)
 end
+
+define test
+call gdb_test($arg0, $arg1, $arg2, $arg3)
+end

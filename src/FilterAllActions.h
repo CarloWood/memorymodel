@@ -3,5 +3,5 @@
 
 struct FilterAllActions
 {
-  bool operator()(Action const&) { return true; }
+  bool operator()(Action const&) const { return true; }
 };

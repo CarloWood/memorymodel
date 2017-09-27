@@ -105,25 +105,25 @@ class Edge
   // Post opsem stuff.
   void visited(int visited_generation, boolean::Product const& path_condition)
   {
+    // Multiply the path_condition so far with the condition of this edge.
+    boolean::Product path_condition_including_edge{m_condition.as_product()};
+    path_condition_including_edge *= path_condition;
     if (m_visited != visited_generation)
     {
-      Dout(dc::visited, "Setting m_visited_condition to " << path_condition << " because new visited_generation " <<
+      Dout(dc::visited, "Setting m_visited_condition to " << path_condition_including_edge << " because new visited_generation " <<
           visited_generation << " is unequal old value " << m_visited);
-      m_visited_condition = path_condition;
+      m_visited_condition = path_condition_including_edge;
       m_visited = visited_generation;
     }
     else
     {
       Dout(dc::visited|continued_cf, "Updating m_visited_condition from " << m_visited_condition << ' ');
-      m_visited_condition += path_condition;
+      m_visited_condition += path_condition_including_edge;
       Dout(dc::finish, "to " << m_visited_condition);
     }
   }
-  bool is_visited(int visited_generation, boolean::Product const& path_condition) const
-  {
-    return m_visited == visited_generation && !(m_visited_condition * path_condition).is_zero();
-  }
-  boolean::Expression const& visited_condition() const { return m_visited_condition; }
+  bool is_visited(int visited_generation) const { return m_visited == visited_generation; }
+  boolean::Expression const& visited_condition(int visited_generation) const { return m_visited == visited_generation ? m_visited_condition : boolean::Expression::zero(); }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }

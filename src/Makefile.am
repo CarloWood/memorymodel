@@ -34,6 +34,7 @@ libcppmem_a_SOURCES = \
 		 FilterLocation.h \
 		 FollowOpsemTails.h \
 		 FollowUniqueOpsemTails.h \
+		 FollowVisitedOpsemHeads.cxx \
 		 FollowVisitedOpsemHeads.h \
 		 ReadFromLoopsPerLocation.h \
 		 ReadFromLoop.cxx \

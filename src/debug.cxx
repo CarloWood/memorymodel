@@ -32,18 +32,21 @@ std::ostream& operator<<(std::ostream& os, std::memory_order mo)
   return os;
 }
 
-void gdb_print_evaluation(Evaluation const&& evaluation)
+void gdb_print_evaluation(Evaluation const* evaluation)
 {
-  std::cout << evaluation << std::endl;
+  std::cout << *evaluation << std::endl;
 }
 
-void gdb_print_expression(ast::expression const&& expression)
+void gdb_print_expression(ast::expression const* expression)
 {
-  std::cout << expression << std::endl;
+  std::cout << *expression << std::endl;
 }
 
-void gdb_print_boolean_expression(boolean::Expression const&& expression)
+void gdb_print_boolean_expression(boolean::Expression const* arg0)
 {
-  std::cout << expression << std::endl;
+  //std::cout << "arg0 = " << arg0;
+  if ((size_t)arg0 > 0x1000000)
+    std::cout << "*arg0 = " << *arg0;
+  std::cout << std::endl;
 }
 #endif // CWDEBUG

@@ -751,6 +751,7 @@ int main(int argc, char* argv[])
   //==========================================================================
   // Brute force approach.
 
+#ifdef CWDEBUG
   // Check that every node has a boolean product as exists condition.
   FilterAllActions all_actions;
   FollowUniqueOpsemTails follow_unique_opsem_tails;
@@ -764,6 +765,7 @@ int main(int argc, char* argv[])
         return false;
       }
   );
+#endif
 
   // Initialize m_sequence_number and m_sequenced_before of all Action nodes.
   std::vector<Action*> topological_ordered_actions;
@@ -774,6 +776,32 @@ int main(int argc, char* argv[])
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
   std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
   graph.write_png_file(basename + "_opsem", topological_ordered_actions, true);
+
+#if 0//def CWDEBUG
+  // Print out all sequenced-before results.
+  Debug(dc::for_action.off());
+  graph.for_actions_no_condition(
+      follow_unique_opsem_tails,
+      all_actions,
+      [&](Action* action1)
+      {
+        Dout(dc::notice, action1->name() << " -->");
+        graph.for_actions_no_condition(
+            follow_unique_opsem_tails,
+            all_actions,
+            [&](Action* action2)
+            {
+              if (action1->is_sequenced_before(*action2))
+                Dout(dc::notice|nolabel_cf|nonewline_cf, ' ' << action2->name());
+              return false;
+            }
+        );
+        Dout(dc::notice|nolabel_cf, "");
+        return false;
+      }
+  );
+  Debug(dc::for_action.on());
+#endif
 
   // A vector of objects representing all read nodes per memory location.
   std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;

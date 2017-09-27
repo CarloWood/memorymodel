@@ -52,31 +52,28 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
   debug::Mark marker;
 #endif
   // g++ starts allocating memory for lambda's capturing more than 16 bytes (clang++ 24 bytes), so put all data that we need in a struct.
-  struct LambdaData {
+  struct ReadFromIfFoundData
+  {
     boolean::Expression found_write;    // Boolean expression under which we found a write.
     bool at_end_of_loop;
     ReadFromLoopsPerLocation const& read_from_loops_per_location;
-    boolean::Expression is_full_visited;
-    LambdaData(ReadFromLoopsPerLocation const& read_from_loops_per_location_) :
+    boolean::Expression new_path_condition;
+
+    ReadFromIfFoundData(ReadFromLoopsPerLocation const& read_from_loops_per_location_) :
       found_write(false),
       at_end_of_loop(true),
-      read_from_loops_per_location(read_from_loops_per_location_),
-      is_full_visited(true) { }
+      read_from_loops_per_location(read_from_loops_per_location_) { }
   };
-  LambdaData data(read_from_loops_per_location);
+  ReadFromIfFoundData data(read_from_loops_per_location);
   if (m_first_iteration)
   {
     ASSERT(m_queued_actions.empty());
     // Look for the last write (if any) on the same thread.
-    FollowVisitedOpsemHeads follow_visited_opsem_heads(visited_generation, data.is_full_visited);
-    FilterLocation filter_location(m_read_action->location());
-    m_read_action->for_actions(
-        follow_visited_opsem_heads,       // Search backwards in the same thread and/or joined child threads, or
-                                          // parent threads when all other child threads visited their asw creation edge.
-        filter_location,                  // for accesses to the same memory location.
+    FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, visited_generation, data.new_path_condition);
+    follow_visited_opsem_heads.process_queued(
         [this, &data](Action* action, boolean::Product const& path_condition)  // if_found
         {
-          Dout(dc::notice, "Calling if_found() with is_full_visited = " << data.is_full_visited);
+          Dout(dc::notice, "ReadFromLoop::find_next_write_action: path_condition = " << path_condition << "; new_path_condition = " << data.new_path_condition);
           if (action->is_write())
           {
             Dout(dc::notice|continued_cf, "Found write " << *action << " if " << path_condition);
@@ -84,22 +81,7 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation const& read_f
             Dout(dc::finish, ".");
             data.at_end_of_loop = false;
           }
-          else
-          {
-            return false;
-            // Does this ever happen?
-            ASSERT(action->is_read());
-            Dout(dc::notice, "Found read " << *action << " if " << path_condition << "; adding Read-Froms from where that read reads from:");
-            for (auto const& write_action_condition_pair : data.read_from_loops_per_location.get_read_from_loop_of(action).m_write_actions)
-            {
-              boolean::Expression condition{write_action_condition_pair.second * path_condition};
-              Dout(dc::notice|continued_cf, "... write " << *write_action_condition_pair.first << " if " << condition);
-              store_write(write_action_condition_pair.first, std::move(condition), data.found_write, true);
-              Dout(dc::finish, ".");
-              data.at_end_of_loop = false;
-            }
-          }
-          return true;                    // Stop following edges once we found a sequenced before action for the same memory locaton.
+          return true;  // Stop following edges once we found a sequenced before action for the same memory locaton.
         }
     );
     m_first_iteration = false;

@@ -346,25 +346,58 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
   );
 }
 
-boolean::Expression Action::is_fully_visited(int visited_generation, boolean::Product const& path_condition) const
+bool Action::is_fully_visited(int visited_generation, Action* read_node) const
 {
-  boolean::Expression result{true};
   for (auto&& end_point : m_end_points)
-    if (end_point.type() == tail && end_point.edge_type() == edge_asw)
+    if (end_point.type() == tail && end_point.edge()->is_opsem())
     {
-      if (end_point.edge()->is_visited(visited_generation, path_condition))
+      if (end_point.other_node() != read_node && !end_point.other_node()->is_sequenced_before(*read_node))
       {
-        Dout(dc::visited, "The edge to " << end_point.other_node()->name() << " is visited under condition " << end_point.edge()->visited_condition());
-        result = result.times(end_point.edge()->visited_condition());
-        Dout(dc::visited, "  result is now " << result);
+        Dout(dc::visited, "The edge to " << end_point.other_node()->name() <<
+            " is skipped because that node is not sequenced before the Read node " << read_node->name() << '.');
+        continue;
       }
-      else
+      if (!end_point.edge()->is_visited(visited_generation))
       {
         Dout(dc::visited, "The edge to " << end_point.other_node()->name() << " wasn't visited yet.");
         return false;
       }
     }
-  return result;
+  return true;
+}
+
+boolean::Expression Action::calculate_path_condition(int visited_generation, Action* read_node) const
+{
+  DoutEntering(dc::visited, "Action::calculate_path_condition('" << read_node->name() << "') [this = " << *this << "].");
+  boolean::Expression branch_path_condition[2] = { true, true };
+  boolean::Product branch_condition;
+  bool have_branch = false;
+  for (auto&& end_point : m_end_points)
+    if (end_point.type() == tail && end_point.edge()->is_opsem() &&
+        (end_point.other_node() == read_node || end_point.other_node()->is_sequenced_before(*read_node)))
+    {
+      // Opsem edges have edge conditions that are products.
+      boolean::Product edge_condition{end_point.edge()->condition().as_product()};
+#ifdef CWDEBUG
+      if (!edge_condition.is_one())
+        Dout(dc::visited, "Edge from " << name() << " to " << end_point.other_node()->name() << " has edge condition " << edge_condition << '.');
+#endif
+      if (!have_branch && !edge_condition.is_one())
+      {
+        have_branch = true;
+        branch_condition = edge_condition;
+        Dout(dc::visited, "Visited condition of edge from " << name() << " to " << end_point.other_node()->name() << " is " <<
+            end_point.edge()->visited_condition(visited_generation) << '.');
+        branch_path_condition[0] = end_point.edge()->visited_condition(visited_generation).copy();
+        Dout(dc::visited, "Initialized branch_path_condition[0] with " << branch_path_condition[0] << " and branch_path_condition[1] with 1.");
+        continue;
+      }
+      int branch = (!have_branch || edge_condition == branch_condition) ? 0 : 1;
+      branch_path_condition[branch] = branch_path_condition[branch].times(end_point.edge()->visited_condition(visited_generation));
+      Dout(dc::visited, "Visited condition of edge from " << name() << " to " << end_point.other_node()->name() << " is " <<
+          end_point.edge()->visited_condition(visited_generation) << "; branch_path_condition[" << branch << "] is now " << branch_path_condition[branch] << '.');
+    }
+  return (have_branch && !branch_path_condition[1].is_one()) ? branch_path_condition[0] + branch_path_condition[1] : branch_path_condition[0].copy();
 }
 
 #ifdef CWDEBUG

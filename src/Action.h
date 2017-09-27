@@ -98,16 +98,16 @@ class Action
 
   template<class FOLLOW, class FILTER>
   void for_actions_no_condition(
-    FOLLOW follow,
+    FOLLOW& follow,
     FILTER filter,
     std::function<bool(Action*)> const& if_found) const;
 
   // Returns an expression that is true when something was found.
   template<class FOLLOW, class FILTER>     // bool FOLLOW::operator()(EndPoint const&) and FILTER::operator()(Action const&) must exist.
   void for_actions(
-    FOLLOW follow,            // Follow each EndPoint when `bool FOLLOW::operator()(EndPoint const&)` returns true.
-    FILTER filter,            // Call if_found() for each action found after following an edge when `bool FILTER::operator()(Action const&)` returns true.
-                              // Call for_actions() recursively unless if_found returned true (so if if_found wasn't called, then always call for_actions).
+    FOLLOW& follow,     // Follow each EndPoint when `bool FOLLOW::operator()(EndPoint const&)` returns true.
+    FILTER filter,      // Call if_found() for each action found after following an edge when `bool FILTER::operator()(Action const&)` returns true.
+                        // Call for_actions() recursively unless if_found returned true (so if if_found wasn't called, then always call for_actions).
     std::function<bool(Action*, boolean::Product const&)> const& if_found,
     boolean::Product const& path_condition = boolean::Product{true}) const;     // The product of the edge conditions encountered.
 
@@ -126,7 +126,8 @@ class Action
   bool is_sequenced_before(Action const& action) const { return action.m_prior_actions.includes(*this); }
   void set_read_from_loop_index(int read_from_loop_index) { m_read_from_loop_index = read_from_loop_index; }
   int get_read_from_loop_index() const { return m_read_from_loop_index; }
-  boolean::Expression is_fully_visited(int visited_generation, boolean::Product const& path_condition) const;
+  bool is_fully_visited(int visited_generation, Action* read_node) const;
+  boolean::Expression calculate_path_condition(int visited_generation, Action* read_node) const;
 
   virtual Kind kind() const = 0;
   virtual bool is_second_mutex_access() const { return false; }

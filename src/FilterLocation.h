@@ -13,7 +13,7 @@ struct FilterLocation
 {
   Location const& m_location;
   FilterLocation(Location const& location) : m_location(location) { }
-  bool operator()(Action const& action)
+  bool operator()(Action const& action) const
   {
     bool result = action.location() == m_location;
     if (!result)
