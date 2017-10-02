@@ -1,7 +1,7 @@
 #include "sys.h"
 #include "FollowVisitedOpsemHeads.h"
 #include "Action.h"
-#include "FilterWriteLocation.h"
+#include "FilterLocation.h"
 #include "Action.inl"
 
 void FollowVisitedOpsemHeads::process_queued(std::function<bool(Action*, boolean::Expression&&)> const& if_found)
@@ -11,7 +11,7 @@ void FollowVisitedOpsemHeads::process_queued(std::function<bool(Action*, boolean
   {
     Action* action = *action_iter;
     m_queued.erase(action_iter);
-    FilterWriteLocation const filter_location(m_read_node->location());
+    FilterLocation const filter_location(m_read_node->location());
     Dout(dc::notice, "Processing next queued action " << action->name() << ':');
     boolean::Expression path_condition{action->calculate_path_condition(m_visited_generation, m_read_node)};
     action->for_actions(*this, filter_location, if_found, path_condition);
@@ -26,7 +26,7 @@ bool FollowVisitedOpsemHeads::operator()(EndPoint const& end_point, boolean::Exp
     return false;
 
   // Mark this edge as being visited under condition path_condition.
-  Dout(dc::visited, "Visited " << end_point.other_node()->name() << " -" << edge_name(end_point.edge_type()) << "-> " << end_point.current_node()->name() <<
+  Dout(dc::visited, "Visited " << end_point.current_node()->name() << " <-" << edge_name(end_point.edge_type()) << "- " << end_point.other_node()->name() <<
       " under condition " << path_condition);
   {
     DebugMarkDownRight;
@@ -48,5 +48,5 @@ bool FollowVisitedOpsemHeads::operator()(EndPoint const& end_point, boolean::Exp
     Dout(dc::visited, "  (removed " << end_point.other_node()->name() << " from queue).");
   Dout(dc::notice, "New path_condition = " << path_condition << '.');
   Debug(path_condition.sanity_check());
-  return true;
+  return !path_condition.is_zero();
 }

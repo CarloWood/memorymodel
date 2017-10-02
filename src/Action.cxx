@@ -386,7 +386,7 @@ boolean::Expression Action::calculate_path_condition(int visited_generation, Act
       {
         have_branch = true;
         branch_condition = edge_condition;
-        Dout(dc::visited, "Visited-condition of " << name() << " --> " << end_point.other_node()->name() << " is " <<
+        Dout(dc::visited, "Visited-condition of " << end_point.other_node()->name() << " <-" << edge_name(end_point.edge_type()) << "- " << name() << " is " <<
             end_point.edge()->visited_condition(visited_generation) << '.');
         branch_path_condition[0] = end_point.edge()->visited_condition(visited_generation).copy();
         Dout(dc::visited, "Initialized branch_path_condition[0] with " << branch_path_condition[0] << " and branch_path_condition[1] with 1.");
@@ -394,7 +394,7 @@ boolean::Expression Action::calculate_path_condition(int visited_generation, Act
       }
       int branch = (!have_branch || edge_condition == branch_condition) ? 0 : 1;
       branch_path_condition[branch] = branch_path_condition[branch].times(end_point.edge()->visited_condition(visited_generation));
-      Dout(dc::visited, "Visited-condition of " << name() << " --> " << end_point.other_node()->name() << " is " <<
+      Dout(dc::visited, "Visited-condition of " << end_point.other_node()->name() << " <-" << edge_name(end_point.edge_type()) << "- " << name() << " is " <<
           end_point.edge()->visited_condition(visited_generation) << "; branch_path_condition[" << branch << "] is now " << branch_path_condition[branch] << '.');
     }
   return (have_branch && !branch_path_condition[1].is_one()) ? branch_path_condition[0] + branch_path_condition[1] : branch_path_condition[0].copy();

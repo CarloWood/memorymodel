@@ -39,7 +39,7 @@ class ReadFromLoop
     m_first_iteration = true;
   }
 
-  bool find_next_write_action(int visited_generation);
+  bool find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int visited_generation);
 
   void delete_edge()
   {

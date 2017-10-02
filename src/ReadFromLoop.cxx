@@ -44,7 +44,7 @@ bool ReadFromLoop::store_write(Action* write_action, boolean::Expression&& condi
   return true;
 }
 
-bool ReadFromLoop::find_next_write_action(int visited_generation)
+bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int visited_generation)
 {
 #ifdef CWDEBUG
   DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
@@ -56,13 +56,15 @@ bool ReadFromLoop::find_next_write_action(int visited_generation)
     boolean::Expression found_write;    // Boolean expression under which we found a write.
     bool have_sequenced_before_writes;  // Set to true when we found one or more write on the same or joined threads.
     bool at_end_of_loop;                // Set to true when all writes have been found.
+    ReadFromLoopsPerLocation& read_from_loops_per_location;     // Reference to the list of all ReadFromLoops.
 
-    ReadFromIfFoundData() :
+    ReadFromIfFoundData(ReadFromLoopsPerLocation& read_from_loops_per_location_) :
       found_write(false),
       have_sequenced_before_writes(false),
-      at_end_of_loop(true) { }
+      at_end_of_loop(false),
+      read_from_loops_per_location(read_from_loops_per_location_) { }
   };
-  ReadFromIfFoundData data;
+  ReadFromIfFoundData data(read_from_loops_per_location);
   if (m_first_iteration)
   {
     ASSERT(m_queued_actions.empty());
@@ -77,8 +79,34 @@ bool ReadFromLoop::find_next_write_action(int visited_generation)
             Dout(dc::notice|continued_cf, "Found write " << *action << " if " << path_condition);
             store_write(action, std::move(path_condition), data.found_write, true);
             Dout(dc::finish, ".");
-            data.have_sequenced_before_writes = true;
           }
+          else
+          {
+            // Can it happen that this is not the case?
+            ASSERT(action->is_read());
+            Dout(dc::notice, "Found read " << *action << " if " << path_condition);
+            ReadFromLoop const& read_from_loop{data.read_from_loops_per_location.get_read_from_loop_of(action)};
+            // This read is already finished, so if it has no writes that it reads from then it would be
+            // reading uninitialized data. If this turns out to be normal then data.have_sequenced_before_writes
+            // should be set accordingly.
+            write_actions_type::const_iterator read_from = read_from_loop.m_write_actions.begin();
+            ASSERT(read_from != read_from_loop.m_write_actions.end());
+            // If any write (ie, the first one) is sequenced before the read (action) then all of them will be,
+            // because we never return a mix of those. If they are sequenced before the read then we can't stop
+            // at this read because the algorihm that finds writes that are sequenced before the corresponding
+            // read needs us to mark every edge in between to be marked with a 'visited' boolean expression.
+            if (read_from->first->is_sequenced_before(*action))
+              return false;
+            do
+            {
+              Dout(dc::notice|continued_cf, "  reading from " << read_from->first->name() << " when " << read_from->second);
+              boolean::Expression condition{read_from->second.times(path_condition)};
+              store_write(read_from->first, std::move(condition), data.found_write, true);
+              Dout(dc::finish, ".");
+            }
+            while (++read_from != read_from_loop.m_write_actions.end());
+          }
+          data.have_sequenced_before_writes = true;
           return true;  // Stop following edges once we found a sequenced before action for the same memory locaton.
         }
     );
@@ -100,7 +128,6 @@ bool ReadFromLoop::find_next_write_action(int visited_generation)
   }
   if (!data.have_sequenced_before_writes)
   {
-
     data.at_end_of_loop = true;
   }
   return !data.at_end_of_loop;
