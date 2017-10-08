@@ -876,7 +876,7 @@ int main(int argc, char* argv[])
           }
         }
 
-        ++ml;
+        ml.start_next_loop_at(0);
       }
     // FIXME: for now break so we only do one variable.
     break;

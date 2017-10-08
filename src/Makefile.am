@@ -1,7 +1,7 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
 noinst_LIBRARIES = libcppmem.a
-bin_PROGRAMS = cppmem_test cppmem csc_test
+bin_PROGRAMS = cppmem_test cppmem csc_test matchings
 
 libcppmem_a_SOURCES = \
 		 grammar_whitespace.cxx \
@@ -90,6 +90,8 @@ cppmem_SOURCES = cppmem.cxx
 
 csc_test_SOURCES = csc_test.cxx
 
+matchings_SOURCES = matchings.cxx
+
 libcppmem_a_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
 
 cppmem_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
@@ -100,6 +102,8 @@ cppmem_LDADD = libcppmem.a ../boolean-expression/libboolean_expression.la ../uti
 
 csc_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 csc_test_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
+
+matchings_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument
 
 # --------------- Maintainer's Section
 

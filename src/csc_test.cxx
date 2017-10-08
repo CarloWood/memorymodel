@@ -5,6 +5,8 @@
 #include <array>
 #include <iomanip>
 #include <bitset>
+#include <stack>
+#include <set>
 
 int constexpr number_of_threads = 4;
 int constexpr nodes_per_thread = 4;
@@ -15,7 +17,7 @@ int thread(int node)
   return node / nodes_per_thread;
 }
 
-int column(int node)
+int row(int node)
 {
   return node % nodes_per_thread;
 }
@@ -51,9 +53,10 @@ class Node
 {
   static int constexpr unused = -1;
   friend class Graph;
-  int m_index;          // Index into the graph array.
-  int m_linked;         // The index of the Node that we're linked with (or unused).
+  int m_index;                  // Index into the graph array.
+  int m_linked;                 // The index of the Node that we're linked with (or unused).
   mask_type m_sequenced_after;
+  int m_old_loop_node_offset;
   static int s_connected_nodes;
 
  public:
@@ -67,40 +70,112 @@ class Node
     m_index = index;
   }
 
-  void link_to(Node const& linked_node)
+  // When two nodes are linked, their m_sequenced_after must reflect
+  // afterwards every node that is effectively sequenced before them.
+  //
+  // For example:
+  //
+  //    A
+  //    .
+  //    |
+  //    o
+  //    |    rf
+  //  1 o--------...
+  //    |
+  //  2 o
+  //    |
+  //  3 o
+  //    |
+  //    .
+  //
+  // Here the m_sequenced_after of node 1 will contain
+  // full information about every node whose side-effects
+  // can no longer be visible to nodes below it.
+  //
+  // This does therefore not include node 1 itself since,
+  // if that was a write, it is still possible to see its
+  // side-effect in a read at node 2. Likewise, this does
+  // not include the node that the rf links to, for the
+  // same reason.
+  //
+  // Now, if -say- node 3 would be connected next (to another
+  // thread), the resulting nodes whoses side-effects will
+  // be hidden from the nodes below 3 will be equal to the
+  // one hidden at 1, plus 1 itself and plus 2, because both
+  // will be ordered in modification order before the write
+  // that is 3 or the node that 3 is connected to.
+  //
+  bool link_to(Node& linked_node)
   {
     ASSERT(m_linked == unused);
+    Node* node = this;
+    int index = m_index;
+    int row = ::row(index);
+    while (row > 0)
+    {
+      --index;
+      --node;
+      --row;
+      m_sequenced_after |= to_mask(index);
+      if (node->m_linked != unused && node->m_linked != index)
+      {
+        m_sequenced_after |= to_mask(node->m_linked);
+        m_sequenced_after |= node->m_sequenced_after;
+        break;
+      }
+    }
     m_linked = linked_node.m_index;
-    int col = column(m_index);
-    if (col > 0)
-      m_sequenced_after = (this - 1)->m_sequenced_after | to_mask(m_index - 1);
-    //else
-    //  ASSERT(m_sequenced_after == 0);
     m_sequenced_after |= linked_node.m_sequenced_after;
+    linked_node.m_sequenced_after |= m_sequenced_after;
+    // Is the node that we're linking to actually hidden?
+    if (0 && (m_sequenced_after & to_mask(m_linked)))
+    {
+      m_linked = unused;
+      m_sequenced_after = linked_node.m_sequenced_after = 0;
+      return false;
+    }
+    return true;
   }
 
  public:
-  int link(Node& node)
+  bool link(Node& node)
   {
-    link_to(node);
-    ++s_connected_nodes;
+    ASSERT(m_index < number_of_nodes - nodes_per_thread);
     if (this != &node)
     {
-      node.link_to(*this);
-      ++s_connected_nodes;
+      if (!link_to(node))
+        return false;
+      // Do not count nodes in the last thread.
+      if (node.m_index < number_of_nodes - nodes_per_thread)
+        ++s_connected_nodes;
+      if (!node.link_to(*this))
+      {
+        m_linked = unused;
+        return false;
+      }
     }
-    return s_connected_nodes;
+    else
+    {
+      m_linked = m_index;
+    }
+    ++s_connected_nodes;
+    return true;
   }
 
+  static int connected_nodes() { return s_connected_nodes; }
   bool is_unused() const { return m_linked == unused; }
   bool is_used() const { return m_linked != unused; }
   bool is_linked_to(int node) const { return m_linked == node; }
   void reset()
   {
-    --s_connected_nodes;
+    if (m_index < number_of_nodes - nodes_per_thread)
+      --s_connected_nodes;
     m_linked = unused;
-    m_sequenced_after = sequenced_after(m_index);
+    m_sequenced_after = 0;
   }
+
+  void set_old_loop_node_offset(int old_loop_node_offset) { m_old_loop_node_offset = old_loop_node_offset; }
+  int get_old_loop_node_offset() const { return m_old_loop_node_offset; }
 
   mask_type mask() const { return to_mask(m_index); }
   mask_type thread_mask() const { return same_thread(m_index); }
@@ -110,13 +185,19 @@ class Node
   {
     std::string result;
     result += char('A' + thread(m_index));
-    result += char('0' + column(m_index));
+    result += char('0' + row(m_index));
     return result;
   }
 
   friend std::ostream& operator<<(std::ostream& os, Node const& node)
   {
     return os << node.m_linked;
+  }
+
+  friend bool operator<(Node const& node1, Node const& node2)
+  {
+    ASSERT(node1.m_index == node2.m_index);
+    return node1.m_linked < node2.m_linked;
   }
 };
 
@@ -131,6 +212,7 @@ class Graph : public array_type
   Graph();
 
   void print() const;
+  void sanity_check() const;
 
   void unlink(Node& node)
   {
@@ -208,17 +290,17 @@ void Graph::print() const
     std::cout << std::setw(indent) << ' ' << "  ";
     for (int n = f; n < number_of_nodes; n += nodes_per_thread)
     {
-      std::cout << f << ": ";
+      std::cout << n << ": ";
       int linked = graph[n].m_linked;
       char linked_thread = char('A' + thread(graph[n].m_linked));
-      int linked_column = column(linked);
-#if 1
+      int linked_row = row(linked);
+#if 2
       if (graph[n].is_unused())                 // Not linked?
         std::cout << " *";
       else if (graph[n].is_linked_to(n))        // Linked to itself?
         std::cout << " |";
       else
-        std::cout << linked_thread << linked_column;
+        std::cout << linked_thread << linked_row;
       std::bitset<number_of_nodes> bs(graph[n].m_sequenced_after);
 #else
         std::cout << " |";
@@ -230,7 +312,17 @@ void Graph::print() const
   }
   std::cout << std::endl;
 
-  std::getchar();
+  //std::getchar();
+}
+
+std::set<Graph> all_graphs;
+
+void Graph::sanity_check() const
+{
+  Graph const& graph(*this);
+  // Make sure this is the first and only time this function is called for this graph.
+  auto res = all_graphs.insert(graph);
+  ASSERT(res.second);
 }
 
 int main()
@@ -242,62 +334,141 @@ int main()
   int constexpr number_of_loops = number_of_nodes;
   Graph graph;
 
-  bool did_break;
-  for (MultiLoop ml(number_of_loops); !ml.finished(); ml.next_loop())
+  int loop_node_offset = 0;
+  // First loop starts at value nodes_per_thread - 1, so it gets connected to
+  // itself and subsequently to the first node of the next thread.
+  for (MultiLoop ml(number_of_loops - nodes_per_thread, nodes_per_thread - 1); !ml.finished(); ml.next_loop())
   {
-    for (; ml() < number_of_nodes; ++ml)
+#if 0
+    if (ml() >= number_of_nodes)
     {
-      did_break = false;
-      Node& from_node{graph[*ml]};
-      Node& to_node{graph[ml()]};
-      std::cout << "At top of loop " << *ml << " (with value " << ml() << "); considering " << from_node.name() << " <--> " << to_node.name() << '.' << std::endl;
-      if (from_node.is_used() || to_node.is_used())
+      std::cout << "WARNING: not even entering while loop for loop " << *ml << " because its value " << ml() << " >= " << number_of_nodes << "!" << std::endl;
+    }
+#endif
+    while (ml() < number_of_nodes)
+    {
+#if 0
+      std::cout << "At top of loop " << *ml << " (with value " << ml() << ")." << std::endl;
+#endif
+      int old_loop_node_offset = loop_node_offset;
+      int loop_node_index = *ml + loop_node_offset;
+      while (loop_node_index < number_of_nodes && graph[loop_node_index].is_used())
       {
-        if (from_node.is_used())
-          std::cout << "Skipping " << from_node.name() << " because it is already connected (to " << graph.linked_node(from_node).name() << ")." << std::endl;
-        else
-          std::cout << "Skipping connection to " << to_node.name() << " because it is already connected (to " << graph.linked_node(to_node).name() << ")." << std::endl;
-        ml.breaks(0);                // Normal continue (of current loop).
-        did_break = true;
-        break;                       // Return control to MultiLoop.
+#if 0
+        std::cout << "Skipping " << graph[loop_node_index].name() <<
+          " because it is already connected (to " << graph.linked_node(graph[loop_node_index]).name() << ")." << std::endl;
+#endif
+        ++loop_node_index;
       }
-      int connected_nodes = from_node.link(to_node);
-      bool fully_connected = connected_nodes == number_of_nodes;
+      bool fully_connected = false;
+      bool last_node = loop_node_index >= number_of_nodes - nodes_per_thread;
+      Node* loop_node = nullptr;
+      if (!last_node)
+      {
+        // The next loop must start at the node number of the last node of the current thread,
+        // which indicates it needs to be connected to itself; and the next iteration we'll
+        // connect it then to the first node of the next thread.
+        int begin = (loop_node_index / nodes_per_thread + 1) * nodes_per_thread - 1;
+#if 0
+        std::cout << "  begin = " << begin << "." << std::endl;
+#endif
 
-      std::cout << "Made connection for loop " << *ml << " (" << from_node.name() << " <--> " << to_node.name();
-      if (fully_connected)
-        std::cout << "; we are now fully connected";
-      std::cout << ")." << std::endl;
-      graph.print();
+        loop_node_offset = loop_node_index - *ml;
+        loop_node = &graph[loop_node_index];
+        loop_node->set_old_loop_node_offset(old_loop_node_offset);
+        int to_node_index = (ml() == begin) ? loop_node_index : ml();
+        Node& to_node{graph[to_node_index]};
+#if 0
+        std::cout << "Considering " << loop_node->name() << " <--> " << to_node.name() << '.' << std::endl;
+#endif
+        if (to_node.is_used())
+        {
+#if 0
+          std::cout << "Skipping connection to " << to_node.name() << " because it is already connected (to " << graph.linked_node(to_node).name() << ")." << std::endl;
+#endif
+          loop_node_offset = loop_node->get_old_loop_node_offset();
+          ml.breaks(0);                // Normal continue (of current loop).
+          break;                       // Return control to MultiLoop.
+        }
+        if (!loop_node->link(to_node))
+        {
+#if 0
+          std::cout << "Skipping connection to " << to_node.name() << " because it is hidden." << std::endl;
+#endif
+          loop_node_offset = loop_node->get_old_loop_node_offset();
+          ml.breaks(0);                // Normal continue (of current loop).
+          break;                       // Return control to MultiLoop.
 
-      if (fully_connected)
+        }
+#if 0
+        std::cout << "Made connection for loop " << *ml << " (" << loop_node->name() << " <--> " << to_node.name();
+#endif
+        fully_connected = Node::connected_nodes() == number_of_nodes - nodes_per_thread;
+#if 0
+        if (fully_connected)
+          std::cout << "; we are now fully connected";
+        std::cout << ")." << std::endl;
+        graph.print();
+#endif
+      }
+#if 0
+      else
+        std::cout << "This was the last node of the second-last thread." << std::endl;
+#endif
+
+      if (ml.inner_loop() || fully_connected || last_node)
       {
         // Here all possible permutations of connecting pairs occur.
-        //graph.print();
+        graph.print();
+        //graph.sanity_check();
 
-        if (ml.inner_loop())
+        if (loop_node)
         {
-          std::cout << "At the end of loop " << *ml << " (" << from_node.name() << ")." << std::endl;
-          graph.unlink(from_node);
-          std::cout << "Unlinked " << from_node.name() << ":" << std::endl;
-          graph.print();
+#if 0
+          std::cout << "At the end of loop " << *ml << " (" << loop_node->name() << ")." << std::endl;
+#endif
+          graph.unlink(*loop_node);
+#if 0
+          std::cout << "Unlinked " << loop_node->name() << ":" << std::endl;
+#endif
+          loop_node_offset = loop_node->get_old_loop_node_offset();
         }
-        else
+
+        if (!ml.inner_loop())
         {
-          ml.breaks(1);
-          did_break = true;
+          // Continue the current loop instead of starting a new nested loop.
+          ml.breaks(0);
           break;
         }
       }
+      // This concerns the begin of the NEXT loop, so add 1 to loop_node_index,
+      // or more if the next node is already used.
+      int next_loop_node_index = loop_node_index;
+      while (++next_loop_node_index < number_of_nodes && graph[next_loop_node_index].is_used())
+        ;
+      int begin = (next_loop_node_index / nodes_per_thread + 1) * nodes_per_thread - 1;
+      ASSERT(next_loop_node_index == number_of_nodes || begin < number_of_nodes);
+      ml.start_next_loop_at(begin);
+#if 0
+      if (ml() >= number_of_nodes)
+      {
+        std::cout << "Leaving while loop because ml() reached " << ml() << std::endl;
+      }
+#endif
     }
-    if (*ml > 0 && !did_break)
+    int loop = ml.end_of_loop();
+    if (loop >= 0)
     {
-      Node& from_node{graph[*ml - 1]};
-      std::cout << "At the end of loop " << (*ml - 1) << " (" << from_node.name() << ")." << std::endl;
-      graph.unlink(from_node);
-      std::cout << "Unlinked " << from_node.name() << ":" << std::endl;
+      Node& loop_node{graph[loop + loop_node_offset]};
+#if 0
+      std::cout << "At the end of loop " << loop << " (" << loop_node.name() << ")." << std::endl;
+#endif
+      graph.unlink(loop_node);
+#if 0
+      std::cout << "Unlinked " << loop_node.name() << ":" << std::endl;
       graph.print();
+#endif
+      loop_node_offset = loop_node.get_old_loop_node_offset();
     }
-    did_break = false;
   }
 }
