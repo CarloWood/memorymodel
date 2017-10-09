@@ -9,7 +9,7 @@
 #include <set>
 
 int constexpr number_of_threads = 4;
-int constexpr nodes_per_thread = 4;
+int constexpr nodes_per_thread = 3;
 int constexpr number_of_nodes = nodes_per_thread * number_of_threads;
 
 int thread(int node)
@@ -56,11 +56,12 @@ class Node
   int m_index;                  // Index into the graph array.
   int m_linked;                 // The index of the Node that we're linked with (or unused).
   mask_type m_sequenced_after;
+  mask_type m_sequenced_before;
   int m_old_loop_node_offset;
   static int s_connected_nodes;
 
  public:
-  Node() : m_linked(unused), m_sequenced_after(0) { }
+  Node() : m_linked(unused), m_sequenced_after(0), m_sequenced_before(0) { }
   Node(unsigned int linked) : m_linked(linked) { }
   Node(int linked) : m_linked(linked) { }
 
@@ -70,41 +71,6 @@ class Node
     m_index = index;
   }
 
-  // When two nodes are linked, their m_sequenced_after must reflect
-  // afterwards every node that is effectively sequenced before them.
-  //
-  // For example:
-  //
-  //    A
-  //    .
-  //    |
-  //    o
-  //    |    rf
-  //  1 o--------...
-  //    |
-  //  2 o
-  //    |
-  //  3 o
-  //    |
-  //    .
-  //
-  // Here the m_sequenced_after of node 1 will contain
-  // full information about every node whose side-effects
-  // can no longer be visible to nodes below it.
-  //
-  // This does therefore not include node 1 itself since,
-  // if that was a write, it is still possible to see its
-  // side-effect in a read at node 2. Likewise, this does
-  // not include the node that the rf links to, for the
-  // same reason.
-  //
-  // Now, if -say- node 3 would be connected next (to another
-  // thread), the resulting nodes whoses side-effects will
-  // be hidden from the nodes below 3 will be equal to the
-  // one hidden at 1, plus 1 itself and plus 2, because both
-  // will be ordered in modification order before the write
-  // that is 3 or the node that 3 is connected to.
-  //
   bool link_to(Node& linked_node)
   {
     ASSERT(m_linked == unused);
@@ -124,14 +90,33 @@ class Node
         break;
       }
     }
+    node = this;
+    index = m_index;
+    row = ::row(index);
+    while (row < nodes_per_thread - 1)
+    {
+      ++index;
+      ++node;
+      ++row;
+      m_sequenced_before |= to_mask(index);
+      if (node->m_linked != unused && node->m_linked != index)
+      {
+        m_sequenced_before |= to_mask(node->m_linked);
+        m_sequenced_before |= node->m_sequenced_before;
+        break;
+      }
+    }
     m_linked = linked_node.m_index;
     m_sequenced_after |= linked_node.m_sequenced_after;
     linked_node.m_sequenced_after |= m_sequenced_after;
-    // Is the node that we're linking to actually hidden?
-    if (0 && (m_sequenced_after & to_mask(m_linked)))
+    m_sequenced_before |= linked_node.m_sequenced_before;
+    linked_node.m_sequenced_before |= m_sequenced_before;
+    // Did this create a staircase loop?
+    if ((m_sequenced_before & m_sequenced_after) != 0)
     {
       m_linked = unused;
       m_sequenced_after = linked_node.m_sequenced_after = 0;
+      m_sequenced_before = linked_node.m_sequenced_before = 0;
       return false;
     }
     return true;
@@ -212,7 +197,8 @@ class Graph : public array_type
   Graph();
 
   void print() const;
-  void sanity_check() const;
+  bool is_looped(std::vector<bool>& ls, std::array<int, number_of_threads>& a, int index) const;
+  bool sanity_check() const;
 
   void unlink(Node& node)
   {
@@ -317,12 +303,57 @@ void Graph::print() const
 
 std::set<Graph> all_graphs;
 
-void Graph::sanity_check() const
+bool Graph::is_looped(std::vector<bool>& ls, std::array<int, number_of_threads>& a, int index) const
+{
+  Graph const& graph(*this);
+
+  if (ls[index])
+    return false;
+  int t = thread(index);
+  if (index >= a[t])
+    return true;
+  int first_node = t * nodes_per_thread;
+  for (int i = index - 1; i >= first_node; --i)
+  {
+    if (ls[i])
+      return false;
+    a[t] = i;
+    if (graph[i].m_linked != -1 && graph[i].m_linked != i && is_looped(ls, a, graph[i].m_linked))
+      return true;
+  }
+  ls[index] = true;
+  return false;
+}
+
+bool Graph::sanity_check() const
 {
   Graph const& graph(*this);
   // Make sure this is the first and only time this function is called for this graph.
   auto res = all_graphs.insert(graph);
   ASSERT(res.second);
+
+  // Set to true when node is checked to NOT be part of a looped staircase.
+  std::vector<bool> ls(number_of_nodes, false);
+
+  // Make sure that none of the nodes are connected to twice and they are only connected to nodes of other threads.
+  std::vector<bool> v(number_of_nodes, false);
+  for (auto&& node : graph)
+  {
+    int linked = node.m_linked;
+    if (linked == -1)           // Unused
+      linked = node.m_index;    // is the same as self-connected.
+    ASSERT(0 <= linked && linked < number_of_nodes);
+    ASSERT(!v[linked]);
+    v[linked] = true;
+    ASSERT(linked == node.m_index || (thread(linked) != thread(node.m_index) && graph[linked].m_linked == node.m_index));
+    // Check for each node that it isn't part of a looped staircase.
+    std::array<int, number_of_threads> a;
+    for (auto&& d : a)
+      d = number_of_nodes;
+    if (is_looped(ls, a, node.m_index))
+      return false;
+  }
+  return true;
 }
 
 int main()
@@ -419,8 +450,11 @@ int main()
       if (ml.inner_loop() || fully_connected || last_node)
       {
         // Here all possible permutations of connecting pairs occur.
+        static int ok_count = 0, count = 0;
+        ok_count += graph.sanity_check() ? 1 : 0;
+        ++count;
+        std::cout << "Graph #" << ok_count << '/' << count << std::endl;
         graph.print();
-        //graph.sanity_check();
 
         if (loop_node)
         {
