@@ -100,7 +100,7 @@ cppmem_test_LDADD = libcppmem.a ../boolean-expression/libboolean_expression.la .
 cppmem_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
 cppmem_LDADD = libcppmem.a ../boolean-expression/libboolean_expression.la ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-csc_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
+csc_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@ -O3
 csc_test_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 matchings_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument

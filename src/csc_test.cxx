@@ -8,8 +8,8 @@
 #include <stack>
 #include <set>
 
-int constexpr number_of_threads = 4;
-int constexpr nodes_per_thread = 3;
+int constexpr number_of_threads = 3;
+int constexpr nodes_per_thread = 2;
 int constexpr number_of_nodes = nodes_per_thread * number_of_threads;
 
 int thread(int node)
@@ -49,19 +49,20 @@ mask_type sequenced_after(int node)
   return same_thread(node) & ~(mask - 1) & ~mask;
 }
 
+class Graph;
+
 class Node
 {
   static int constexpr unused = -1;
   friend class Graph;
   int m_index;                  // Index into the graph array.
   int m_linked;                 // The index of the Node that we're linked with (or unused).
-  mask_type m_sequenced_after;
-  mask_type m_sequenced_before;
+  mask_type m_lowest_tops;      // The lowest end point of staircases from this node to each respective thread.
   int m_old_loop_node_offset;
   static int s_connected_nodes;
 
  public:
-  Node() : m_linked(unused), m_sequenced_after(0), m_sequenced_before(0) { }
+  Node() : m_linked(unused), m_lowest_tops(0) { }
   Node(unsigned int linked) : m_linked(linked) { }
   Node(int linked) : m_linked(linked) { }
 
@@ -73,6 +74,7 @@ class Node
 
   bool link_to(Node& linked_node)
   {
+    DoutEntering(dc::notice, name() << "->Node::link_to(" << linked_node.name() << ")");
     ASSERT(m_linked == unused);
     Node* node = this;
     int index = m_index;
@@ -87,7 +89,6 @@ class Node
       {
         m_sequenced_after |= to_mask(node->m_linked);
         m_sequenced_after |= node->m_sequenced_after;
-        break;
       }
     }
     node = this;
@@ -103,7 +104,6 @@ class Node
       {
         m_sequenced_before |= to_mask(node->m_linked);
         m_sequenced_before |= node->m_sequenced_before;
-        break;
       }
     }
     m_linked = linked_node.m_index;
@@ -114,39 +114,19 @@ class Node
     // Did this create a staircase loop?
     if ((m_sequenced_before & m_sequenced_after) != 0)
     {
+#if 0
       m_linked = unused;
       m_sequenced_after = linked_node.m_sequenced_after = 0;
       m_sequenced_before = linked_node.m_sequenced_before = 0;
+#endif
+      Dout(dc::notice, "REJECTED; because m_sequenced_before = " << m_sequenced_before << " and m_sequenced_after = " << m_sequenced_after << "; m_sequenced_before & m_sequenced_after = " << (m_sequenced_before & m_sequenced_after));
       return false;
     }
     return true;
   }
 
  public:
-  bool link(Node& node)
-  {
-    ASSERT(m_index < number_of_nodes - nodes_per_thread);
-    if (this != &node)
-    {
-      if (!link_to(node))
-        return false;
-      // Do not count nodes in the last thread.
-      if (node.m_index < number_of_nodes - nodes_per_thread)
-        ++s_connected_nodes;
-      if (!node.link_to(*this))
-      {
-        m_linked = unused;
-        return false;
-      }
-    }
-    else
-    {
-      m_linked = m_index;
-    }
-    ++s_connected_nodes;
-    return true;
-  }
-
+  bool link(Graph& graph, Node& node);
   static int connected_nodes() { return s_connected_nodes; }
   bool is_unused() const { return m_linked == unused; }
   bool is_used() const { return m_linked != unused; }
@@ -157,6 +137,7 @@ class Node
       --s_connected_nodes;
     m_linked = unused;
     m_sequenced_after = 0;
+    m_sequenced_before = 0;
   }
 
   void set_old_loop_node_offset(int old_loop_node_offset) { m_old_loop_node_offset = old_loop_node_offset; }
@@ -196,9 +177,9 @@ class Graph : public array_type
  public:
   Graph();
 
-  void print() const;
-  bool is_looped(std::vector<bool>& ls, std::array<int, number_of_threads>& a, int index) const;
-  bool sanity_check() const;
+  void print_on(std::ostream& os) const;
+  bool is_looped(std::vector<bool>& ls, std::array<int, number_of_threads> a, int index) const;
+  bool sanity_check(bool output) const;
 
   void unlink(Node& node)
   {
@@ -213,12 +194,69 @@ class Graph : public array_type
     ASSERT(node.is_used());
     return at(node.m_linked);
   }
+
+  friend std::ostream& operator<<(std::ostream& os, Graph const& graph)
+  {
+    graph.print_on(os);
+    return os;
+  }
 };
 
 Graph::Graph()
 {
   for (int index = 0; index < number_of_nodes; ++index)
     at(index).init(index);
+}
+
+bool Node::link(Graph& graph, Node& node)
+{
+  DoutEntering(dc::notice, name() << "->Node::link(graph, " << node.name() << ")");
+  Dout(dc::notice, "graph is now:\n" << graph);
+  ASSERT(m_index < number_of_nodes - nodes_per_thread);
+  if (this != &node)
+  {
+    bool rejected = !link_to(node);
+    //if (!link_to(node))
+    //  return false;
+    // Do not count nodes in the last thread.
+    if (node.m_index < number_of_nodes - nodes_per_thread)
+      ++s_connected_nodes;
+    Dout(dc::notice, "graph is now:\n" << graph);
+    rejected |= !node.link_to(*this);
+#if 0
+    if (!node.link_to(*this))
+    {
+      m_linked = unused;
+      return false;
+    }
+#endif
+    if (rejected)
+    {
+      if (graph.sanity_check(false))
+      {
+        Dout(dc::notice, '\n' << graph);
+        bool algorithm_rejected_sanity_check_does_not_reject = false;
+        ASSERT(algorithm_rejected_sanity_check_does_not_reject);
+      }
+      node.m_linked = unused;
+      m_linked = unused;
+      m_sequenced_before = m_sequenced_after = 0;
+      node.m_sequenced_before = node.m_sequenced_after = 0;
+      return false;
+    }
+    else if (!graph.sanity_check(false))
+    {
+      Dout(dc::notice, '\n' << graph);
+      bool sanity_check_rejected_algorithm_does_not_reject = false;
+      ASSERT(sanity_check_rejected_algorithm_does_not_reject);
+    }
+  }
+  else
+  {
+    m_linked = m_index;
+  }
+  ++s_connected_nodes;
+  return true;
 }
 
 bool is_same_thread(int node1, int node2)
@@ -251,7 +289,7 @@ int last_thread(int node)
   return (thread(node) == number_of_threads - 1) ? number_of_threads - 2 : number_of_threads - 1;
 }
 
-void Graph::print() const
+void Graph::print_on(std::ostream& os) const
 {
   Graph const& graph(*this);
   int const indent = 4;
@@ -263,74 +301,101 @@ void Graph::print() const
       header1 += char('A' + t);
       header2 += char('0' + j);
     }
-  std::cout << std::setw(indent + 2) << ' ';
+  os << std::setw(indent + 1) << ' ';
   for (int t = 0; t < number_of_threads; ++t)
-    std::cout << "      " << header1 << "  ";
-  std::cout << '\n';
-  std::cout << std::setw(indent + 2) << ' ';
+    os << "       " << header1 << "  ";
+  os << '\n';
+  os << std::setw(indent + 1) << ' ';
   for (int t = 0; t < number_of_threads; ++t)
-    std::cout << "    " << char('A' + t) << ' ' << header2 << "  ";
-  std::cout << '\n';
+    os << "     " << char('A' + t) << ' ' << header2 << "  ";
+  os << '\n';
   for (int f = 0; f < nodes_per_thread; ++f)
   {
-    std::cout << std::setw(indent) << ' ' << "  ";
-    for (int n = f; n < number_of_nodes; n += nodes_per_thread)
+    for (int ba = 0; ba < 2; ++ba)
     {
-      std::cout << n << ": ";
-      int linked = graph[n].m_linked;
-      char linked_thread = char('A' + thread(graph[n].m_linked));
-      int linked_row = row(linked);
-#if 2
-      if (graph[n].is_unused())                 // Not linked?
-        std::cout << " *";
-      else if (graph[n].is_linked_to(n))        // Linked to itself?
-        std::cout << " |";
-      else
-        std::cout << linked_thread << linked_row;
-      std::bitset<number_of_nodes> bs(graph[n].m_sequenced_after);
-#else
-        std::cout << " |";
-      std::bitset<number_of_nodes> bs(graph[n].sequenced_after_mask());
-#endif
-      std::cout << '-' << bs << "  ";
+      os << std::setw(indent) << ' ' << ' ';
+      for (int n = f; n < number_of_nodes; n += nodes_per_thread)
+      {
+        if (ba == 0)
+          os << std::setw(2) << n << ": ";
+        else
+          os << "    ";
+        int linked = graph[n].m_linked;
+        char linked_thread = char('A' + thread(graph[n].m_linked));
+        int linked_row = row(linked);
+        if (ba == 1)
+          os << "   ";
+        else if (graph[n].is_unused())            // Not linked?
+          os << " *-";
+        else if (graph[n].is_linked_to(n))        // Linked to itself?
+          os << " |-";
+        else
+          os << linked_thread << linked_row << '-';
+        std::bitset<number_of_nodes> bs(ba == 0 ? graph[n].m_sequenced_after : graph[n].m_sequenced_before);
+        os << bs << "  ";
+      }
+      os << '\n';
     }
-    std::cout << '\n';
   }
-  std::cout << std::endl;
+  os << std::endl;
 
   //std::getchar();
 }
 
 std::set<Graph> all_graphs;
 
-bool Graph::is_looped(std::vector<bool>& ls, std::array<int, number_of_threads>& a, int index) const
+bool Graph::is_looped(std::vector<bool>& ls, std::array<int, number_of_threads> a, int index) const
 {
+  DoutEntering(dc::notice, "Graph::is_looped(.., " << index << ")");
+#ifdef CWDEBUG
+  Dout(dc::notice|continued_cf, "Array a[] =");
+  for (int e : a)
+    Dout(dc::continued, ' ' << e);
+  Dout(dc::finish, "");
+#endif
   Graph const& graph(*this);
 
   if (ls[index])
+  {
+    Dout(dc::notice, "Returning 'no loop' because index " << index << " was already marked as not a loop.");
     return false;
+  }
   int t = thread(index);
   if (index >= a[t])
+  {
+    Dout(dc::notice, "Returning 'loop!' because index " << index << " is larger or equal to a[" << t << "] = " << a[t]);
     return true;
+  }
   int first_node = t * nodes_per_thread;
-  for (int i = index - 1; i >= first_node; --i)
+  for (int i = index; i >= first_node; --i)
   {
     if (ls[i])
+    {
+      Dout(dc::notice, "Returning 'no loop' because index " << i << " was already marked as not a loop.");
       return false;
+    }
     a[t] = i;
-    if (graph[i].m_linked != -1 && graph[i].m_linked != i && is_looped(ls, a, graph[i].m_linked))
+    Dout(dc::notice, "Set a[" << t << "] to " << i);
+    if (graph[i].m_linked != -1 && graph[i].m_linked != i && row(graph[i].m_linked) > 0 && is_looped(ls, a, graph[i].m_linked - 1))
+    {
+      Dout(dc::notice, "Returning 'loop!' because is_looped() returned 'loop!' for index " << (graph[i].m_linked - 1));
       return true;
+    }
   }
   ls[index] = true;
+  Dout(dc::notice, "Marked index " << index << " as NOT a loop.");
   return false;
 }
 
-bool Graph::sanity_check() const
+bool Graph::sanity_check(bool output) const
 {
   Graph const& graph(*this);
-  // Make sure this is the first and only time this function is called for this graph.
-  auto res = all_graphs.insert(graph);
-  ASSERT(res.second);
+  if (output)
+  {
+    // Make sure this is the first and only time this function is called for this graph.
+    auto res = all_graphs.insert(graph);
+    ASSERT(res.second);
+  }
 
   // Set to true when node is checked to NOT be part of a looped staircase.
   std::vector<bool> ls(number_of_nodes, false);
@@ -359,6 +424,7 @@ bool Graph::sanity_check() const
 int main()
 {
   Debug(NAMESPACE_DEBUG::init());
+  Debug(libcw_do.off());
   // Each bit in mask_type represents a node.
   ASSERT(number_of_nodes <= sizeof(mask_type) * 8);
 
@@ -370,25 +436,22 @@ int main()
   // itself and subsequently to the first node of the next thread.
   for (MultiLoop ml(number_of_loops - nodes_per_thread, nodes_per_thread - 1); !ml.finished(); ml.next_loop())
   {
-#if 0
+#ifdef CWDEBUG
     if (ml() >= number_of_nodes)
     {
-      std::cout << "WARNING: not even entering while loop for loop " << *ml << " because its value " << ml() << " >= " << number_of_nodes << "!" << std::endl;
+      Dout(dc::notice, "Not even entering while loop for loop " << *ml << " because its value " << ml() << " >= " << number_of_nodes << "!");
     }
 #endif
     while (ml() < number_of_nodes)
     {
-#if 0
-      std::cout << "At top of loop " << *ml << " (with value " << ml() << ")." << std::endl;
-#endif
+      Dout(dc::notice, "At top of loop " << *ml << " (with value " << ml() << ").");
+
       int old_loop_node_offset = loop_node_offset;
       int loop_node_index = *ml + loop_node_offset;
       while (loop_node_index < number_of_nodes && graph[loop_node_index].is_used())
       {
-#if 0
-        std::cout << "Skipping " << graph[loop_node_index].name() <<
-          " because it is already connected (to " << graph.linked_node(graph[loop_node_index]).name() << ")." << std::endl;
-#endif
+        Dout(dc::notice, "Skipping " << graph[loop_node_index].name() <<
+          " because it is already connected (to " << graph.linked_node(graph[loop_node_index]).name() << ").");
         ++loop_node_index;
       }
       bool fully_connected = false;
@@ -400,71 +463,52 @@ int main()
         // which indicates it needs to be connected to itself; and the next iteration we'll
         // connect it then to the first node of the next thread.
         int begin = (loop_node_index / nodes_per_thread + 1) * nodes_per_thread - 1;
-#if 0
-        std::cout << "  begin = " << begin << "." << std::endl;
-#endif
+        Dout(dc::notice, "  begin = " << begin << ".");
 
         loop_node_offset = loop_node_index - *ml;
         loop_node = &graph[loop_node_index];
         loop_node->set_old_loop_node_offset(old_loop_node_offset);
         int to_node_index = (ml() == begin) ? loop_node_index : ml();
         Node& to_node{graph[to_node_index]};
-#if 0
-        std::cout << "Considering " << loop_node->name() << " <--> " << to_node.name() << '.' << std::endl;
-#endif
+        Dout(dc::notice, "Considering " << loop_node->name() << " <--> " << to_node.name() << '.');
         if (to_node.is_used())
         {
-#if 0
-          std::cout << "Skipping connection to " << to_node.name() << " because it is already connected (to " << graph.linked_node(to_node).name() << ")." << std::endl;
-#endif
+          Dout(dc::notice, "Skipping connection to " << to_node.name() << " because it is already connected (to " << graph.linked_node(to_node).name() << ").");
           loop_node_offset = loop_node->get_old_loop_node_offset();
           ml.breaks(0);                // Normal continue (of current loop).
           break;                       // Return control to MultiLoop.
         }
-        if (!loop_node->link(to_node))
+        if (!loop_node->link(graph, to_node))
         {
-#if 0
-          std::cout << "Skipping connection to " << to_node.name() << " because it is hidden." << std::endl;
-#endif
+          Dout(dc::notice, "Skipping connection to " << to_node.name() << " because it is hidden.");
           loop_node_offset = loop_node->get_old_loop_node_offset();
           ml.breaks(0);                // Normal continue (of current loop).
           break;                       // Return control to MultiLoop.
 
         }
-#if 0
-        std::cout << "Made connection for loop " << *ml << " (" << loop_node->name() << " <--> " << to_node.name();
-#endif
+        Dout(dc::notice|continued_cf, "Made connection for loop " << *ml << " (" << loop_node->name() << " <--> " << to_node.name());
         fully_connected = Node::connected_nodes() == number_of_nodes - nodes_per_thread;
-#if 0
         if (fully_connected)
-          std::cout << "; we are now fully connected";
-        std::cout << ")." << std::endl;
-        graph.print();
-#endif
+          Dout(dc::continued, "; we are now fully connected");
+        Dout(dc::finish, ").\n" << graph);
       }
-#if 0
       else
-        std::cout << "This was the last node of the second-last thread." << std::endl;
-#endif
+        Dout(dc::notice, "This was the last node of the second-last thread.");
 
       if (ml.inner_loop() || fully_connected || last_node)
       {
         // Here all possible permutations of connecting pairs occur.
         static int ok_count = 0, count = 0;
-        ok_count += graph.sanity_check() ? 1 : 0;
+        ok_count += graph.sanity_check(true) ? 1 : 0;
         ++count;
         std::cout << "Graph #" << ok_count << '/' << count << std::endl;
-        graph.print();
+        graph.print_on(std::cout);
 
         if (loop_node)
         {
-#if 0
-          std::cout << "At the end of loop " << *ml << " (" << loop_node->name() << ")." << std::endl;
-#endif
+          Dout(dc::notice, "At the end of loop " << *ml << " (" << loop_node->name() << ").");
           graph.unlink(*loop_node);
-#if 0
-          std::cout << "Unlinked " << loop_node->name() << ":" << std::endl;
-#endif
+          Dout(dc::notice, "Unlinked " << loop_node->name() << ":");
           loop_node_offset = loop_node->get_old_loop_node_offset();
         }
 
@@ -483,10 +527,10 @@ int main()
       int begin = (next_loop_node_index / nodes_per_thread + 1) * nodes_per_thread - 1;
       ASSERT(next_loop_node_index == number_of_nodes || begin < number_of_nodes);
       ml.start_next_loop_at(begin);
-#if 0
+#ifdef CWDEBUG
       if (ml() >= number_of_nodes)
       {
-        std::cout << "Leaving while loop because ml() reached " << ml() << std::endl;
+        Dout(dc::notice, "Leaving while loop because ml() reached " << ml());
       }
 #endif
     }
@@ -494,13 +538,10 @@ int main()
     if (loop >= 0)
     {
       Node& loop_node{graph[loop + loop_node_offset]};
-#if 0
-      std::cout << "At the end of loop " << loop << " (" << loop_node.name() << ")." << std::endl;
-#endif
+      Dout(dc::notice, "At the end of loop " << loop << " (" << loop_node.name() << ").");
       graph.unlink(loop_node);
-#if 0
-      std::cout << "Unlinked " << loop_node.name() << ":" << std::endl;
-      graph.print();
+#ifdef CWDEBUG
+      Dout(dc::notice, "Unlinked " << loop_node.name() << ":\n" << graph);
 #endif
       loop_node_offset = loop_node.get_old_loop_node_offset();
     }
