@@ -9,7 +9,7 @@
 #include <set>
 
 int constexpr number_of_threads = 3;
-int constexpr nodes_per_thread = 2;
+int constexpr nodes_per_thread = 3;
 int constexpr number_of_nodes = nodes_per_thread * number_of_threads;
 
 int thread(int node)
@@ -49,6 +49,36 @@ mask_type sequenced_after(int node)
   return same_thread(node) & ~(mask - 1) & ~mask;
 }
 
+bool is_same_thread(int node1, int node2)
+{
+  return thread(node1) == thread(node2);
+}
+
+bool is_sequenced_before(int node1, int node2)
+{
+  return node1 < node2 && is_same_thread(node1, node2);
+}
+
+int first_node(int thread)
+{
+  return thread * nodes_per_thread;
+}
+
+int last_node(int thread)
+{
+  return first_node(thread) + nodes_per_thread - 1;
+}
+
+int next_thread(int node)
+{
+  return thread(node) + 1;
+}
+
+int last_thread(int node)
+{
+  return (thread(node) == number_of_threads - 1) ? number_of_threads - 2 : number_of_threads - 1;
+}
+
 class Graph;
 
 class Node
@@ -72,72 +102,20 @@ class Node
     m_index = index;
   }
 
-  bool link_to(Node& linked_node)
-  {
-    DoutEntering(dc::notice, name() << "->Node::link_to(" << linked_node.name() << ")");
-    ASSERT(m_linked == unused);
-    Node* node = this;
-    int index = m_index;
-    int row = ::row(index);
-    while (row > 0)
-    {
-      --index;
-      --node;
-      --row;
-      m_sequenced_after |= to_mask(index);
-      if (node->m_linked != unused && node->m_linked != index)
-      {
-        m_sequenced_after |= to_mask(node->m_linked);
-        m_sequenced_after |= node->m_sequenced_after;
-      }
-    }
-    node = this;
-    index = m_index;
-    row = ::row(index);
-    while (row < nodes_per_thread - 1)
-    {
-      ++index;
-      ++node;
-      ++row;
-      m_sequenced_before |= to_mask(index);
-      if (node->m_linked != unused && node->m_linked != index)
-      {
-        m_sequenced_before |= to_mask(node->m_linked);
-        m_sequenced_before |= node->m_sequenced_before;
-      }
-    }
-    m_linked = linked_node.m_index;
-    m_sequenced_after |= linked_node.m_sequenced_after;
-    linked_node.m_sequenced_after |= m_sequenced_after;
-    m_sequenced_before |= linked_node.m_sequenced_before;
-    linked_node.m_sequenced_before |= m_sequenced_before;
-    // Did this create a staircase loop?
-    if ((m_sequenced_before & m_sequenced_after) != 0)
-    {
-#if 0
-      m_linked = unused;
-      m_sequenced_after = linked_node.m_sequenced_after = 0;
-      m_sequenced_before = linked_node.m_sequenced_before = 0;
-#endif
-      Dout(dc::notice, "REJECTED; because m_sequenced_before = " << m_sequenced_before << " and m_sequenced_after = " << m_sequenced_after << "; m_sequenced_before & m_sequenced_after = " << (m_sequenced_before & m_sequenced_after));
-      return false;
-    }
-    return true;
-  }
-
  public:
   bool link(Graph& graph, Node& node);
   static int connected_nodes() { return s_connected_nodes; }
   bool is_unused() const { return m_linked == unused; }
   bool is_used() const { return m_linked != unused; }
   bool is_linked_to(int node) const { return m_linked == node; }
+  bool is_connected() const { return m_linked != unused && m_linked != m_index; }
+  bool detect_loop(int index);
   void reset()
   {
     if (m_index < number_of_nodes - nodes_per_thread)
       --s_connected_nodes;
     m_linked = unused;
-    m_sequenced_after = 0;
-    m_sequenced_before = 0;
+    m_lowest_tops = 0;
   }
 
   void set_old_loop_node_offset(int old_loop_node_offset) { m_old_loop_node_offset = old_loop_node_offset; }
@@ -178,6 +156,8 @@ class Graph : public array_type
   Graph();
 
   void print_on(std::ostream& os) const;
+  bool calculate_staircases();
+  bool follow(int index, std::array<int, number_of_threads>& lowest_per_thread, std::array<int, number_of_threads> visited);
   bool is_looped(std::vector<bool>& ls, std::array<int, number_of_threads> a, int index) const;
   bool sanity_check(bool output) const;
 
@@ -208,48 +188,147 @@ Graph::Graph()
     at(index).init(index);
 }
 
+// Starting at node index, follow staircases upwards and update lowest_per_thread.
+// If a thread is entered at a point lower then were we were before (not as a branch,
+// but as a loop) then return true.
+bool Graph::follow(int index, std::array<int, number_of_threads>& lowest_per_thread, std::array<int, number_of_threads> visited)
+{
+  DoutEntering(dc::notice|continued_cf, "Graph::follow(" << index << ",");
+  for (int e : lowest_per_thread) Dout(dc::continued, ' ' << e);
+  Dout(dc::continued, ", ");
+  for (int e : visited) Dout(dc::continued, ' ' << e);
+  Dout(dc::finish, ")");
+  Graph const& graph = *this;
+  Node const* node = &graph[index];
+  int row = ::row(index);
+  if (index >= visited[thread(index)])        // Loop?
+  {
+    Dout(dc::notice, "Returning true because visited[" << thread(index) << "] = " << visited[thread(index)] <<
+        ", which is less than or equal the current index (" << index << ").");
+    return true;
+  }
+  int t = thread(index);
+  visited[t] = index;
+  if (index > lowest_per_thread[t] || lowest_per_thread[t] == number_of_nodes)
+  {
+    lowest_per_thread[t] = index;
+    Dout(dc::notice, "Setting lowest_per_thread[" << t << "] to " << index);
+  }
+  while (row > 0)
+  {
+    --node;
+    --index;
+    --row;
+    if (node->is_connected())
+    {
+      Dout(dc::notice, "Following rf of node " << node->name());
+      if (follow(node->m_linked, lowest_per_thread, visited))
+      {
+        Dout(dc::notice, "Returning 'loop' from Graph::follow.");
+        return true;
+      }
+    }
+  }
+  Dout(dc::notice|continued_cf, "No loop detected; returning false. lowest_per_thread is now: ");
+  for (int e : lowest_per_thread) Dout(dc::continued, ' ' << e);
+  Dout(dc::finish, ".");
+  return false;
+}
+
+// Recalculate all staircases brute-force.
+// Return true if a loop is detected.
+bool Graph::calculate_staircases()
+{
+  DoutEntering(dc::notice, "Graph::calculate_staircases()");
+  Graph& graph(*this);
+  // Run over all connected nodes.
+  for (Node& start_node : graph)
+  {
+    if (!start_node.is_connected())
+      continue;
+    Dout(dc::notice, "for node " << start_node.name() << "...");
+    // Fill an array with sufficiently large values, so every node index is less.
+    std::array<int, number_of_threads> lowest_per_thread;
+    for (int& e : lowest_per_thread) e = number_of_nodes;
+    int t2 = thread(start_node.m_index);
+    lowest_per_thread[t2] = start_node.m_index;
+    Dout(dc::notice, "set lowest_per_thread[" << t2 << "] to " << start_node.m_index);
+    Node* node = &start_node;
+    int row = ::row(start_node.m_index);
+    do
+    {
+      if (node->is_connected())
+      {
+        std::array<int, number_of_threads> visited;
+        for (int& e : visited) e = number_of_nodes;
+        visited[t2] = node->m_index;
+        if (follow(node->m_linked, lowest_per_thread, visited))
+        {
+          Dout(dc::notice, "Returning 'loop' from Graph::calculate_staircases.");
+          return true;
+        }
+      }
+      --row;
+      --node;
+    }
+    while (row >= 0);
+    // Calculate the resulting m_lowest_tops.
+    start_node.m_lowest_tops = 0;
+    for (int t = 0; t < number_of_threads; ++t)
+      if (lowest_per_thread[t] < number_of_nodes)
+        start_node.m_lowest_tops |= to_mask(lowest_per_thread[t]);
+    Dout(dc::notice, "Set m_lowest_tops for node " << start_node.name() << " to " << std::bitset<number_of_nodes>(start_node.m_lowest_tops) << ".");
+  }
+  Dout(dc::notice, "Return 'no loop' from Graph::calculate_staircases.");
+  return false;
+}
+
+// Return true if above us there is a (canonical) staircase that ends below index.
+bool Node::detect_loop(int index)
+{
+  int t = thread(index);
+  int row = ::row(m_index);
+  Node* node = this;
+  while (row > 0)
+  {
+    --row;
+    --node;
+    if (node->is_connected())
+    {
+      for (int n = first_node(t); n <= last_node(t); ++n)
+      {
+        if ((node->m_lowest_tops & to_mask(n)))
+        {
+          if (n > index)
+            return true;
+          break;
+        }
+      }
+      break;
+    }
+  }
+  return false;
+}
+
 bool Node::link(Graph& graph, Node& node)
 {
   DoutEntering(dc::notice, name() << "->Node::link(graph, " << node.name() << ")");
-  Dout(dc::notice, "graph is now:\n" << graph);
+  Dout(dc::notice|flush_cf, "graph is now:\n" << graph);
   ASSERT(m_index < number_of_nodes - nodes_per_thread);
   if (this != &node)
   {
-    bool rejected = !link_to(node);
-    //if (!link_to(node))
-    //  return false;
+    ASSERT(m_linked == unused && node.m_linked == unused);
+    bool rejected = graph.calculate_staircases();
+    ASSERT(!rejected);
+    rejected = detect_loop(node.m_index) || node.detect_loop(m_index);
+    if (rejected)
+      return false;
+    m_linked = node.m_index;
+    node.m_linked = m_index;
+    Dout(dc::notice, "graph is now:\n" << graph);
     // Do not count nodes in the last thread.
     if (node.m_index < number_of_nodes - nodes_per_thread)
       ++s_connected_nodes;
-    Dout(dc::notice, "graph is now:\n" << graph);
-    rejected |= !node.link_to(*this);
-#if 0
-    if (!node.link_to(*this))
-    {
-      m_linked = unused;
-      return false;
-    }
-#endif
-    if (rejected)
-    {
-      if (graph.sanity_check(false))
-      {
-        Dout(dc::notice, '\n' << graph);
-        bool algorithm_rejected_sanity_check_does_not_reject = false;
-        ASSERT(algorithm_rejected_sanity_check_does_not_reject);
-      }
-      node.m_linked = unused;
-      m_linked = unused;
-      m_sequenced_before = m_sequenced_after = 0;
-      node.m_sequenced_before = node.m_sequenced_after = 0;
-      return false;
-    }
-    else if (!graph.sanity_check(false))
-    {
-      Dout(dc::notice, '\n' << graph);
-      bool sanity_check_rejected_algorithm_does_not_reject = false;
-      ASSERT(sanity_check_rejected_algorithm_does_not_reject);
-    }
   }
   else
   {
@@ -259,38 +338,9 @@ bool Node::link(Graph& graph, Node& node)
   return true;
 }
 
-bool is_same_thread(int node1, int node2)
+void Graph::print_on(std::ostream&) const
 {
-  return thread(node1) == thread(node2);
-}
-
-bool is_sequenced_before(int node1, int node2)
-{
-  return node1 < node2 && is_same_thread(node1, node2);
-}
-
-int first_node(int thread)
-{
-  return thread * nodes_per_thread;
-}
-
-int last_node(int thread)
-{
-  return first_node(thread) + nodes_per_thread - 1;
-}
-
-int next_thread(int node)
-{
-  return thread(node) + 1;
-}
-
-int last_thread(int node)
-{
-  return (thread(node) == number_of_threads - 1) ? number_of_threads - 2 : number_of_threads - 1;
-}
-
-void Graph::print_on(std::ostream& os) const
-{
+  std::ostream& os{std::cout};
   Graph const& graph(*this);
   int const indent = 4;
   std::string header1;
@@ -311,7 +361,7 @@ void Graph::print_on(std::ostream& os) const
   os << '\n';
   for (int f = 0; f < nodes_per_thread; ++f)
   {
-    for (int ba = 0; ba < 2; ++ba)
+    for (int ba = 0; ba < 1; ++ba)
     {
       os << std::setw(indent) << ' ' << ' ';
       for (int n = f; n < number_of_nodes; n += nodes_per_thread)
@@ -331,7 +381,7 @@ void Graph::print_on(std::ostream& os) const
           os << " |-";
         else
           os << linked_thread << linked_row << '-';
-        std::bitset<number_of_nodes> bs(ba == 0 ? graph[n].m_sequenced_after : graph[n].m_sequenced_before);
+        std::bitset<number_of_nodes> bs(graph[n].m_lowest_tops);
         os << bs << "  ";
       }
       os << '\n';
@@ -424,7 +474,7 @@ bool Graph::sanity_check(bool output) const
 int main()
 {
   Debug(NAMESPACE_DEBUG::init());
-  Debug(libcw_do.off());
+  //Debug(libcw_do.off());
   // Each bit in mask_type represents a node.
   ASSERT(number_of_nodes <= sizeof(mask_type) * 8);
 
@@ -490,7 +540,8 @@ int main()
         fully_connected = Node::connected_nodes() == number_of_nodes - nodes_per_thread;
         if (fully_connected)
           Dout(dc::continued, "; we are now fully connected");
-        Dout(dc::finish, ").\n" << graph);
+        Dout(dc::finish, ").");
+        Dout(dc::notice, graph);
       }
       else
         Dout(dc::notice, "This was the last node of the second-last thread.");
