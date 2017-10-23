@@ -1,5 +1,7 @@
 set print static off
 
+b cppmem.cxx:832
+
 define pbe
 call gdb_print_boolean_expression($arg0)
 end

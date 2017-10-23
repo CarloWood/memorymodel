@@ -820,7 +820,7 @@ int main(int argc, char* argv[])
       if (action->location() == location && action->is_read())
       {
         Dout(dc::notice, "Found read " << *action);
-        read_from_loops_per_location.add_read_action(action);
+        read_from_loops_per_location.add_read_action(action, topological_ordered_actions);
       }
     }
 

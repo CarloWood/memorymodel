@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "debug.h"
 #include "utils/MultiLoop.h"
+#include "utils/is_power_of_two.h"
 #include <iostream>
 #include <array>
 #include <iomanip>
@@ -9,7 +10,7 @@
 #include <set>
 
 int constexpr number_of_threads = 3;
-int constexpr nodes_per_thread = 3;
+int constexpr nodes_per_thread = 2;
 int constexpr number_of_nodes = nodes_per_thread * number_of_threads;
 
 int thread(int node)
@@ -37,13 +38,42 @@ mask_type same_thread(int node)
   return thread_mask0 >> (nodes_per_thread * thread(node));
 }
 
-mask_type at_or_sequenced_below(int node)
+// Suppose that 'node' is B2, then to_mask(node) would return
+// the following mask:
+//
+//        thread: A    B    C
+//
+// row: 0    msb->0    0    0  (msb: most significant bit).
+//      1         0    0    0
+//      2         0    1    0
+//      3         0    0    0
+//      4         0    0    0
+//                          ^
+//                          |__ least significant bit.
+//
+// mask - 1 is equal to:
+//
+// row: 0    msb->0    0    1
+//      1         0    0    1
+//      2         0    0    1
+//      3         0    1    1
+//      4         0    1    1
+//
+// And same_thread(node) would return:
+//
+// row: 0    msb->0    1    0
+//      1         0    1    0
+//      2         0    1    0
+//      3         0    1    0
+//      4         0    1    0
+//
+mask_type sequenced_after(int node)
 {
   mask_type const mask = to_mask(node);
-  return same_thread(node) & (~mask + 1);
+  return same_thread(node) & (mask - 1);
 }
 
-mask_type sequenced_after(int node)
+mask_type sequenced_before(int node)
 {
   mask_type const mask = to_mask(node);
   return same_thread(node) & ~(mask - 1) & ~mask;
@@ -56,7 +86,9 @@ bool is_same_thread(int node1, int node2)
 
 bool is_sequenced_before(int node1, int node2)
 {
-  return node1 < node2 && is_same_thread(node1, node2);
+  mask_type const mask1 = to_mask(node1);
+  mask_type const before2 = sequenced_before(node2);
+  return (mask1 & before2);
 }
 
 int first_node(int thread)
@@ -74,6 +106,7 @@ int next_thread(int node)
   return thread(node) + 1;
 }
 
+// Return the last thread that isn't the thread of node.
 int last_thread(int node)
 {
   return (thread(node) == number_of_threads - 1) ? number_of_threads - 2 : number_of_threads - 1;
@@ -87,12 +120,13 @@ class Node
   friend class Graph;
   int m_index;                  // Index into the graph array.
   int m_linked;                 // The index of the Node that we're linked with (or unused).
-  mask_type m_lowest_tops;      // The lowest end point of staircases from this node to each respective thread.
+  mask_type m_lowest_endpoints; // The lowest end point of staircases from this node to each respective thread.
+  mask_type m_beginpoints;      // The begin points of staircases leading to m_lowest_endpoints.
   int m_old_loop_node_offset;
   static int s_connected_nodes;
 
  public:
-  Node() : m_linked(unused), m_lowest_tops(0) { }
+  Node() : m_linked(unused), m_lowest_endpoints(0) { }
   Node(unsigned int linked) : m_linked(linked) { }
   Node(int linked) : m_linked(linked) { }
 
@@ -110,13 +144,16 @@ class Node
   bool is_linked_to(int node) const { return m_linked == node; }
   bool is_connected() const { return m_linked != unused && m_linked != m_index; }
   bool detect_loop(int index);
+  bool can_set(Graph& graph, mask_type mask) const;
   void reset()
   {
     if (m_index < number_of_nodes - nodes_per_thread)
       --s_connected_nodes;
     m_linked = unused;
-    m_lowest_tops = 0;
+    m_lowest_endpoints = 0;
+    m_beginpoints = 0;
   }
+  void add_csc_to(Graph& graph, Node& node);
 
   void set_old_loop_node_offset(int old_loop_node_offset) { m_old_loop_node_offset = old_loop_node_offset; }
   int get_old_loop_node_offset() const { return m_old_loop_node_offset; }
@@ -156,17 +193,20 @@ class Graph : public array_type
   Graph();
 
   void print_on(std::ostream& os) const;
-  bool calculate_staircases();
+  bool calculate_staircases(bool fix = false);
   bool follow(int index, std::array<int, number_of_threads>& lowest_per_thread, std::array<int, number_of_threads> visited);
   bool is_looped(std::vector<bool>& ls, std::array<int, number_of_threads> a, int index) const;
+  Node& mask_to_node(mask_type mask);
   bool sanity_check(bool output) const;
 
   void unlink(Node& node)
   {
+    DoutEntering(dc::notice, "unlink(" << node.name() << ")");
     ASSERT(node.m_linked != Node::unused);
     if (node.m_linked != node.m_index)
       at(node.m_linked).reset();
     node.reset();
+    calculate_staircases(true);
   }
 
   Node& linked_node(Node const& node)
@@ -230,14 +270,24 @@ bool Graph::follow(int index, std::array<int, number_of_threads>& lowest_per_thr
     }
   }
   Dout(dc::notice|continued_cf, "No loop detected; returning false. lowest_per_thread is now: ");
-  for (int e : lowest_per_thread) Dout(dc::continued, ' ' << e);
+  for (int e : lowest_per_thread)
+  {
+    if (e == number_of_nodes)
+      Dout(dc::continued, " -");
+    else
+    {
+      Node n;
+      n.init(e);
+      Dout(dc::continued, ' ' << n.name());
+    }
+  }
   Dout(dc::finish, ".");
   return false;
 }
 
 // Recalculate all staircases brute-force.
 // Return true if a loop is detected.
-bool Graph::calculate_staircases()
+bool Graph::calculate_staircases(bool fix)
 {
   DoutEntering(dc::notice, "Graph::calculate_staircases()");
   Graph& graph(*this);
@@ -272,12 +322,19 @@ bool Graph::calculate_staircases()
       --node;
     }
     while (row >= 0);
-    // Calculate the resulting m_lowest_tops.
-    start_node.m_lowest_tops = 0;
+    // Calculate the correct lowest_endpoints.
+    mask_type lowest_endpoints = 0;
     for (int t = 0; t < number_of_threads; ++t)
       if (lowest_per_thread[t] < number_of_nodes)
-        start_node.m_lowest_tops |= to_mask(lowest_per_thread[t]);
-    Dout(dc::notice, "Set m_lowest_tops for node " << start_node.name() << " to " << std::bitset<number_of_nodes>(start_node.m_lowest_tops) << ".");
+        lowest_endpoints |= to_mask(lowest_per_thread[t]);
+    if (start_node.m_lowest_endpoints != lowest_endpoints)
+    {
+      if (!fix)
+        DoutFatal(dc::core, "m_lowest_endpoints of node " << start_node.name() << " should be " << std::bitset<number_of_nodes>(lowest_endpoints) <<
+            ", but is " << std::bitset<number_of_nodes>(start_node.m_lowest_endpoints));
+      Dout(dc::notice, "Fixing m_lowest_endpoints of node " << start_node.name());
+      start_node.m_lowest_endpoints = lowest_endpoints;
+    }
   }
   Dout(dc::notice, "Return 'no loop' from Graph::calculate_staircases.");
   return false;
@@ -297,7 +354,7 @@ bool Node::detect_loop(int index)
     {
       for (int n = first_node(t); n <= last_node(t); ++n)
       {
-        if ((node->m_lowest_tops & to_mask(n)))
+        if ((node->m_lowest_endpoints & to_mask(n)))
         {
           if (n > index)
             return true;
@@ -310,28 +367,202 @@ bool Node::detect_loop(int index)
   return false;
 }
 
+mask_type thread_to_mask(int t)
+{
+  mask_type m1 = first_node(t) - 1;
+  mask_type m2 = first_node(t + 1) - 1;
+  return m2 ^ m1;
+}
+
+bool Node::can_set(Graph& graph, mask_type mask) const
+{
+  Node& n{graph.mask_to_node(mask)};
+  int t = thread(n.m_index);
+  mask_type tm = same_thread(t);
+  mask_type r = (m_lowest_endpoints | mask) & tm;
+  return r == 0 || utils::is_power_of_two(r);
+}
+
+void Node::add_csc_to(Graph& graph, Node& node2)
+{
+  DoutEntering(dc::notice, "'" << name() << "'->add_csc_to(graph, '" << node2.name() << "')");
+  mask_type const bp = to_mask(m_index);        // The begin point is on this node.
+  mask_type const ep = to_mask(node2.m_index);  // The end point is at the other node.
+  node2.m_beginpoints |= bp;                    // Add the new csc link.
+  ASSERT(can_set(graph, ep));
+  m_lowest_endpoints |= ep;
+  ASSERT(can_set(graph, bp));
+  m_lowest_endpoints |= bp;                     // Also mark ourselves as reachable endpoint from here.
+  int t1 = thread(m_index);
+  int last_node1 = last_node(t1);
+  int t2 = thread(node2.m_index);
+  mask_type const sa1 = sequenced_after(m_index);
+  mask_type const sa2 = sequenced_after(node2.m_index);
+  mask_type const sb2 = sequenced_before(node2.m_index);
+  // Run over all nodes sequenced after the current node.
+  for (int i = m_index + 1; i <= last_node1; ++i)
+  {
+    Node& node_sequenced_after{graph[i]};
+    // Skip unused nodes.
+    if (!node_sequenced_after.is_connected())
+      continue;
+
+    // Cross rule:
+    //
+    //                |      |
+    // our beginpoint o      |
+    //                |╲1    |
+    //                | ╲  2 |
+    //              a o──╲──>o e
+    //              b o───╲─>o f
+    //                | 3  ╲ |
+    //                |     >o our endpoint
+    //                |      |
+    //              c o─────>o
+    //                |      |
+    //
+    // If a new canonical staircase (csc) edge '1' is added
+    // and crosses one or more existing staircases (here '2'
+    // and '3' with respective begin points 'a' and 'b'),
+    // such that their begin points ('a' and 'b') are sequenced
+    // after our beginpoint and their endpoint is sequenced
+    // before our endpoint then those endpoints need to
+    // be changed become our endpoint.
+    //
+    // FIXME: this documentation is incomplete
+    // Also every other existing csc that ends in each of
+    // the respective endpoints ('e' and 'f') and begins at
+    // the node linked to their beginpoint, or begins in a
+    // beginpoint of a csc that ends in that linked node,
+    // should have their end point adjusted.
+    //
+    // For example, each csc in this graph (2, 4, 5) need to
+    // have it's endpoint also adjusted from 'e' to our endpoint.
+    //
+    //                |                |
+    // our beginpoint o                |
+    //                |                |
+    //                |        2       |
+    //              a o───────────────>o e
+    //                |                |
+    //                |  rf       4    |
+    //              a o------o────────>o e
+    //                |                |
+    //                |  rf         5  |
+    //              a o------o<───o───>o e
+    //                |                |
+    //                |                |
+    //                |                o our endpoint
+    //                |                |
+
+    // As soon as we find a point (c) that ends after our
+    // end point, we can stop searching.
+    if ((sa2 & node_sequenced_after.m_lowest_endpoints))
+      break;
+    if ((sb2 & node_sequenced_after.m_lowest_endpoints))
+    {
+      // Fix me.
+      ASSERT(false);
+    }
+  }
+
+  for (Node& node : graph)                              // Run over all nodes ◉ not in t1 or t2.
+  {
+    int t = thread(node.m_index);
+    if (t == t1 || t == t2)
+      continue;
+
+    mask_type ep1 = node.m_lowest_endpoints & sa1;      // csc's ending after bp.
+    mask_type ep2 = node.m_lowest_endpoints & sa2;      // csc's ending after ep.
+
+    // Staircase rule:              ________
+    //         t1      t2          ╱    3   ╲
+    // |       |sb1 sb2|       |  ╱    |     ╲ |
+    // |    bp o───2──>o ep    | ╱     o──────>o
+    // |       |⌉     ⌈|  ==>  |╱      |       |
+    // ◉───1──>⊗sa1 sa2|       ◉──────>⊗       |
+    // |       |⌋     ⌊|       |       |       |
+    //
+    // If the canonical staircase edge '1' already exists and
+    // we are creating '2', then we need to add a csc 3 to
+    // our end point as that is now reachable following 1 and
+    // then 2; however if there is already a csc from ◉ to sa2
+    // then we should not add a csc to ep as that is not lower
+    // on the t2 thread. If ◉ already has a csc to sb2 then its
+    // endpoint needs to be updated.
+    if (ep1 && !ep2)                                    // ◉ has a csc that ends in sa1 but not in sa2.
+    {
+      // Then add or update a csc link (3) to our endpoint.
+      node.m_lowest_endpoints &= ~sb2;
+      ASSERT(node.can_set(graph, ep));
+      node.m_lowest_endpoints |= ep;
+      ASSERT(node2.can_set(graph, to_mask(node.m_index)));
+      node2.m_beginpoints |= to_mask(node.m_index);
+
+      // Also from the point in sa1.
+      Node& nx{graph.mask_to_node(ep1)};                // ⊗
+      ASSERT(!(nx.m_lowest_endpoints & sb2));
+      ASSERT(nx.can_set(graph, to_mask(nx.m_index)));
+      nx.m_lowest_endpoints |= ep;
+      node2.m_beginpoints |= to_mask(nx.m_index);
+    }
+  }
+  for (Node& node : graph)                              // Run over all nodes ◉ not in t1 or t2.
+  {
+    int t = thread(node.m_index);
+    if (t == t1 || t == t2)
+      continue;
+
+    // On the other hand, when staircase edge '2' already exists
+    // we are creating '1', then we have the following case:
+    //                                 ________
+    //    t1                          ╱    3   ╲
+    //    |⌉     ⌈|       |       |  ╱    |     ╲ |
+    //    |sb1 sb2⊗───2──>◉       | ╱     ⊗──────>◉
+    //    |⌋     ⌊|       |  ==>  |╱      |       |
+    // bp o───1──>o ep    |       o──────>o       |
+    //    |sa1 sa2|       |       |       |       |
+    if ((node.m_beginpoints & sb2))
+    {
+      add_csc_to(graph, node);      
+      node2.add_csc_to(graph, node);
+    }
+  }
+}
+
 bool Node::link(Graph& graph, Node& node)
 {
   DoutEntering(dc::notice, name() << "->Node::link(graph, " << node.name() << ")");
-  Dout(dc::notice|flush_cf, "graph is now:\n" << graph);
+  Dout(dc::notice, "graph is now:");
+  Dout(dc::notice, graph);
   ASSERT(m_index < number_of_nodes - nodes_per_thread);
   if (this != &node)
   {
     ASSERT(m_linked == unused && node.m_linked == unused);
-    bool rejected = graph.calculate_staircases();
-    ASSERT(!rejected);
-    rejected = detect_loop(node.m_index) || node.detect_loop(m_index);
-    if (rejected)
+    //Debug(libcw_do.off());
+    bool is_looping = graph.calculate_staircases();
+    //Debug(libcw_do.on());
+    ASSERT(!is_looping);
+    is_looping = detect_loop(node.m_index) || node.detect_loop(m_index);
+    if (is_looping)
       return false;
     m_linked = node.m_index;
     node.m_linked = m_index;
-    Dout(dc::notice, "graph is now:\n" << graph);
     // Do not count nodes in the last thread.
     if (node.m_index < number_of_nodes - nodes_per_thread)
       ++s_connected_nodes;
+    // Update m_lowest_endpoints.
+    add_csc_to(graph, node);
+    node.add_csc_to(graph, *this);
+    Dout(dc::notice, "graph is now:");
+    Dout(dc::notice, graph);
+    // Check if this worked...
+    is_looping = graph.calculate_staircases();
+    ASSERT(!is_looping);
   }
   else
   {
+    ASSERT(m_linked == unused);
     m_linked = m_index;
   }
   ++s_connected_nodes;
@@ -381,7 +612,7 @@ void Graph::print_on(std::ostream&) const
           os << " |-";
         else
           os << linked_thread << linked_row << '-';
-        std::bitset<number_of_nodes> bs(graph[n].m_lowest_tops);
+        std::bitset<number_of_nodes> bs(graph[n].m_lowest_endpoints);
         os << bs << "  ";
       }
       os << '\n';
@@ -393,6 +624,16 @@ void Graph::print_on(std::ostream&) const
 }
 
 std::set<Graph> all_graphs;
+
+Node& Graph::mask_to_node(mask_type mask)
+{
+  ASSERT(utils::is_power_of_two(mask));
+  Graph& graph{*this};
+  int s = __builtin_clzll(mask) - (8 * sizeof(mask_type) - number_of_nodes);
+  Node& result{graph[s]};
+  ASSERT(to_mask(result.m_index) == mask);
+  return result;
+}
 
 bool Graph::is_looped(std::vector<bool>& ls, std::array<int, number_of_threads> a, int index) const
 {
@@ -560,6 +801,7 @@ int main()
           Dout(dc::notice, "At the end of loop " << *ml << " (" << loop_node->name() << ").");
           graph.unlink(*loop_node);
           Dout(dc::notice, "Unlinked " << loop_node->name() << ":");
+          Dout(dc::notice, graph);
           loop_node_offset = loop_node->get_old_loop_node_offset();
         }
 
@@ -592,7 +834,8 @@ int main()
       Dout(dc::notice, "At the end of loop " << loop << " (" << loop_node.name() << ").");
       graph.unlink(loop_node);
 #ifdef CWDEBUG
-      Dout(dc::notice, "Unlinked " << loop_node.name() << ":\n" << graph);
+      Dout(dc::notice, "Unlinked " << loop_node.name() << ":");
+      Dout(dc::notice, graph);
 #endif
       loop_node_offset = loop_node.get_old_loop_node_offset();
     }

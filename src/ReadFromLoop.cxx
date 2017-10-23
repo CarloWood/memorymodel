@@ -48,8 +48,12 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
 {
 #ifdef CWDEBUG
   DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
-  debug::Mark marker;
+  debug::Mark marker{m_read_action->name().c_str()};
 #endif
+  if (m_topo_next == m_topo_end)
+    Dout(dc::notice, "m_topo_next == m_topo_end");
+  else
+    Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
   // g++ starts allocating memory for lambda's capturing more than 16 bytes (clang++ 24 bytes), so put all data that we need in a struct.
   struct ReadFromIfFoundData
   {
@@ -67,13 +71,14 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
   ReadFromIfFoundData data(read_from_loops_per_location);
   if (m_first_iteration)
   {
+    Dout(dc::notice, "m_first_iteration is true.");
     ASSERT(m_queued_actions.empty());
     // Look for the last write (if any) on the same thread.
     FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, visited_generation);
     follow_visited_opsem_heads.process_queued(
         [this, &data](Action* action, boolean::Expression&& path_condition)  // if_found
         {
-          Dout(dc::notice, "ReadFromLoop::find_next_write_action: path_condition = " << path_condition);
+          Dout(dc::notice, "path_condition = " << path_condition);
           if (action->is_write())
           {
             Dout(dc::notice|continued_cf, "Found write " << *action << " if " << path_condition);
@@ -91,11 +96,11 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
             // should be set accordingly.
             write_actions_type::const_iterator read_from = read_from_loop.m_write_actions.begin();
             ASSERT(read_from != read_from_loop.m_write_actions.end());
-            // If any write (ie, the first one) is sequenced before the read (action) then all of them will be,
+            // If any write (ie, the first one) is not sequenced before the read (action) then none of them will be,
             // because we never return a mix of those. If they are sequenced before the read then we can't stop
             // at this read because the algorihm that finds writes that are sequenced before the corresponding
             // read needs us to mark every edge in between to be marked with a 'visited' boolean expression.
-            if (read_from->first->is_sequenced_before(*action))
+            if (!action->is_sequenced_before(*read_from->first))
               return false;
             do
             {
@@ -114,6 +119,7 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
   }
   else
   {
+    Dout(dc::notice, "m_first_iteration is false.");
     data.have_sequenced_before_writes = !m_queued_actions.empty();
     for (queued_actions_type::iterator queued_action = m_queued_actions.begin(); queued_action != m_queued_actions.end();)
     {
@@ -128,7 +134,32 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
   }
   if (!data.have_sequenced_before_writes)
   {
+    Dout(dc::notice, "have_sequenced_before_writes is false; starting next phase (unsequenced writes).");
     data.at_end_of_loop = true;
+    if (m_topo_next == m_topo_end)
+      Dout(dc::notice, "m_topo_next == m_topo_end");
+    while (m_topo_next != m_topo_end)
+    {
+      Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
+      Dout(dc::warning, "******************************************************* WE GET HERE *************************");
+      if ((*m_topo_next)->thread() != m_read_action->thread() &&
+          (*m_topo_next)->location() == m_read_action->location() &&
+          (*m_topo_next)->is_write() &&
+         !(*m_topo_next)->is_sequenced_before(*m_read_action) &&
+         !m_read_action->is_sequenced_before(**m_topo_next))
+      {
+        boolean::Expression condition{true};
+        Dout(dc::notice|continued_cf, "Found unsequenced write " << **m_topo_next);
+        store_write(*m_topo_next, std::move(condition), data.found_write, true);
+        Dout(dc::finish, ".");
+        data.at_end_of_loop = false;
+      }
+      ++m_topo_next;
+    }
   }
+  if (m_topo_next == m_topo_end)
+    Dout(dc::notice, "m_topo_next == m_topo_end");
+  else
+    Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
   return !data.at_end_of_loop;
 }

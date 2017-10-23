@@ -17,10 +17,10 @@ class ReadFromLoopsPerLocation
  public:
   ReadFromLoopsPerLocation() : m_previous_read_from_loop_index(-1) { }
 
-  void add_read_action(Action* read_action)
+  void add_read_action(Action* read_action, std::vector<Action*> const& topological_ordered_actions)
   {
     read_action->set_read_from_loop_index(m_read_from_loops.size());
-    m_read_from_loops.emplace_back(read_action);
+    m_read_from_loops.emplace_back(read_action, topological_ordered_actions.begin(), topological_ordered_actions.end());
   }
 
   ReadFromLoop const& get_read_from_loop_of(Action* read_action) const
@@ -40,5 +40,3 @@ class ReadFromLoopsPerLocation
 
   ReadFromLoop& operator[](int read_from_loop_index) { return m_read_from_loops[read_from_loop_index]; }
 };
-
-
