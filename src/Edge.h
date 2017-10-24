@@ -122,7 +122,14 @@ class Edge
     }
   }
   bool is_visited(int visited_generation) const { return m_visited == visited_generation; }
-  boolean::Expression const& visited_condition(int visited_generation) const { return m_visited == visited_generation ? m_visited_condition : boolean::Expression::zero(); }
+  boolean::Expression const& visited_condition(int visited_generation) const
+  {
+    // If a recursive algorithm incremented visited_generation and wrote where we are still
+    // checking if edges have been visited, then it might have overwritten our value and
+    // we'd return false where we should have returned true.
+    ASSERT(m_visited <= visited_generation);
+    return m_visited == visited_generation ? m_visited_condition : boolean::Expression::zero();
+  }
 
   friend std::ostream& operator<<(std::ostream& os, Edge const& edge);
   friend bool operator==(Edge const& edge1, Edge const& edge2) { return edge1.m_edge_type == edge2.m_edge_type; }

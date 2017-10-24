@@ -2,6 +2,8 @@
 #include "ReadFromLoop.h"
 #include "FollowVisitedOpsemHeads.h"
 #include "ReadFromLoopsPerLocation.h"
+#include "Node.h"
+#include "boolean-expression/TruthProduct.h"
 #include "Action.inl"
 
 // Returns true when condition was moved (to m_write_actions or m_queued_actions).
@@ -44,16 +46,71 @@ bool ReadFromLoop::store_write(Action* write_action, boolean::Expression&& condi
   return true;
 }
 
-bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int visited_generation)
+namespace {
+
+bool can_be_reached_from(Action* begin_action, Action* end_action, boolean::Expression const& condition, int visited_generation);
+
+bool can_be_reached_from_rfs_of(Action* begin_action, Action* end_action, Action* origin_action, boolean::Expression const& condition, int visited_generation)
+{
+  DoutEntering(dc::notice, "can_be_reached_from_rfs_of(from:" << begin_action->name() <<
+      ", to:" << end_action->name() << ", origin:" << origin_action->name() << ", condition:" << condition << ", " << visited_generation << ")");
+  for (auto&& end_point : begin_action->get_end_points())
+  {
+    Action* other_node{end_point.other_node()};
+    if (end_point.edge_type() != edge_rf ||
+        other_node == origin_action ||
+        other_node->is_sequenced_before(*begin_action) ||
+        begin_action->is_sequenced_before(*other_node))
+      continue;
+    ASSERT(!(*other_node == *origin_action));
+    boolean::Expression accumulative_path_condition{condition.times(end_point.edge()->exists())};
+    if (!accumulative_path_condition.is_zero() &&
+        (can_be_reached_from_rfs_of(other_node, end_action, begin_action, accumulative_path_condition, visited_generation) ||
+         can_be_reached_from(other_node, end_action, accumulative_path_condition, visited_generation)))
+      return true;
+  }
+  return false;
+}
+
+bool can_be_reached_from(Action* begin_action, Action* end_action, boolean::Expression const& condition, int visited_generation)
+{
+  DoutEntering(dc::notice, "can_be_reached_from(" << *begin_action << ", " << *end_action << ", " << condition << ", " << visited_generation << ")");
+  struct can_be_reached_from_data
+  {
+    bool reached_end;
+    Action* end_action;
+    boolean::Expression condition;
+    int visited_generation;
+    can_be_reached_from_data(Action* end_action_, boolean::Expression const& condition_, int visited_generation_) :
+        reached_end(false), end_action(end_action_), condition(condition_.copy()), visited_generation(visited_generation_) { }
+  };
+  can_be_reached_from_data data(end_action, condition, visited_generation);
+  FollowVisitedOpsemHeads follow_visited_opsem_heads(begin_action, visited_generation);
+  follow_visited_opsem_heads.process_queued(
+      [&data](Action* action, boolean::Expression&& path_condition)  // if_found
+      {
+        Dout(dc::notice, "action = " << *action << "; path_condition = " << path_condition);
+        data.reached_end = *action == *data.end_action;
+        if (!data.reached_end)
+        {
+          boolean::Expression accumulative_path_condition{data.condition * path_condition.as_product()};
+          data.reached_end = !accumulative_path_condition.is_zero() &&
+            can_be_reached_from_rfs_of(action, data.end_action, action, accumulative_path_condition, data.visited_generation);
+        }
+        return data.reached_end;     // Stop following edges when we find the end point.
+      }
+  );
+  return data.reached_end;
+}
+
+} // namespace
+
+bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int& visited_generation)
 {
 #ifdef CWDEBUG
   DoutEntering(dc::notice, "find_next_write_action() on ReadFromLoop for read action " << *m_read_action);
   debug::Mark marker{m_read_action->name().c_str()};
 #endif
-  if (m_topo_next == m_topo_end)
-    Dout(dc::notice, "m_topo_next == m_topo_end");
-  else
-    Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
   // g++ starts allocating memory for lambda's capturing more than 16 bytes (clang++ 24 bytes), so put all data that we need in a struct.
   struct ReadFromIfFoundData
   {
@@ -74,7 +131,7 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
     Dout(dc::notice, "m_first_iteration is true.");
     ASSERT(m_queued_actions.empty());
     // Look for the last write (if any) on the same thread.
-    FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, visited_generation);
+    FollowVisitedOpsemHeads follow_visited_opsem_heads(m_read_action, ++visited_generation);
     follow_visited_opsem_heads.process_queued(
         [this, &data](Action* action, boolean::Expression&& path_condition)  // if_found
         {
@@ -138,28 +195,38 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
     data.at_end_of_loop = true;
     if (m_topo_next == m_topo_end)
       Dout(dc::notice, "m_topo_next == m_topo_end");
+
+    static int count = 0;
+    Dout(dc::notice, "Count = " << count);
+    ++count;
+
     while (m_topo_next != m_topo_end)
     {
-      Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
-      Dout(dc::warning, "******************************************************* WE GET HERE *************************");
       if ((*m_topo_next)->thread() != m_read_action->thread() &&
           (*m_topo_next)->location() == m_read_action->location() &&
           (*m_topo_next)->is_write() &&
          !(*m_topo_next)->is_sequenced_before(*m_read_action) &&
          !m_read_action->is_sequenced_before(**m_topo_next))
       {
-        boolean::Expression condition{true};
-        Dout(dc::notice|continued_cf, "Found unsequenced write " << **m_topo_next);
-        store_write(*m_topo_next, std::move(condition), data.found_write, true);
-        Dout(dc::finish, ".");
-        data.at_end_of_loop = false;
+        boolean::Product new_rf_exists{m_read_action->exists().as_product()};
+        new_rf_exists *= (*m_topo_next)->exists().as_product();
+        if (!new_rf_exists.is_zero())
+        {
+          Dout(dc::notice|continued_cf, "Found unsequenced write " << **m_topo_next);
+          boolean::Expression condition{new_rf_exists};
+          if (!can_be_reached_from_rfs_of(m_read_action, *m_topo_next, m_read_action, condition, ++visited_generation) &&
+              !can_be_reached_from(m_read_action, *m_topo_next, condition, ++visited_generation) &&
+              !can_be_reached_from_rfs_of(*m_topo_next, m_read_action, *m_topo_next, condition, ++visited_generation) &&
+              !can_be_reached_from(*m_topo_next, m_read_action, condition, ++visited_generation))
+          {
+            store_write(*m_topo_next, std::move(condition), data.found_write, true);
+            data.at_end_of_loop = false;
+          }
+          Dout(dc::finish, ".");
+        }
       }
       ++m_topo_next;
     }
   }
-  if (m_topo_next == m_topo_end)
-    Dout(dc::notice, "m_topo_next == m_topo_end");
-  else
-    Dout(dc::notice, "m_topo_next points to " << **m_topo_next);
   return !data.at_end_of_loop;
 }

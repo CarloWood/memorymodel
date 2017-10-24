@@ -853,7 +853,7 @@ int main(int argc, char* argv[])
         else
           read_from_loop.delete_edge();         // Otherwise remove the edge that was added the previous loop.
 
-        if (!read_from_loop.find_next_write_action(read_from_loops_per_location, ++visited_generation))
+        if (!read_from_loop.find_next_write_action(read_from_loops_per_location, visited_generation))
           break;
 
         if (read_from_loop.add_edge())
@@ -871,15 +871,13 @@ int main(int argc, char* argv[])
               ReadFromLoop& read_from_loop{read_from_loops_per_location[read_loop]};
               valid = valid.times(read_from_loop.have_write()(boolean::TruthProduct{read_from_loop.have_read().as_product()}));
             }
-            graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, rf_candidate++);
+            graph.write_png_file(basename + "_" + location.name() + "_rf", topological_ordered_actions, valid, rf_candidate++);
             new_writes_found = false;
           }
         }
 
         ml.start_next_loop_at(0);
       }
-    // FIXME: for now break so we only do one variable.
-    break;
   }
 
   // Run over all possible flow-control paths.

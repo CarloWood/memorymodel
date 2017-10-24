@@ -21,18 +21,19 @@ class ReadFromLoop
   queued_actions_type m_queued_actions;         // Write actions found that couldn't be processed immediately because they happen
                                                 // under the same condition(s) as what we found so far.
   boolean::Expression m_have_write;             // The condition under which m_read_action has a Read-From edge.
+  std::vector<Action*>::const_iterator m_topo_begin;
   std::vector<Action*>::const_iterator m_topo_next;
   std::vector<Action*>::const_iterator m_topo_end;
 
  public:
-  ReadFromLoop(Action* read_action, std::vector<Action*>::const_iterator const& topo_next, std::vector<Action*>::const_iterator const& topo_end) :
-    m_read_action(read_action), m_topo_next(topo_next), m_topo_end(topo_end) { }
+  ReadFromLoop(Action* read_action, std::vector<Action*>::const_iterator const& topo_begin, std::vector<Action*>::const_iterator const& topo_end) :
+    m_read_action(read_action), m_topo_begin(topo_begin), m_topo_end(topo_end) { }
   ReadFromLoop(ReadFromLoop&& read_from_loop) :
     m_read_action(read_from_loop.m_read_action),
     m_first_iteration(read_from_loop.m_first_iteration),
     m_write_actions(std::move(read_from_loop.m_write_actions)),
     m_queued_actions(std::move(read_from_loop.m_queued_actions)),
-    m_topo_next(std::move(read_from_loop.m_topo_next)),
+    m_topo_begin(std::move(read_from_loop.m_topo_begin)),
     m_topo_end(std::move(read_from_loop.m_topo_end)) { }
 
   boolean::Expression const& have_write() const { return m_have_write; }
@@ -43,9 +44,10 @@ class ReadFromLoop
     DoutEntering(dc::notice, "begin() on ReadFromLoop for read action " << *m_read_action);
     m_write_actions.clear();
     m_first_iteration = true;
+    m_topo_next = m_topo_begin;
   }
 
-  bool find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int visited_generation);
+  bool find_next_write_action(ReadFromLoopsPerLocation& read_from_loops_per_location, int& visited_generation);
 
   void delete_edge()
   {
