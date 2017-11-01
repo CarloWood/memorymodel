@@ -41,6 +41,7 @@ class Graph
 
   // Accessor.
   nodes_type::iterator begin() { return m_nodes.begin(); }
+  nodes_type::const_iterator begin() const { return m_nodes.begin(); }
   nodes_type::iterator end() const { return m_nodes.end(); }
 
  public:

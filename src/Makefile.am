@@ -39,6 +39,14 @@ libcppmem_a_SOURCES = \
 		 ReadFromLoopsPerLocation.h \
 		 ReadFromLoop.cxx \
 		 ReadFromLoop.h \
+		 DirectedEdge.cxx \
+		 DirectedEdge.h \
+		 DirectedEdgeTails.cxx \
+		 DirectedEdgeTails.h \
+		 DirectedSubgraph.cxx \
+		 DirectedSubgraph.h \
+		 ReadFromLocationSubgraphs.cxx \
+		 ReadFromLocationSubgraphs.h \
 		 Action.cxx \
 		 Action.h \
 		 Action.inl \
@@ -92,18 +100,18 @@ csc_test_SOURCES = csc_test.cxx
 
 matchings_SOURCES = matchings.cxx
 
-libcppmem_a_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
+libcppmem_a_CXXFLAGS = @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
 
-cppmem_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
+cppmem_test_CXXFLAGS = @LIBCWD_FLAGS@
 cppmem_test_LDADD = libcppmem.a ../boolean-expression/libboolean_expression.la ../utils/libutils.la $(top_builddir)/cwds/libcwds.la @BOOST_UNIT_TEST_FRAMEWORK_LIB@
 
-cppmem_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
+cppmem_CXXFLAGS = @LIBCWD_FLAGS@
 cppmem_LDADD = libcppmem.a ../boolean-expression/libboolean_expression.la ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-csc_test_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument @LIBCWD_FLAGS@
+csc_test_CXXFLAGS = @LIBCWD_FLAGS@
 csc_test_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
-matchings_CXXFLAGS = -fmax-errors=1 -ferror-limit=1 -Wno-unused-command-line-argument
+matchings_CXXFLAGS =
 
 # --------------- Maintainer's Section
 

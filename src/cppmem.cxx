@@ -16,6 +16,8 @@
 #include "FollowUniqueOpsemTails.h"
 #include "ReadFromLoopsPerLocation.h"
 #include "FilterAllActions.h"
+#include "DirectedSubgraph.h"
+#include "ReadFromLocationSubgraphs.h"
 #include "boolean-expression/TruthProduct.h"
 #include "utils/AIAlert.h"
 #include "utils/MultiLoop.h"
@@ -805,6 +807,11 @@ int main(int argc, char* argv[])
 
   // A vector of objects representing all read nodes per memory location.
   std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;
+  // A vector of objects representing all subgraphs per memory location.
+  std::vector<ReadFromLocationSubgraphs> read_from_location_subgraphs_vector;
+
+  // A counter to mark edges as being visited. Incremented to reset (as opposed to resetting all edges).
+  int visited_generation = 0;
 
   // Run over all memory locations.
   for (auto&& location : Context::instance().locations())
@@ -812,6 +819,8 @@ int main(int argc, char* argv[])
     Dout(dc::notice, "Considering location " << location);
     read_from_loops_per_location_vector.emplace_back();
     ReadFromLoopsPerLocation& read_from_loops_per_location(read_from_loops_per_location_vector.back());
+    read_from_location_subgraphs_vector.emplace_back(location);
+    ReadFromLocationSubgraphs& read_from_location_subgraph(read_from_location_subgraphs_vector.back());
 
     // Find all read actions for this location in topological order (their m_sequence_number).
     // Also reset the visited flags.
@@ -824,9 +833,8 @@ int main(int argc, char* argv[])
       }
     }
 
-    int visited_generation = 0;
     bool new_writes_found = false;
-    int rf_candidate = 0;
+    //int rf_candidate = 0;
     size_t number_of_read_actions = read_from_loops_per_location.number_of_read_actions();
     Dout(dc::notice, "Number of read actions: " << number_of_read_actions);
     for (MultiLoop ml(number_of_read_actions); !ml.finished(); ml.next_loop())
@@ -863,6 +871,8 @@ int main(int argc, char* argv[])
         {
           if (new_writes_found)
           {
+            new_writes_found = false;
+
             // Calculate under which condition this graph is valid.
             // The graph is valid when every read has a read-from edge when it exists.
             boolean::Expression valid{true};
@@ -871,13 +881,48 @@ int main(int argc, char* argv[])
               ReadFromLoop& read_from_loop{read_from_loops_per_location[read_loop]};
               valid = valid.times(read_from_loop.have_write()(boolean::TruthProduct{read_from_loop.have_read().as_product()}));
             }
-            graph.write_png_file(basename + "_" + location.name() + "_rf", topological_ordered_actions, valid, rf_candidate++);
-            new_writes_found = false;
+            //graph.write_png_file(basename + "_" + location.name() + "_rf", topological_ordered_actions, valid, rf_candidate++);
+
+            // Collect all ReadFromSubgraphs.
+            read_from_location_subgraph.add(DirectedSubgraph{graph, edge_mask_rf, std::move(valid)});
           }
         }
 
         ml.start_next_loop_at(0);
       }
+  }
+
+  for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
+  {
+    Dout(dc::notice, location_subgraphs.location() << ':');
+#ifdef CWDEBUG
+    NAMESPACE_DEBUG::Indent indent(4);
+#endif
+    for (auto&& subgraph : location_subgraphs)
+    {
+      Dout(dc::notice, subgraph);
+    }
+  }
+
+  DirectedSubgraph opsem_graph{graph, edge_mask_sbw, true};
+
+  size_t number_of_locations = read_from_loops_per_location_vector.size();
+  Dout(dc::notice, "Number of locations: " << number_of_locations);
+  ASSERT(read_from_location_subgraphs_vector.size() == number_of_locations);
+  for (MultiLoop ml(number_of_locations); !ml.finished(); ml.next_loop())
+  {
+    ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[*ml]};
+    while (ml() < (int)read_from_location_subgraphs.size())
+    {
+      if (loop_detected())
+      {
+        ml.breaks(1);
+        break;
+      }
+      if (ml.inner_loop())
+        read_from_location_subgraphs.inner_loop();
+      ml.start_next_loop_at(0);
+    }
   }
 
   // Run over all possible flow-control paths.

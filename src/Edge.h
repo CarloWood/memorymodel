@@ -70,9 +70,9 @@ class Edge
  private:
   EdgeType m_edge_type;
   boolean::Expression m_condition;
-  Action* m_tail_node;                  // The Node from where the edge starts:  tail_node ---> head_node.
-  int m_visited;                        // A helper variable used post opsem.
-  boolean::Expression m_visited_condition; // The condition under which this edge is visited.
+  Action* m_tail_node;                          // The Node from where the edge starts:  tail_node ---> head_node.
+  int m_visited;                                // A helper variable used by post opsem.
+  boolean::Expression m_visited_condition;      // The condition under which this edge is visited.
 
 #ifdef CWDEBUG
   int m_id;             // For debugging purposes.

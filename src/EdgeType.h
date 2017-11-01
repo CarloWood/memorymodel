@@ -42,6 +42,7 @@ EdgeMaskTypePod constexpr edge_mask_sb    = { to_mask(edge_sb) };       // Seque
 EdgeMaskTypePod constexpr edge_mask_asw   = { to_mask(edge_asw) };      // Additional-Synchronizes-With.
 EdgeMaskTypePod constexpr edge_mask_dd    = { to_mask(edge_dd) };       // Data-Dependency.
 EdgeMaskTypePod constexpr edge_mask_cd    = { to_mask(edge_cd) };       // Control-Dependency.
+EdgeMaskTypePod constexpr edge_mask_sbw   = { edge_mask_sb.mask | edge_mask_asw.mask };
 EdgeMaskTypePod constexpr edge_mask_opsem = { edge_mask_sb.mask | edge_mask_asw.mask | edge_mask_dd.mask | edge_mask_cd.mask };
 // Next we have several relations that are existentially quantified: for each choice of control-flow paths;
 // the program enumerates all possible alternatives of the following:

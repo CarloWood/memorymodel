@@ -113,7 +113,8 @@ class Action
 
   // Accessors.
   id_type id() const { return m_id; }
-  std::string name() const { return utils::ulong_to_base(m_id, "abcdefghijklmnopqrstuvwxyz"); } // action_id
+  static std::string name(int id) { return utils::ulong_to_base(id, "abcdefghijklmnopqrstuvwxyz"); }
+  std::string name() const { return name(m_id); } // action_id
   ThreadPtr const thread() const { return m_thread; }
   ast::tag tag() const { return m_location->tag(); }
   Location const& location() const { return *m_location; }

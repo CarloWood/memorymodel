@@ -196,10 +196,6 @@ bool ReadFromLoop::find_next_write_action(ReadFromLoopsPerLocation& read_from_lo
     if (m_topo_next == m_topo_end)
       Dout(dc::notice, "m_topo_next == m_topo_end");
 
-    static int count = 0;
-    Dout(dc::notice, "Count = " << count);
-    ++count;
-
     while (m_topo_next != m_topo_end)
     {
       if ((*m_topo_next)->thread() != m_read_action->thread() &&
