@@ -66,6 +66,9 @@ class Action
   // Delete edge added before by add_edge_to.
   void delete_edge_to(EdgeType edge_type, Action* head_node);
 
+  // Delete all endpoints of edge_type.
+  void delete_endpoints(EdgeType edge_type);
+
   // Called on the tail-node of a new (conditional) sb edge.
   void sequenced_before();
 

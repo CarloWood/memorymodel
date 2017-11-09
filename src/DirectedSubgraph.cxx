@@ -1,6 +1,7 @@
 #include "sys.h"
 #include "DirectedSubgraph.h"
 #include "Graph.h"
+#include "utils/MultiLoop.h"
 #include <iostream>
 
 DirectedSubgraph::DirectedSubgraph(Graph const& graph, EdgeMaskType type, boolean::Expression&& condition) : m_condition(std::move(condition))
@@ -15,6 +16,26 @@ DirectedSubgraph::DirectedSubgraph(Graph const& graph, EdgeMaskType type, boolea
     ASSERT(action_ptr->id() == index++);
     m_nodes.emplace_back(type, *action_ptr);
   }
+}
+
+void DirectedSubgraph::add_to(Graph& graph) const
+{
+  for (DirectedEdgeTails const& directed_edge_tails : m_nodes)
+    directed_edge_tails.add_to(graph);
+}
+
+bool DirectedSubgraph::loop_detected(MultiLoop const& ml, std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs) const
+{
+  DoutEntering(dc::notice, "DirectedSubgraph::loop_detected(" << *ml << ", ...)");
+  // The subgraphs themselves are already without loops.
+  if (*ml == 0)         // Is this the first (and only) subgraph?
+    return false;
+
+  Action
+  for (auto&& directed_edge_tails : m_nodes)
+    Dout(dc::notice, directed_edge_tails.action());
+
+  return true;
 }
 
 std::ostream& operator<<(std::ostream& os, DirectedSubgraph const& directed_subgraph)

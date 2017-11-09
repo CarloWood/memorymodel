@@ -814,6 +814,7 @@ int main(int argc, char* argv[])
   int visited_generation = 0;
 
   // Run over all memory locations.
+  int rf_candidate = 0;
   for (auto&& location : Context::instance().locations())
   {
     Dout(dc::notice, "Considering location " << location);
@@ -837,6 +838,12 @@ int main(int argc, char* argv[])
     //int rf_candidate = 0;
     size_t number_of_read_actions = read_from_loops_per_location.number_of_read_actions();
     Dout(dc::notice, "Number of read actions: " << number_of_read_actions);
+    if (number_of_read_actions == 0)
+    {
+      read_from_loops_per_location_vector.pop_back();
+      read_from_location_subgraphs_vector.pop_back();
+      continue;
+    }
     for (MultiLoop ml(number_of_read_actions); !ml.finished(); ml.next_loop())
       for (;;)
       {
@@ -906,21 +913,34 @@ int main(int argc, char* argv[])
 
   DirectedSubgraph opsem_graph{graph, edge_mask_sbw, true};
 
-  size_t number_of_locations = read_from_loops_per_location_vector.size();
+  size_t number_of_locations = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
   Dout(dc::notice, "Number of locations: " << number_of_locations);
-  ASSERT(read_from_location_subgraphs_vector.size() == number_of_locations);
   for (MultiLoop ml(number_of_locations); !ml.finished(); ml.next_loop())
   {
-    ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[*ml]};
-    while (ml() < (int)read_from_location_subgraphs.size())
+    for (;;)
     {
-      if (loop_detected())
+      ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[*ml]};
+      if (ml() == (int)read_from_location_subgraphs.size())
+        break;
+      if (opsem_graph.loop_detected(ml, read_from_location_subgraphs_vector))
       {
         ml.breaks(1);
         break;
       }
       if (ml.inner_loop())
-        read_from_location_subgraphs.inner_loop();
+      {
+        // Calculate under which condition this graph is valid.
+        boolean::Expression valid{true}; // FIXME
+        // Construct a new graph.
+        graph.delete_edges(edge_rf);
+        for (size_t location = 0; location < number_of_locations; ++location)
+        {
+          DirectedSubgraph const& read_from_location_subgraph{read_from_location_subgraphs_vector[location][ml[location]]};
+          read_from_location_subgraph.add_to(graph);
+          valid.times(read_from_location_subgraph.valid());
+        }
+        graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, rf_candidate++);
+      }
       ml.start_next_loop_at(0);
     }
   }

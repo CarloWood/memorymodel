@@ -140,6 +140,20 @@ void Action::delete_edge_to(EdgeType edge_type, Action* head_node)
       head_node->m_end_points.end());
 }
 
+void Action::delete_endpoints(EdgeType edge_type)
+{
+  m_end_points.erase(
+      std::remove_if(
+        m_end_points.begin(),
+        m_end_points.end(),
+        [edge_type](EndPoint const& end_point)
+        {
+          return end_point.edge_type() == edge_type;
+        }
+      ),
+      m_end_points.end());
+}
+
 //static
 boolean::Expression const Action::s_expression_one(true);
 boolean::Product const Action::s_product_one(true);

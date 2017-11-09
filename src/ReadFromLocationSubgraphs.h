@@ -24,6 +24,7 @@ class ReadFromLocationSubgraphs
 
   // Accessor.
   Location const& location() const { return m_location; }
+  DirectedSubgraph const& operator[](int index) const { return m_subgraphs[index]; }
 
   iterator begin() { return m_subgraphs.begin(); }
   const_iterator begin() const { return m_subgraphs.begin(); }

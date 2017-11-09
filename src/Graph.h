@@ -42,7 +42,7 @@ class Graph
   // Accessor.
   nodes_type::iterator begin() { return m_nodes.begin(); }
   nodes_type::const_iterator begin() const { return m_nodes.begin(); }
-  nodes_type::iterator end() const { return m_nodes.end(); }
+  nodes_type::const_iterator end() const { return m_nodes.end(); }
 
  public:
   // Add a new node.
@@ -66,5 +66,12 @@ class Graph
   void new_edge(EdgeType edge_type, NodePtrConditionPair const& tail_current_head_of_thread, NodePtr const& head_node)
   {
     new_edge(edge_type, tail_current_head_of_thread.node(), head_node, tail_current_head_of_thread.condition());
+  }
+
+  // Delete all edges of type edge_type.
+  void delete_edges(EdgeType edge_type)
+  {
+    for (auto&& action_ptr : m_nodes)
+      action_ptr->delete_endpoints(edge_type);
   }
 };
