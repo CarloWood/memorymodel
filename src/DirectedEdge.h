@@ -1,11 +1,11 @@
 #pragma once
 
 #include "EdgeType.h"
+#include "Action.h"
 #include "boolean-expression/BooleanExpression.h"
 #include <iosfwd>
 
 class Graph;
-class Action;
 
 class DirectedEdge
 {
@@ -19,6 +19,8 @@ class DirectedEdge
     m_head_node(head_node), m_edge_type(edge_type), m_condition(condition.copy()) { }
 
   void add_to(Graph& graph, Action* tail_node) const;
+  Action::id_type id() const { return m_head_node->id(); }
+  boolean::Expression const& condition() const { return m_condition; }
 
   friend std::ostream& operator<<(std::ostream& os, DirectedEdge const& directed_edge);
 };

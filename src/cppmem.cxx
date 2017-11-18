@@ -16,7 +16,7 @@
 #include "FollowUniqueOpsemTails.h"
 #include "ReadFromLoopsPerLocation.h"
 #include "FilterAllActions.h"
-#include "DirectedSubgraph.h"
+#include "ReadFromGraph.h"
 #include "ReadFromLocationSubgraphs.h"
 #include "boolean-expression/TruthProduct.h"
 #include "utils/AIAlert.h"
@@ -911,7 +911,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  DirectedSubgraph opsem_graph{graph, edge_mask_sbw, true};
+  ReadFromGraph opsem_graph{graph, edge_mask_sbw, true};
 
   size_t number_of_locations = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
   Dout(dc::notice, "Number of locations: " << number_of_locations);
@@ -922,7 +922,10 @@ int main(int argc, char* argv[])
       ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[*ml]};
       if (ml() == (int)read_from_location_subgraphs.size())
         break;
-      if (opsem_graph.loop_detected(ml, read_from_location_subgraphs_vector))
+      // Begin of loop *ml.
+      opsem_graph.push(read_from_location_subgraphs[ml()]);
+      if (*ml > 0 &&    // We need at least two read-from subgraphs before there can be a loop.
+          opsem_graph.loop_detected().is_one())
       {
         ml.breaks(1);
         break;
@@ -940,9 +943,12 @@ int main(int argc, char* argv[])
           valid.times(read_from_location_subgraph.valid());
         }
         graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, rf_candidate++);
+        opsem_graph.pop();
       }
       ml.start_next_loop_at(0);
     }
+    if (ml.end_of_loop() >= 0)
+      opsem_graph.pop();
   }
 
   // Run over all possible flow-control paths.

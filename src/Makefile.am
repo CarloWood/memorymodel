@@ -45,6 +45,8 @@ libcppmem_a_SOURCES = \
 		 DirectedEdgeTails.h \
 		 DirectedSubgraph.cxx \
 		 DirectedSubgraph.h \
+		 ReadFromGraph.h \
+		 ReadFromGraph.cxx \
 		 ReadFromLocationSubgraphs.cxx \
 		 ReadFromLocationSubgraphs.h \
 		 Action.cxx \

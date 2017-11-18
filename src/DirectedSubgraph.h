@@ -13,7 +13,7 @@ class DirectedSubgraph
  public:
   using nodes_type = std::vector<DirectedEdgeTails>;
 
- private:
+ protected:
   nodes_type m_nodes;
   boolean::Expression m_condition;              // The condition under which this subgraph is valid.
 
@@ -24,10 +24,8 @@ class DirectedSubgraph
   void add_to(Graph& graph) const;
   // Return condition under which this subgraph is valid.
   boolean::Expression const& valid() const { return m_condition; }
-  // Return true if a loop is detected where this object contains the sb and asw edges,
-  // and the first *ml ReadFromLocationSubgraphs's in read_from_location_subgraphs
-  // contain rf edges.
-  bool loop_detected(MultiLoop const& ml, std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs) const;
+  // Return the outgoing edges of node n for this subgraph.
+  DirectedEdgeTails const& tails(int n) const { return m_nodes[n]; }
 
 #if 0
   nodes_type::iterator begin() { return m_nodes.begin(); }

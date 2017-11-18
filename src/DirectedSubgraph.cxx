@@ -24,20 +24,6 @@ void DirectedSubgraph::add_to(Graph& graph) const
     directed_edge_tails.add_to(graph);
 }
 
-bool DirectedSubgraph::loop_detected(MultiLoop const& ml, std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs) const
-{
-  DoutEntering(dc::notice, "DirectedSubgraph::loop_detected(" << *ml << ", ...)");
-  // The subgraphs themselves are already without loops.
-  if (*ml == 0)         // Is this the first (and only) subgraph?
-    return false;
-
-  Action
-  for (auto&& directed_edge_tails : m_nodes)
-    Dout(dc::notice, directed_edge_tails.action());
-
-  return true;
-}
-
 std::ostream& operator<<(std::ostream& os, DirectedSubgraph const& directed_subgraph)
 {
   char const* sep = "<subgraph>";
