@@ -19,7 +19,7 @@ boolean::Expression const& ReadFromGraph::loop_detected()
   // has no loops, because every node should be reachable from node 0.
   // Therefore it is enough to only test node 0.
 
-  // ALL nodes should be white at this point, so also node 0.
+  // ALL nodes should be unvisited at this point, so also node 0.
   ASSERT(is_unvisited(0));
 
   // dfs returns false when there is no loop detected at all; otherwise
@@ -49,8 +49,8 @@ boolean::Expression const& ReadFromGraph::loop_detected()
   return m_node_data[0].m_loop_condition;
 }
 
-// Returns false when no loop was detected starting from node n (in which case m_loop_condition[n] is invalidated).
-// Otherwise returns true and m_loop_condition[n] is set to the non-zero condition under which one or more loops exist.
+// Returns false when no loop was detected starting from node n (in which case m_node_data[n].m_loop_condition is invalidated).
+// Otherwise returns true and m_node_data[n].m_loop_condition is set to the non-zero condition under which one or more loops exist.
 //
 // For example,
 //
@@ -71,12 +71,27 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 // Let A, B, ..., H be the boolean expressions under which each edge exists.
 // Then dfs(4) is only called after calling dfs(0), dfs(1), dfs(2), dfs(3)
 // and then either dfs(4) directly or first dfs(5) and dfs(6), which means
-// that node 1 will always be gray; hence that dfs(4) will return true
-// and set m_loop_condition[4] to E.
-// Therefore, the call to dfs(6) will return true and set m_loop_condition[6] to HE,
-// the call to dfs(5) will return true and set m_loop_condition[5] to GHE,
-// and the call to dfs(3) will return true and set m_loop_condition[3] to DE + FGHE.
-// Finally, the call to dfs(0) will return true and set m_loop_condition[0] to ABCDE + ABCFGHE.
+// that node 1 will always be 'followed'; hence that dfs(4) will return true
+// and set m_node_data[4].m_loop_condition to E.
+// Therefore, the call to dfs(6) will return true and set
+// m_node_data[6].m_loop_condition to HE, the call to dfs(5) will return true
+// and set m_node_data[5].m_loop_condition to GHE, and the call to dfs(3) will
+// return true and set m_node_data[3].m_loop_condition to DE + FGHE.
+// Finally, the call to dfs(0) will return true and set m_node_data.m_loop_condition[0]
+// to ABCDE + ABCFGHE.
+// Note that if dfs(4) is called before dfs(5), so that m_node_data[4].m_loop_condition
+// is already set to E and m_node_data[4].m_end_point to 1; then the call to
+// dfs(6) will short circuit the calculation done by dfs(4) and not call dfs(4)
+// again because node 1 will still be in the 'followed' state: the boolean expression
+// E can just be used directly to produce HE. Likewise if the children of node 3
+// are called in the opposite order. But if there would be an edge from node 0
+// to say node 5, then that is considered to be a dead cycle because the detected
+// cycle that node 5 is part of "ends" at node 1 which is no longer marked as
+// being 'followed'.
+//
+// The algorithm used here, that detects under which condition a cycle will
+// exist when each edge is "weighted" (with a boolean expression in this case),
+// was designed by myself (Carlo Wood) in November 2017.
 //
 bool ReadFromGraph::dfs(int n)
 {
@@ -91,7 +106,7 @@ bool ReadFromGraph::dfs(int n)
       Dout(dc::notice, "Following edge to child " << node_id(child));
       if (is_dead_end(child) || is_dead_cycle(child))
       {
-        Dout(dc::notice, "  continueing because that node is dead.");
+        Dout(dc::notice, "  continuing because that node is dead.");
         continue;
       }
       if (is_followed(child))
