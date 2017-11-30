@@ -924,11 +924,23 @@ int main(int argc, char* argv[])
         break;
       // Begin of loop *ml.
       opsem_graph.push(read_from_location_subgraphs[ml()]);
-      if (*ml > 0 &&    // We need at least two read-from subgraphs before there can be a loop.
-          opsem_graph.loop_detected().is_one())
+      if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
       {
-        ml.breaks(1);
-        break;
+#ifdef CWDEBUG
+        static int count = 0;
+        ++count;
+        Dout(dc::notice|continued_cf, "Calling loop_detected() with *ml == " << *ml << "; count = " << count << "; ml = ");
+        for (unsigned int j = 0; j <= *ml; ++j)
+          Dout(dc::continued, (j > 0 ? ", " : "") << ml[j]);
+        Dout(dc::finish, "");
+#endif
+        if (opsem_graph.loop_detected().is_one())
+        {
+          Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continueing the current loop!");
+          opsem_graph.pop();
+          ml.breaks(0);
+          break;
+        }
       }
       if (ml.inner_loop())
       {

@@ -414,6 +414,20 @@ boolean::Expression Action::calculate_path_condition(int visited_generation, Act
   return (have_branch && !branch_path_condition[1].is_one()) ? branch_path_condition[0] + branch_path_condition[1] : branch_path_condition[0].copy();
 }
 
+std::memory_order Action::read_memory_order() const
+{
+  // This node does not provide a read memory order (ie, it is a write node, or something else).
+  DoutFatal(dc::core, "Calling Action::read_memory_order()");
+  return std::memory_order_relaxed;
+}
+
+std::memory_order Action::write_memory_order() const
+{
+  // This node does not provide a write memory order (ie, it is a read node, or something else).
+  DoutFatal(dc::core, "Calling Action::write_memory_order()");
+  return std::memory_order_relaxed;
+}
+
 #ifdef CWDEBUG
 NAMESPACE_DEBUG_CHANNELS_START
 channel_ct for_action("FORACTION");

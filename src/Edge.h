@@ -96,6 +96,7 @@ class Edge
 
   EdgeType edge_type() const { return m_edge_type; }
   boolean::Expression const& condition() const { return m_condition; }
+  Action* tail_node() const { return m_tail_node; }
   char const* name() const { return edge_name(m_edge_type); }
   bool is_opsem() const { return EdgeMaskType{m_edge_type}.is_opsem(); }
 

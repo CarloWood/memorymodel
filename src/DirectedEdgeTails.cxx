@@ -7,12 +7,8 @@
 DirectedEdgeTails::DirectedEdgeTails(EdgeMaskType edge_mask_type, Action& action) : m_action(action)
 {
   for (auto&& end_point : action.get_end_points())
-  {
     if ((end_point.edge_type() & edge_mask_type) && end_point.type() == tail)
-    {
-      m_directed_edges.emplace_back(end_point.other_node(), end_point.edge_type(), end_point.edge()->condition());
-    }
-  }
+      m_directed_edges.emplace_back(end_point.edge()-> tail_node(), end_point.other_node(), end_point.edge_type(), end_point.edge()->condition());
 }
 
 void DirectedEdgeTails::add_to(Graph& graph) const

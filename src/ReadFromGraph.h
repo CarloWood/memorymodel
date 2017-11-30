@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DirectedSubgraph.h"
+#include "ast_tag.h"
 #include <vector>
 
 class ReadFromGraph : public DirectedSubgraph
@@ -74,5 +75,5 @@ class ReadFromGraph : public DirectedSubgraph
 
   // Do a Depth-First-Search starting from node n, returning true if and only if we detected a cycle
   // in which case m_loop_condition is set to the (non-zero) condition under which a cycle was found.
-  bool dfs(int n);
+  bool dfs(int n, int current_memory_location = 0);
 };

@@ -39,6 +39,7 @@ class AtomicReadNode : public ReadNode
   std::string type() const override;
   void print_code(std::ostream& os) const override;
   Kind kind() const override { return atomic_load; }
+  std::memory_order read_memory_order() const override { return m_read_memory_order; }
 };
 
 // Base class for [value-computation/]side-effect nodes that write m_evaluation to their memory location.
@@ -82,6 +83,7 @@ class AtomicWriteNode : public WriteNode
   // Interface implementation.
   std::string type() const override;
   Kind kind() const override { return atomic_store; }
+  std::memory_order write_memory_order() const override { return m_write_memory_order; }
 };
 
 class MutexDeclNode : public Action
@@ -145,6 +147,8 @@ class RMWNode : public WriteNode
   void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
   Kind kind() const override { return atomic_rmw; }
+  std::memory_order read_memory_order() const override { return m_memory_order; }
+  std::memory_order write_memory_order() const override { return m_memory_order; }
 };
 
 class CEWNode : public AtomicWriteNode
@@ -165,6 +169,7 @@ class CEWNode : public AtomicWriteNode
   void print_code(std::ostream& os) const override;
   NodeProvidedType provided_type() const override { return NodeProvidedType::value_computation_and_side_effect; }
   Kind kind() const override { return atomic_rmw; }
+  // FIXME, add accessors for the memory order.
 };
 
 //inline

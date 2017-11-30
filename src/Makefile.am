@@ -1,7 +1,7 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
 noinst_LIBRARIES = libcppmem.a
-bin_PROGRAMS = cppmem_test cppmem csc_test matchings
+bin_PROGRAMS = cppmem_test cppmem csc_test matchings test_generate_test30
 
 libcppmem_a_SOURCES = \
 		 grammar_whitespace.cxx \
@@ -102,6 +102,8 @@ csc_test_SOURCES = csc_test.cxx
 
 matchings_SOURCES = matchings.cxx
 
+test_generate_test30_SOURCES = test_generate_test30.cxx
+
 libcppmem_a_CXXFLAGS = @LIBCWD_FLAGS@ #-DBOOST_SPIRIT_QI_DEBUG
 
 cppmem_test_CXXFLAGS = @LIBCWD_FLAGS@
@@ -114,6 +116,8 @@ csc_test_CXXFLAGS = @LIBCWD_FLAGS@
 csc_test_LDADD = ../utils/libutils.la $(top_builddir)/cwds/libcwds.la
 
 matchings_CXXFLAGS =
+
+test_generate_test30_CXXFLAGS = -DREDI_EVISCERATE_PSTREAMS=0
 
 # --------------- Maintainer's Section
 

@@ -14,3 +14,7 @@
 	path = boolean-expression
 	url = https://github.com/CarloWood/boolean-expression.git
 	branch = master
+[submodule "pstreams"]
+	path = pstreams
+	url = https://github.com/CarloWood/pstreams.git
+	branch = master

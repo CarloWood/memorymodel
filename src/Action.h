@@ -90,6 +90,7 @@ class Action
 
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }
+  bool is_atomic() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_store || kind_ == atomic_rmw; }
 
   Edge* first_of(EndPointType end_point_type, EdgeMaskType edge_mask_type) const
   {
@@ -138,6 +139,8 @@ class Action
   virtual std::string type() const = 0;
   virtual void print_code(std::ostream& os) const = 0;
   virtual NodeProvidedType provided_type() const = 0;
+  virtual std::memory_order read_memory_order() const;
+  virtual std::memory_order write_memory_order() const;
 
   // Less-than comparator for Graph::m_nodes.
   friend bool operator<(Action const& action1, Action const& action2) { return action1.m_id < action2.m_id; }

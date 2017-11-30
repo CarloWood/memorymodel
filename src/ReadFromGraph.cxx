@@ -93,17 +93,31 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 // exist when each edge is "weighted" (with a boolean expression in this case),
 // was designed by myself (Carlo Wood) in November 2017.
 //
-bool ReadFromGraph::dfs(int n)
+bool ReadFromGraph::dfs(int n, int current_memory_location)
 {
-  DoutEntering(dc::notice, "ReadFromGraph::dfs(" << node_id(n) << "): following children of node " << node_id(n));
+  DoutEntering(dc::notice, "ReadFromGraph::dfs(" << node_id(n) << ", " << current_memory_location << "): following children of node " << node_id(n));
   set_followed(n);
   boolean::Expression loop_condition{false};
   int end_point = -1;
+  int memory_location = 0;
   for (DirectedSubgraph const* subgraph : m_current_subgraphs)
+  {
     for (DirectedEdge const& directed_edge : subgraph->tails(n))
     {
       int const child = directed_edge.id();
       Dout(dc::notice, "Following edge to child " << node_id(child));
+      if (directed_edge.is_rf_not_release_acquire())
+      {
+        // When memory_location == 0 this is a sb or asw edge, not an rf edge.
+        ASSERT(memory_location > 0);
+        Dout(dc::notice, "  (which is a rf edge of memory location '" << memory_location << "' that is not an release-acquire!)");
+        if (current_memory_location > 0 && current_memory_location != memory_location)
+        {
+          Dout(dc::notice, "  Continuing because we already encountered a non-rel-acq Read-From edge for memory location " << current_memory_location << "!");
+          continue;
+        }
+        current_memory_location = memory_location;
+      }
       if (is_dead_end(child) || is_dead_cycle(child))
       {
         Dout(dc::notice, "  continuing because that node is dead.");
@@ -116,14 +130,22 @@ bool ReadFromGraph::dfs(int n)
         loop_condition += directed_edge.condition();
         Dout(dc::notice, "  loop_condition is now " << loop_condition);
       }
-      else if (is_current_cycle(child) || dfs(child))
+      else
       {
-        Dout(dc::notice, "  cycle detected behind child " << node_id(child) << " of node " << node_id(n) << " with node " << node_id(m_node_data[child].m_end_point) << " as end_point.");
-        end_point = m_node_data[child].m_end_point;
-        loop_condition += m_node_data[child].m_loop_condition.times(directed_edge.condition());
-        Dout(dc::notice, "  loop_condition is now " << loop_condition);
+        if (is_current_cycle(child) || dfs(child, current_memory_location))
+        {
+          Dout(dc::notice, "  cycle detected behind child " << node_id(child) << " of node " << node_id(n) << " with node " << node_id(m_node_data[child].m_end_point) << " as end_point.");
+          end_point = m_node_data[child].m_end_point;
+          loop_condition += m_node_data[child].m_loop_condition.times(directed_edge.condition());
+          Dout(dc::notice, "  loop_condition is now " << loop_condition);
+        }
       }
     }
+    // When memory_location is larger than 0 the edges being followed
+    // are Read-From edges of a certain memory location; different values
+    // of memory_location mean different memory locations.
+    ++memory_location;
+  }
   bool loop_detected = !loop_condition.is_zero();
   Dout(dc::notice, "Done following children of node " << node_id(n));
   if (loop_detected)
