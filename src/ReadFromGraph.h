@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DirectedSubgraph.h"
+#include "PathConditionPerLoopEvent.h"
 #include "ast_tag.h"
 #include <vector>
 
@@ -12,13 +13,15 @@ class ReadFromGraph : public DirectedSubgraph
   struct NodeData {
     set_type m_set;                                             // The set type (unvisited, followed, processed (dead_end, current_cycle or dead_cycle)) of each node.
     int m_end_point;                                            // The end point of a detected cycle (or -1 if it's a dead_end).
-    boolean::Expression m_loop_condition;                       // Helper variable to calculate the condition under which a loop exists.
+    PathConditionPerLoopEvent m_path_condition_per_loop_event;  // Helper variables to calculate the condition under which a loop exists.
+    NodeData() : m_set(0) { }
   };
 
   int const m_number_of_nodes;                                  // Copy of DirectedSubgraph::m_nodes.size().
   set_type m_generation;                                        // The current generation.
-  std::vector<NodeData> m_node_data;                            // The node data, using the nodes id as index.
+  boolean::Expression m_loop_condition;                         // Collector for the total condition under which there is any loop.
   std::vector<DirectedSubgraph const*> m_current_subgraphs;     // List of subgraphs that make up the current graph.
+  std::vector<NodeData> m_node_data;                            // The node data, using the nodes id as index.
 
  public:
   // Reset all nodes to the state 'unvisited'.
@@ -28,28 +31,19 @@ class ReadFromGraph : public DirectedSubgraph
   bool is_unvisited(int n) const { return m_node_data[n].m_set <= m_generation; }
 
   // Mark node n as being followed.
-  void set_followed(int n) { m_node_data[n].m_set = m_generation + 1; }
+  void set_followed(int n) { m_node_data[n].m_set = m_generation + 1; m_node_data[n].m_path_condition_per_loop_event.reset(); }
 
   // Return true we are currently in the process of following node n's children.
   bool is_followed(int n) const { return m_node_data[n].m_set == m_generation + 1; }
 
   // Mark node n as being part of a detected cycle.
-  void set_current_cycle(int n, int end_point, boolean::Expression&& loop_condition)
-  {
-    ASSERT(end_point >= 0 && end_point < m_number_of_nodes);
-    m_node_data[n].m_set = m_generation + 2;
-    m_node_data[n].m_end_point = end_point;
-    m_node_data[n].m_loop_condition = std::move(loop_condition);
-  }
+  void set_cycle(int n) { m_node_data[n].m_set = m_generation + 2; }
 
   // Return true if node n is part of a current or dead cycle.
   bool is_cycle(int n) const { return m_node_data[n].m_set == m_generation + 2; }
 
-  // Return true if node n is part of one or more current cycles (if any) that were detected.
-  bool is_current_cycle(int n) const { return is_cycle(n) && is_followed(m_node_data[n].m_end_point); }
-
   // Return true if node n is part of a dead cycle.
-  bool is_dead_cycle(int n) const { return is_cycle(n) && is_cycle(m_node_data[n].m_end_point); }
+  bool is_dead_cycle(int n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_loop_event.contains_actual_loop_event(this); }
 
   // Mark node n as (being part of) a dead end.
   void set_dead_end(int n) { m_node_data[n].m_set = m_generation + 3; }

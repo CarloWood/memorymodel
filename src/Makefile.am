@@ -78,6 +78,10 @@ libcppmem_a_SOURCES = \
 		 ConditionalBranch.h \
 		 SBNodePresence.cxx \
 		 SBNodePresence.h \
+		 LoopEvent.cxx \
+		 LoopEvent.h \
+		 PathConditionPerLoopEvent.cxx \
+		 PathConditionPerLoopEvent.h \
 		 debug_ostream_operators.cxx \
 		 debug_ostream_operators.h \
 		 ast.cxx \
