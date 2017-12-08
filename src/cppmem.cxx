@@ -625,7 +625,12 @@ void execute_body(std::string name, ast::statement_seq const& body)
   Context::instance().m_symbols.scope_end();
 }
 
-void Graph::write_png_file(std::string basename, std::vector<Action*> const& topological_ordered_actions, boolean::Expression const& valid, int appendix) const
+void Graph::write_png_file(
+    std::string basename,
+    std::vector<Action*> const& topological_ordered_actions,
+    boolean::Expression const& valid,           // For the graph to be valid, this must be true
+    boolean::Expression const& invalid,         // and this expression must be false.
+    int appendix) const
 {
   if (appendix >= 0)
   {
@@ -635,7 +640,7 @@ void Graph::write_png_file(std::string basename, std::vector<Action*> const& top
   }
   std::string const dot_filename = basename + ".dot";
   std::string const png_filename = basename + ".png";
-  generate_dot_file(dot_filename, topological_ordered_actions, valid);
+  generate_dot_file(dot_filename, topological_ordered_actions, valid, invalid);
   std::string command = "dot ";
   if (Context::instance().number_of_threads() > 1)
     command += "-Kneato ";
@@ -777,7 +782,7 @@ int main(int argc, char* argv[])
   std::string const path = filepath;
   std::string const source_filename = path.substr(path.find_last_of("/") + 1);
   std::string const basename = source_filename.substr(0, source_filename.find_last_of("."));
-  graph.write_png_file(basename + "_opsem", topological_ordered_actions, true);
+  graph.write_png_file(basename + "_opsem", topological_ordered_actions, true, false);
 
 #if 0//def CWDEBUG
   // Print out all sequenced-before results.
@@ -945,7 +950,7 @@ int main(int argc, char* argv[])
       if (ml.inner_loop())
       {
         // Calculate under which condition this graph is valid.
-        boolean::Expression valid{true}; // FIXME
+        boolean::Expression valid{true};
         // Construct a new graph.
         graph.delete_edges(edge_rf);
         for (size_t location = 0; location < number_of_locations; ++location)
@@ -954,7 +959,8 @@ int main(int argc, char* argv[])
           read_from_location_subgraph.add_to(graph);
           valid.times(read_from_location_subgraph.valid());
         }
-        graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, rf_candidate++);
+        boolean::Expression has_loop{opsem_graph.loop_condition().copy()};
+        graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, has_loop, rf_candidate++);
         opsem_graph.pop();
       }
       ml.start_next_loop_at(0);

@@ -67,6 +67,9 @@ class ReadFromGraph : public DirectedSubgraph
   // Returns the condition under which a loop exists (m_loop_condition).
   boolean::Expression const& loop_detected();
 
+  // Returns the last value calculated by loop_detected().
+  boolean::Expression const& loop_condition() const { return m_loop_condition; }
+
   // Do a Depth-First-Search starting from node n, returning true if and only if we detected a cycle
   // in which case m_loop_condition is set to the (non-zero) condition under which a cycle was found.
   bool dfs(int n, int current_memory_location = 0);

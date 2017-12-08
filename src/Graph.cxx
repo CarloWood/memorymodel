@@ -26,7 +26,11 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
   }
 }
 
-void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> const& topological_ordered_actions, boolean::Expression const& valid) const
+void Graph::generate_dot_file(
+    std::string const& filename,
+    std::vector<Action*> const& topological_ordered_actions,
+    boolean::Expression const& valid,
+    boolean::Expression const& invalid) const
 {
   DoutEntering(dc::notice, "Graph::generate_dot_file(\"" << filename << "\"");
 
@@ -157,6 +161,17 @@ void Graph::generate_dot_file(std::string const& filename, std::vector<Action*> 
         "      <TD>Valid</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
       out << valid.as_html_string();
+      out <<
+        "</FONT></TD>\n"
+        "      </TR>\n";
+    }
+    if (!invalid.is_zero())
+    {
+      out <<
+        "      <TR>\n"
+        "      <TD>Invalid</TD>\n"
+        "      <TD><FONT COLOR=\"black\">";
+      out << invalid.as_html_string();
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";
