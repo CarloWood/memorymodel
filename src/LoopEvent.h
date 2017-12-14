@@ -14,16 +14,16 @@ class LoopEvent
 {
  private:
   loop_event_type m_loop_event;                 // The type of event.
-  TopologicalOrderedActionsIndex m_end_point;   // The first vertex that was found that was already visited while following this path.
+  SequenceNumber m_end_point;   // The first vertex that was found that was already visited while following this path.
 
  public:
-  LoopEvent(loop_event_type loop_event, TopologicalOrderedActionsIndex end_point) : m_loop_event(loop_event), m_end_point(end_point) { }
+  LoopEvent(loop_event_type loop_event, SequenceNumber end_point) : m_loop_event(loop_event), m_end_point(end_point) { }
 
   // Return true when this event is actual at this moment in the Depth-First-Search of read_from_graph.
   bool is_actual(ReadFromGraph const& read_from_graph) const;
 
   // Accessor.
-  TopologicalOrderedActionsIndex end_point() const { return m_end_point; }
+  SequenceNumber end_point() const { return m_end_point; }
 
   friend bool operator==(LoopEvent const& le1, LoopEvent const& le2)
   {

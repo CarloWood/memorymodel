@@ -75,7 +75,7 @@ bool PathConditionPerLoopEvent::contains_actual_loop_event(ReadFromGraph const* 
 }
 
 // Return the condition under which there is a loop ending in end_point.
-boolean::Expression PathConditionPerLoopEvent::current_loop_condition(TopologicalOrderedActionsIndex end_point) const
+boolean::Expression PathConditionPerLoopEvent::current_loop_condition(SequenceNumber end_point) const
 {
   boolean::Expression result{false};
   for (auto&& loop_event_path_condition_pair : m_map)

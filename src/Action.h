@@ -50,7 +50,7 @@ class Action
   static boolean::Product const s_product_one;
 
   // Post opsem stuff.
-  TopologicalOrderedActionsIndex m_sequence_number; // Some over all ordering number (n) such that if A--sb/asw-->B than n_A < n_B.
+  SequenceNumber m_sequence_number; // Some over all ordering number (n) such that if A--sb/asw-->B than n_A < n_B.
   ActionSet m_prior_actions;                    // Actions from which this action is reachable through SB and ASW edges.
   int m_read_from_loop_index;                   // The index into the ... array
 
@@ -128,7 +128,7 @@ class Action
 
   // Post opsem stuff.
   static void initialize_post_opsem(Graph const& graph, TopologicalOrderedActions& topological_ordered_actions);
-  TopologicalOrderedActionsIndex sequence_number() const { return m_sequence_number; }
+  SequenceNumber sequence_number() const { return m_sequence_number; }
   bool is_sequenced_before(Action const& action) const { return action.m_prior_actions.includes(*this); }
   void set_read_from_loop_index(int read_from_loop_index) { m_read_from_loop_index = read_from_loop_index; }
   int get_read_from_loop_index() const { return m_read_from_loop_index; }

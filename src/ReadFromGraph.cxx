@@ -46,7 +46,7 @@ boolean::Expression const& ReadFromGraph::loop_detected()
   DoutEntering(dc::notice, "ReadFromGraph::loop_detected() " << ++count);
 
   // Node m_topological_ordered_actions.ibegin() (index 0) is the starting node of the program.
-  TopologicalOrderedActionsIndex const begin_node{m_topological_ordered_actions.ibegin()};
+  SequenceNumber const begin_node{m_topological_ordered_actions.ibegin()};
 
   // If no loops are detected when starting from that node then the program
   // has no loops, because every node should be reachable from begin_node.
@@ -123,14 +123,14 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 // exist when each edge is "weighted" (with a boolean expression in this case),
 // was designed by myself (Carlo Wood) in November/December 2017.
 //
-bool ReadFromGraph::dfs(TopologicalOrderedActionsIndex n, int current_memory_location)
+bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
 {
   DoutEntering(dc::notice, "ReadFromGraph::dfs(" << n << ", " << current_memory_location << "): following children of node " << n);
 
   // n equals Action::m_sequence_number, the index for m_topological_ordered_actions.
   bool const is_write = m_topological_ordered_actions[n]->is_write();
   bool const is_read = m_topological_ordered_actions[n]->is_read();
-  TopologicalOrderedActionsIndex previous_write;
+  SequenceNumber previous_write;
   ast::tag location;
 
   if (is_read || is_write)
@@ -140,7 +140,7 @@ bool ReadFromGraph::dfs(TopologicalOrderedActionsIndex n, int current_memory_loc
     {
       DirectedSubgraph const* subgraph = m_current_subgraphs[m_location_tag_to_current_subgraphs_index_map[location.id]];
       //subgraph->rf_heads(n);
-      TopologicalOrderedActionsIndex read_from_node{m_topological_ordered_actions.ibegin()}; // FIXME
+      SequenceNumber read_from_node{m_topological_ordered_actions.ibegin()}; // FIXME
       if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
       {
         Dout(dc::warning, "*** *** *** node " << n << " reads from node " << read_from_node <<
@@ -161,7 +161,7 @@ bool ReadFromGraph::dfs(TopologicalOrderedActionsIndex n, int current_memory_loc
   {
     for (DirectedEdge const& directed_edge : subgraph->tails(n))
     {
-      TopologicalOrderedActionsIndex const child = directed_edge.sequence_number();
+      SequenceNumber const child = directed_edge.sequence_number();
       Dout(dc::notice, "Following edge to child " << child);
       if (directed_edge.is_rf_not_release_acquire())
       {

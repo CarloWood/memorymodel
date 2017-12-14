@@ -313,7 +313,7 @@ void Action::initialize_post_opsem(Graph const& graph, TopologicalOrderedActions
 {
   DoutEntering(dc::notice, "Action::initialize_post_opsem(...)");
   // Number all actions in a smart way.
-  TopologicalOrderedActionsIndex sequence_number{topological_ordered_actions.ibegin()};
+  SequenceNumber sequence_number{topological_ordered_actions.ibegin()};
   FollowOpsemTails follow_opsem_tails;
   FilterAllActions all_actions;
   graph.for_actions_no_condition(

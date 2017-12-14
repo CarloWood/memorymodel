@@ -11,7 +11,7 @@ class ReadFromLocationSubgraphs;
 class DirectedSubgraph
 {
  public:
-  using nodes_type = utils::Vector<DirectedEdgeTails, TopologicalOrderedActionsIndex>;
+  using nodes_type = utils::Vector<DirectedEdgeTails, SequenceNumber>;
 
  protected:
   nodes_type m_nodes;
@@ -25,7 +25,7 @@ class DirectedSubgraph
   // Return condition under which this subgraph is valid.
   boolean::Expression const& valid() const { return m_condition; }
   // Return the outgoing edges of node n for this subgraph.
-  DirectedEdgeTails const& tails(TopologicalOrderedActionsIndex n) const { return m_nodes[n]; }
+  DirectedEdgeTails const& tails(SequenceNumber n) const { return m_nodes[n]; }
 
 #if 0
   nodes_type::iterator begin() { return m_nodes.begin(); }

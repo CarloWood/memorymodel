@@ -4,8 +4,11 @@
 
 class Action;
 
-struct TopologicalOrderedActionsCategory;
-using TopologicalOrderedActions = utils::Vector<Action*, utils::VectorIndex<TopologicalOrderedActionsCategory>>;
-using TopologicalOrderedActionsIndex = TopologicalOrderedActions::index_type;
+namespace ordering_category {
+struct Topological;
+} // namespace ordering_category
 
-std::ostream& operator<<(std::ostream& os, TopologicalOrderedActionsIndex index);
+using SequenceNumber = utils::VectorIndex<ordering_category::Topological>;
+using TopologicalOrderedActions = utils::Vector<Action*, SequenceNumber>;
+
+std::ostream& operator<<(std::ostream& os, SequenceNumber index);

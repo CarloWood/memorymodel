@@ -43,7 +43,7 @@ void Graph::generate_dot_file(
   }
 
   int max_count = 0;
-  utils::Vector<int, TopologicalOrderedActionsIndex> vertical_position;                         // As function of sequence number.
+  utils::Vector<int, SequenceNumber> vertical_position;                         // As function of sequence number.
   std::vector<int> pos_of_last_node(Context::instance().number_of_threads(), -1);               // Position of last node of a thread as function of thread id.
   std::vector<Action*> action_of_last_node(Context::instance().number_of_threads(), nullptr);   // Last node of a thread as function of thread id.
   for (Action* action : topological_ordered_actions)
