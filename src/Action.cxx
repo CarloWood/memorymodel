@@ -47,7 +47,7 @@ std::ostream& operator<<(std::ostream& os, Action const& action)
   return os;
 }
 
-Action::Action(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : m_id(next_node_id), m_thread(thread), m_exists(true), m_sequence_number(0)
+Action::Action(id_type next_node_id, ThreadPtr const& thread, ast::tag variable) : m_id(next_node_id), m_thread(thread), m_exists(true)
 {
 #ifdef CWDEBUG
   locations_type const& locations{Context::instance().locations()};
@@ -309,11 +309,11 @@ bool Action::matches(NodeRequestedType const& requested_type, boolean::Expressio
 }
 
 //static
-void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& topological_ordered_actions)
+void Action::initialize_post_opsem(Graph const& graph, TopologicalOrderedActions& topological_ordered_actions)
 {
   DoutEntering(dc::notice, "Action::initialize_post_opsem(...)");
   // Number all actions in a smart way.
-  int sequence_number = 0;
+  TopologicalOrderedActionsIndex sequence_number{topological_ordered_actions.ibegin()};
   FollowOpsemTails follow_opsem_tails;
   FilterAllActions all_actions;
   graph.for_actions_no_condition(
@@ -333,7 +333,7 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
         //    |/
         //    v
         //    c Wna y
-        if (action->m_sequence_number != 0)
+        if (!action->m_sequence_number.undefined())
           return true;
         for (auto&& end_point : action->m_end_points)
           if (end_point.type() == tail && end_point.edge()->is_opsem())
@@ -344,15 +344,15 @@ void Action::initialize_post_opsem(Graph const& graph, std::vector<Action*>& top
         for (auto&& end_point : action->m_end_points)
           if (end_point.type() == head && end_point.edge()->is_opsem())
           {
-            if (end_point.other_node()->m_sequence_number == 0)
+            if (end_point.other_node()->m_sequence_number.undefined())
             {
               Dout(dc::for_action, "Returning true because " << *end_point.other_node() << " still has sequence number of 0.");
               return true;
             }
           }
         Dout(dc::for_action, "Setting sequence number on " << *action);
-        ASSERT(action->m_sequence_number == 0);
-        action->m_sequence_number = ++sequence_number;
+        ASSERT(action->m_sequence_number.undefined());
+        action->m_sequence_number = sequence_number++;
         topological_ordered_actions.push_back(action);
         Dout(dc::for_action, "Returning false");
         return false;

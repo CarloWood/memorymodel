@@ -30,9 +30,9 @@ class DirectedEdge
           head_node->read_memory_order() == std::memory_order_seq_cst))) { }
 
   void add_to(Graph& graph, Action* tail_node) const;
-  Action::id_type id() const { return m_head_node->id(); }
   boolean::Expression const& condition() const { return m_condition; }
   bool is_rf_not_release_acquire() const { return m_rf_not_release_acquire; }
+  TopologicalOrderedActionsIndex sequence_number() const { return m_head_node->sequence_number(); }
 
   friend std::ostream& operator<<(std::ostream& os, DirectedEdge const& directed_edge);
 };

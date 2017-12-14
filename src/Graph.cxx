@@ -28,7 +28,7 @@ void Graph::new_edge(EdgeType edge_type, NodePtr const& tail_node, NodePtr const
 
 void Graph::generate_dot_file(
     std::string const& filename,
-    std::vector<Action*> const& topological_ordered_actions,
+    TopologicalOrderedActions const& topological_ordered_actions,
     boolean::Expression const& valid,
     boolean::Expression const& invalid) const
 {
@@ -43,7 +43,7 @@ void Graph::generate_dot_file(
   }
 
   int max_count = 0;
-  std::vector<int> vertical_position(1, 0);                                                     // As function of sequence number.
+  utils::Vector<int, TopologicalOrderedActionsIndex> vertical_position;                         // As function of sequence number.
   std::vector<int> pos_of_last_node(Context::instance().number_of_threads(), -1);               // Position of last node of a thread as function of thread id.
   std::vector<Action*> action_of_last_node(Context::instance().number_of_threads(), nullptr);   // Last node of a thread as function of thread id.
   for (Action* action : topological_ordered_actions)

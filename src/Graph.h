@@ -3,6 +3,7 @@
 #include "Node.h"
 #include "debug.h"
 #include "NodePtrConditionPair.h"
+#include "TopologicalOrderedActions.h"
 #include "Action.inl"   // Action::for_actions.
 #include <memory>
 #include <set>
@@ -38,13 +39,13 @@ class Graph
 
   void generate_dot_file(
       std::string const& filename,
-      std::vector<Action*> const& topological_ordered_actions,
+      TopologicalOrderedActions const& topological_ordered_actions,
       boolean::Expression const& valid,
       boolean::Expression const& invalid) const;
 
   void write_png_file(
       std::string basename,
-      std::vector<Action*> const& topological_ordered_actions,
+      TopologicalOrderedActions const& topological_ordered_actions,
       boolean::Expression const& valid,
       boolean::Expression const& invalid,
       int appendix = -1) const;
@@ -53,6 +54,7 @@ class Graph
   nodes_type::iterator begin() { return m_nodes.begin(); }
   nodes_type::const_iterator begin() const { return m_nodes.begin(); }
   nodes_type::const_iterator end() const { return m_nodes.end(); }
+  nodes_type::size_type size() const { return m_nodes.size(); }
 
  public:
   // Add a new node.

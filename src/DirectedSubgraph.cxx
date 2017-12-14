@@ -2,20 +2,21 @@
 #include "DirectedSubgraph.h"
 #include "Graph.h"
 #include "utils/MultiLoop.h"
+#include <utility>
 #include <iostream>
 
 DirectedSubgraph::DirectedSubgraph(Graph const& graph, EdgeMaskType type, boolean::Expression&& condition) : m_condition(std::move(condition))
 {
-#ifdef CWDEBUG
-  int index = 0;
-#endif
+  ASSERT(m_nodes.empty());
+  m_nodes.resize(graph.size());
+  size_t count = 0;
   for (auto&& action_ptr : graph)
   {
-    // Graph::m_nodes is ordered by Action::m_id and therefore
-    // node->id() should monotonically increase here. See also NodeOrder.
-    ASSERT(action_ptr->id() == index++);
-    m_nodes.emplace_back(type, *action_ptr);
+    ASSERT(0 <= action_ptr->sequence_number().get_value() && action_ptr->sequence_number().get_value() < m_nodes.size());
+    m_nodes[action_ptr->sequence_number()] = DirectedEdgeTails(type, action_ptr.get());
+    ++count;
   }
+  ASSERT(count == m_nodes.size());
 }
 
 void DirectedSubgraph::add_to(Graph& graph) const

@@ -140,6 +140,12 @@ struct position_handler
     return (*m_iters)[id];
   }
 
+  size_t tag_end() const
+  {
+    // The size of m_iters is one past the largest used value of ast::tag::id's.
+    return m_iters->size();
+  }
+
   void operator()(ast::function& ast, Iterator pos) const
   {
     DoutEntering(dc::poshandler, "position_handler<Iterator>::operator()(ast::function& {" << ast << "}, " << location(pos) << ")");

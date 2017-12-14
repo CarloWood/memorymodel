@@ -18,7 +18,7 @@ class PathConditionPerLoopEvent
   void add_new(PathConditionPerLoopEvent const& path_condition_per_loop_event, boolean::Expression const& condition, ReadFromGraph const* read_from_graph);
   bool contains_actual_loop_event(ReadFromGraph const* read_from_graph) const;
   bool empty() const { return m_map.empty(); }
-  boolean::Expression current_loop_condition(int end_point) const;
+  boolean::Expression current_loop_condition(TopologicalOrderedActionsIndex end_point) const;
 
   friend std::ostream& operator<<(std::ostream& os, PathConditionPerLoopEvent const& path_condition_per_loop_event);
 };

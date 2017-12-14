@@ -627,7 +627,7 @@ void execute_body(std::string name, ast::statement_seq const& body)
 
 void Graph::write_png_file(
     std::string basename,
-    std::vector<Action*> const& topological_ordered_actions,
+    TopologicalOrderedActions const& topological_ordered_actions,
     boolean::Expression const& valid,           // For the graph to be valid, this must be true
     boolean::Expression const& invalid,         // and this expression must be false.
     int appendix) const
@@ -775,7 +775,7 @@ int main(int argc, char* argv[])
 #endif
 
   // Initialize m_sequence_number and m_sequenced_before of all Action nodes.
-  std::vector<Action*> topological_ordered_actions;
+  TopologicalOrderedActions topological_ordered_actions;
   Action::initialize_post_opsem(graph, topological_ordered_actions);
 
   // Generate the *_opsem.dot file.
@@ -904,23 +904,12 @@ int main(int argc, char* argv[])
       }
   }
 
-  for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
-  {
-    Dout(dc::notice, location_subgraphs.location() << ':');
-#ifdef CWDEBUG
-    NAMESPACE_DEBUG::Indent indent(4);
-#endif
-    for (auto&& subgraph : location_subgraphs)
-    {
-      Dout(dc::notice, subgraph);
-    }
-  }
+  size_t number_of_locations_with_rf = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
+  Dout(dc::notice, "Number of locations with at least one rf edge: " << number_of_locations_with_rf);
 
-  ReadFromGraph opsem_graph{graph, edge_mask_sbw, true};
+  ReadFromGraph read_from_graph{graph, edge_mask_sbw, topological_ordered_actions, read_from_location_subgraphs_vector};
 
-  size_t number_of_locations = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
-  Dout(dc::notice, "Number of locations: " << number_of_locations);
-  for (MultiLoop ml(number_of_locations); !ml.finished(); ml.next_loop())
+  for (MultiLoop ml(number_of_locations_with_rf); !ml.finished(); ml.next_loop())
   {
     for (;;)
     {
@@ -928,7 +917,7 @@ int main(int argc, char* argv[])
       if (ml() == (int)read_from_location_subgraphs.size())
         break;
       // Begin of loop *ml.
-      opsem_graph.push(read_from_location_subgraphs[ml()]);
+      read_from_graph.push(read_from_location_subgraphs[ml()]);
       if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
       {
 #ifdef CWDEBUG
@@ -939,10 +928,10 @@ int main(int argc, char* argv[])
           Dout(dc::continued, (j > 0 ? ", " : "") << ml[j]);
         Dout(dc::finish, "");
 #endif
-        if (opsem_graph.loop_detected().is_one())
+        if (read_from_graph.loop_detected().is_one())
         {
           Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continueing the current loop!");
-          opsem_graph.pop();
+          read_from_graph.pop();
           ml.breaks(0);
           break;
         }
@@ -953,20 +942,20 @@ int main(int argc, char* argv[])
         boolean::Expression valid{true};
         // Construct a new graph.
         graph.delete_edges(edge_rf);
-        for (size_t location = 0; location < number_of_locations; ++location)
+        for (size_t location = 0; location < number_of_locations_with_rf; ++location)
         {
           DirectedSubgraph const& read_from_location_subgraph{read_from_location_subgraphs_vector[location][ml[location]]};
           read_from_location_subgraph.add_to(graph);
           valid.times(read_from_location_subgraph.valid());
         }
-        boolean::Expression has_loop{opsem_graph.loop_condition().copy()};
+        boolean::Expression has_loop{read_from_graph.loop_condition().copy()};
         graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, has_loop, rf_candidate++);
-        opsem_graph.pop();
+        read_from_graph.pop();
       }
       ml.start_next_loop_at(0);
     }
     if (ml.end_of_loop() >= 0)
-      opsem_graph.pop();
+      read_from_graph.pop();
   }
 
   // Run over all possible flow-control paths.

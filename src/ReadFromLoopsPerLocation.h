@@ -3,6 +3,7 @@
 #include "ReadFromLoop.h"
 #include "Location.h"
 #include "Action.h"
+#include "TopologicalOrderedActions.h"
 #include <vector>
 
 class ReadFromLoopsPerLocation
@@ -17,7 +18,7 @@ class ReadFromLoopsPerLocation
  public:
   ReadFromLoopsPerLocation() : m_previous_read_from_loop_index(-1) { }
 
-  void add_read_action(Action* read_action, std::vector<Action*> const& topological_ordered_actions)
+  void add_read_action(Action* read_action, TopologicalOrderedActions const& topological_ordered_actions)
   {
     read_action->set_read_from_loop_index(m_read_from_loops.size());
     m_read_from_loops.emplace_back(read_action, topological_ordered_actions.begin(), topological_ordered_actions.end());

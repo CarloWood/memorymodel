@@ -82,6 +82,8 @@ libcppmem_a_SOURCES = \
 		 LoopEvent.h \
 		 PathConditionPerLoopEvent.cxx \
 		 PathConditionPerLoopEvent.h \
+		 TopologicalOrderedActions.cxx \
+		 TopologicalOrderedActions.h \
 		 debug_ostream_operators.cxx \
 		 debug_ostream_operators.h \
 		 ast.cxx \

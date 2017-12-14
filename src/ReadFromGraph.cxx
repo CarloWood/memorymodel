@@ -2,30 +2,63 @@
 #include "debug.h"
 #include "ReadFromGraph.h"
 #include "Action.h"
+#include "Context.h"
 #include "utils/MultiLoop.h"
 
+ReadFromGraph::ReadFromGraph(
+    Graph const& graph,
+    EdgeMaskType type,
+    TopologicalOrderedActions const& topological_ordered_actions,
+    std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs_vector) :
+      DirectedSubgraph(graph, type, boolean::Expression{true}),
+      m_number_of_nodes(m_nodes.size()),
+      m_generation(0),
+      m_node_data(m_number_of_nodes),
+      m_last_write_per_location(Context::instance().get_position_handler().tag_end(), topological_ordered_actions.iend()),
+      m_topological_ordered_actions(topological_ordered_actions),
+      m_location_tag_to_current_subgraphs_index_map(Context::instance().get_position_handler().tag_end(), -1)
+{
+  // The opsem subgraph is the first subgraph, and always present.
+  push(*this);
+  // Initialize m_location_tag_to_current_subgraphs_index_map.
+  int index = 0;
+  for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
+  {
+    Dout(dc::notice, location_subgraphs.location() << ':');
+    // Subgraphs from read_from_location_subgraphs_vector are pushed in order to m_current_subgraphs
+    // by calling push/pop. Therefore the n+1's subgraph in m_current_subgraphs always corresponds
+    // to the same memory location, namely the location of the n-th ReadFromLocationSubgraphs
+    // of read_from_location_subgraphs_vector. The +1 is because of the push(*this) above.
+    m_location_tag_to_current_subgraphs_index_map[location_subgraphs.location().tag().id] = ++index; // Preincement: we start at index 1.
 #ifdef CWDEBUG
-int node_id(int n) { return n + 1; }
+    NAMESPACE_DEBUG::Indent indent(4);
 #endif
+    for (auto&& subgraph : location_subgraphs)
+    {
+      Dout(dc::notice, subgraph);
+    }
+  }
+}
 
 boolean::Expression const& ReadFromGraph::loop_detected()
 {
   static int count = 0;
   DoutEntering(dc::notice, "ReadFromGraph::loop_detected() " << ++count);
 
-  // Node 0 is the starting node of the program.
-  //
-  // If no loops are detected when starting from that node then the program
-  // has no loops, because every node should be reachable from node 0.
-  // Therefore it is enough to only test node 0.
+  // Node m_topological_ordered_actions.ibegin() (index 0) is the starting node of the program.
+  TopologicalOrderedActionsIndex const begin_node{m_topological_ordered_actions.ibegin()};
 
-  // ALL nodes should be unvisited at this point, so also node 0.
-  ASSERT(is_unvisited(0));
+  // If no loops are detected when starting from that node then the program
+  // has no loops, because every node should be reachable from begin_node.
+  // Therefore it is enough to only test this first node.
+
+  // ALL nodes should be unvisited at this point, so also begin_node.
+  ASSERT(is_unvisited(begin_node));
 
   // Initialize the condition under which a loop is found to zero.
   m_loop_condition = false;
 
-  if (dfs(0))
+  if (dfs(begin_node))
     Dout(dc::notice, "Found cycle under condition " << m_loop_condition);
 
   // Prepare for next call to loop_detected().
@@ -90,22 +123,51 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 // exist when each edge is "weighted" (with a boolean expression in this case),
 // was designed by myself (Carlo Wood) in November/December 2017.
 //
-bool ReadFromGraph::dfs(int n, int current_memory_location)
+bool ReadFromGraph::dfs(TopologicalOrderedActionsIndex n, int current_memory_location)
 {
-  DoutEntering(dc::notice, "ReadFromGraph::dfs(" << node_id(n) << ", " << current_memory_location << "): following children of node " << node_id(n));
+  DoutEntering(dc::notice, "ReadFromGraph::dfs(" << n << ", " << current_memory_location << "): following children of node " << n);
+
+  // n equals Action::m_sequence_number, the index for m_topological_ordered_actions.
+  bool const is_write = m_topological_ordered_actions[n]->is_write();
+  bool const is_read = m_topological_ordered_actions[n]->is_read();
+  TopologicalOrderedActionsIndex previous_write;
+  ast::tag location;
+
+  if (is_read || is_write)
+  {
+    location = m_topological_ordered_actions[n]->tag();
+    if (is_read)
+    {
+      DirectedSubgraph const* subgraph = m_current_subgraphs[m_location_tag_to_current_subgraphs_index_map[location.id]];
+      //subgraph->rf_heads(n);
+      TopologicalOrderedActionsIndex read_from_node{m_topological_ordered_actions.ibegin()}; // FIXME
+      if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
+      {
+        Dout(dc::warning, "*** *** *** node " << n << " reads from node " << read_from_node <<
+            " which was hidden by the write by node " << m_last_write_per_location[location.id]);
+      }
+    }
+    if (is_write)
+    {
+      // Keep track of when was the last time we wrote to a memory location.
+      previous_write = m_last_write_per_location[location.id];
+      m_last_write_per_location[location.id] = n;
+    }
+  }
+
   set_followed(n);
   int memory_location = 0;
   for (DirectedSubgraph const* subgraph : m_current_subgraphs)
   {
     for (DirectedEdge const& directed_edge : subgraph->tails(n))
     {
-      int const child = directed_edge.id();
-      Dout(dc::notice, "Following edge to child " << node_id(child));
+      TopologicalOrderedActionsIndex const child = directed_edge.sequence_number();
+      Dout(dc::notice, "Following edge to child " << child);
       if (directed_edge.is_rf_not_release_acquire())
       {
         // When memory_location == 0 this is a sb or asw edge, not an rf edge.
         ASSERT(memory_location > 0);
-        Dout(dc::notice, "  (which is a rf edge of memory location '" << memory_location << "' that is not an release-acquire!)");
+        Dout(dc::notice, "  (which is a rf edge of memory location '" << memory_location << "' that is not a release-acquire!)");
         if (current_memory_location > 0 && current_memory_location != memory_location)
         {
           Dout(dc::notice, "  Continuing because we already encountered a non-rel-acq Read-From edge for memory location " << current_memory_location << "!");
@@ -120,7 +182,7 @@ bool ReadFromGraph::dfs(int n, int current_memory_location)
       }
       if (is_followed(child))
       {
-        Dout(dc::notice, "  cycle detected! Marking node " << node_id(child) << " as end_point.");
+        Dout(dc::notice, "  cycle detected! Marking node " << child << " as end_point.");
         m_node_data[n].m_path_condition_per_loop_event.add_new(LoopEvent(causal_loop, child), directed_edge.condition().copy());
         Dout(dc::notice, "  path_condition_per_loop_condition is now " << m_node_data[n].m_path_condition_per_loop_event);
       }
@@ -129,7 +191,7 @@ bool ReadFromGraph::dfs(int n, int current_memory_location)
         // If is_cycle returns true then we have a current cycle because the cycle isn't dead when we get here.
         if (is_cycle(child) || dfs(child, current_memory_location))
         {
-          Dout(dc::notice, "  cycle detected behind child " << node_id(child) << " of node " << node_id(n) <<
+          Dout(dc::notice, "  cycle detected behind child " << child << " of node " << n <<
               " with path_condition_per_loop_event: " << m_node_data[child].m_path_condition_per_loop_event);
           m_node_data[n].m_path_condition_per_loop_event.add_new(m_node_data[child].m_path_condition_per_loop_event, directed_edge.condition(), this);
           Dout(dc::notice, "  path_condition_per_loop_event is now " << m_node_data[n].m_path_condition_per_loop_event);
@@ -141,7 +203,7 @@ bool ReadFromGraph::dfs(int n, int current_memory_location)
     // of memory_location mean different memory locations.
     ++memory_location;
   }
-  Dout(dc::notice, "Done following children of node " << node_id(n));
+  Dout(dc::notice, "Done following children of node " << n);
   bool loop_detected = !m_node_data[n].m_path_condition_per_loop_event.empty();
   if (loop_detected)
   {
@@ -156,5 +218,11 @@ bool ReadFromGraph::dfs(int n, int current_memory_location)
   }
   else
     set_dead_end(n);
+
+  if (is_write)
+  {
+    m_last_write_per_location[location.id] = previous_write;
+  }
+
   return loop_detected;
 }

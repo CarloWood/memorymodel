@@ -64,6 +64,6 @@ std::ostream& operator<<(std::ostream& os, LoopEvent const& loop_event)
     os << "causal_loop";
   else
     os << "hidden_vse";
-  os << ';' << (loop_event.m_end_point + 1);    // See node_id in ReadFromGraph.cxx.
+  os << ';' << loop_event.m_end_point;
   return os << '}';
 }

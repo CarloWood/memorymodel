@@ -29,4 +29,5 @@ class ReadFromLocationSubgraphs
   iterator begin() { return m_subgraphs.begin(); }
   const_iterator begin() const { return m_subgraphs.begin(); }
   iterator end() { return m_subgraphs.end(); }
+  const_iterator end() const { return m_subgraphs.end(); }
 };

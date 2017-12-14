@@ -2,6 +2,7 @@
 
 #include "Action.h"
 #include "debug.h"
+#include "TopologicalOrderedActions.h"
 #include "boolean-expression/BooleanExpression.h"
 #include <map>
 #include <deque>
@@ -21,12 +22,12 @@ class ReadFromLoop
   queued_actions_type m_queued_actions;         // Write actions found that couldn't be processed immediately because they happen
                                                 // under the same condition(s) as what we found so far.
   boolean::Expression m_have_write;             // The condition under which m_read_action has a Read-From edge.
-  std::vector<Action*>::const_iterator m_topo_begin;
-  std::vector<Action*>::const_iterator m_topo_next;
-  std::vector<Action*>::const_iterator m_topo_end;
+  TopologicalOrderedActions::const_iterator m_topo_begin;
+  TopologicalOrderedActions::const_iterator m_topo_next;
+  TopologicalOrderedActions::const_iterator m_topo_end;
 
  public:
-  ReadFromLoop(Action* read_action, std::vector<Action*>::const_iterator const& topo_begin, std::vector<Action*>::const_iterator const& topo_end) :
+  ReadFromLoop(Action* read_action, TopologicalOrderedActions::const_iterator const& topo_begin, TopologicalOrderedActions::const_iterator const& topo_end) :
     m_read_action(read_action), m_topo_begin(topo_begin), m_topo_end(topo_end) { }
   ReadFromLoop(ReadFromLoop&& read_from_loop) :
     m_read_action(read_from_loop.m_read_action),

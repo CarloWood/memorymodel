@@ -1,9 +1,9 @@
 #pragma once
 
-#include "DirectedSubgraph.h"
 #include "PathConditionPerLoopEvent.h"
+#include "ReadFromLocationSubgraphs.h"
+#include "TopologicalOrderedActions.h"
 #include "ast_tag.h"
-#include <vector>
 
 class ReadFromGraph : public DirectedSubgraph
 {
@@ -21,45 +21,45 @@ class ReadFromGraph : public DirectedSubgraph
   set_type m_generation;                                        // The current generation.
   boolean::Expression m_loop_condition;                         // Collector for the total condition under which there is any loop.
   std::vector<DirectedSubgraph const*> m_current_subgraphs;     // List of subgraphs that make up the current graph.
-  std::vector<NodeData> m_node_data;                            // The node data, using the nodes id as index.
+  utils::Vector<NodeData, TopologicalOrderedActionsIndex> m_node_data;// The node data, using the nodes id as index.
+  std::vector<TopologicalOrderedActionsIndex> m_last_write_per_location; // Keeps track of the last node that wrote to a given memory location (iend when nothing was written yet).
+  TopologicalOrderedActions const& m_topological_ordered_actions;    // Maps node numbers to Action objects.
+  std::vector<int> m_location_tag_to_current_subgraphs_index_map;// Maps location tags to an index into m_current_subgraphs.
 
  public:
   // Reset all nodes to the state 'unvisited'.
   void reset() { m_generation += 3; }
 
   // Return true if node n is not yet visited.
-  bool is_unvisited(int n) const { return m_node_data[n].m_set <= m_generation; }
+  bool is_unvisited(TopologicalOrderedActionsIndex n) const { return m_node_data[n].m_set <= m_generation; }
 
   // Mark node n as being followed.
-  void set_followed(int n) { m_node_data[n].m_set = m_generation + 1; m_node_data[n].m_path_condition_per_loop_event.reset(); }
+  void set_followed(TopologicalOrderedActionsIndex n) { m_node_data[n].m_set = m_generation + 1; m_node_data[n].m_path_condition_per_loop_event.reset(); }
 
   // Return true we are currently in the process of following node n's children.
-  bool is_followed(int n) const { return m_node_data[n].m_set == m_generation + 1; }
+  bool is_followed(TopologicalOrderedActionsIndex n) const { return m_node_data[n].m_set == m_generation + 1; }
 
   // Mark node n as being part of a detected cycle.
-  void set_cycle(int n) { m_node_data[n].m_set = m_generation + 2; }
+  void set_cycle(TopologicalOrderedActionsIndex n) { m_node_data[n].m_set = m_generation + 2; }
 
   // Return true if node n is part of a current or dead cycle.
-  bool is_cycle(int n) const { return m_node_data[n].m_set == m_generation + 2; }
+  bool is_cycle(TopologicalOrderedActionsIndex n) const { return m_node_data[n].m_set == m_generation + 2; }
 
   // Return true if node n is part of a dead cycle.
-  bool is_dead_cycle(int n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_loop_event.contains_actual_loop_event(this); }
+  bool is_dead_cycle(TopologicalOrderedActionsIndex n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_loop_event.contains_actual_loop_event(this); }
 
   // Mark node n as (being part of) a dead end.
-  void set_dead_end(int n) { m_node_data[n].m_set = m_generation + 3; }
+  void set_dead_end(TopologicalOrderedActionsIndex n) { m_node_data[n].m_set = m_generation + 3; }
 
   // Return true if node n is a dead end.
-  bool is_dead_end(int n) const { return m_node_data[n].m_set == m_generation + 3; }
+  bool is_dead_end(TopologicalOrderedActionsIndex n) const { return m_node_data[n].m_set == m_generation + 3; }
 
-  ReadFromGraph(Graph const& graph, EdgeMaskType type, boolean::Expression&& condition) :
-      DirectedSubgraph(graph, type, std::move(condition)),
-      m_number_of_nodes(m_nodes.size()),
-      m_generation(0),
-      m_node_data(m_number_of_nodes)
-  {
-    // The opsem subgraph is the first subgraph, and always present.
-    push(*this);
-  }
+  // Constructor.
+  ReadFromGraph(
+      Graph const& graph,
+      EdgeMaskType type,
+      TopologicalOrderedActions const& topological_ordered_actions,
+      std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs_vector);
 
   void push(DirectedSubgraph const& directed_subgraph) { m_current_subgraphs.push_back(&directed_subgraph); }
   void pop() { m_current_subgraphs.pop_back(); }
@@ -72,5 +72,5 @@ class ReadFromGraph : public DirectedSubgraph
 
   // Do a Depth-First-Search starting from node n, returning true if and only if we detected a cycle
   // in which case m_loop_condition is set to the (non-zero) condition under which a cycle was found.
-  bool dfs(int n, int current_memory_location = 0);
+  bool dfs(TopologicalOrderedActionsIndex n, int current_memory_location = 0);
 };
