@@ -16,12 +16,12 @@ ReadFromGraph::ReadFromGraph(
       m_node_data(m_number_of_nodes),
       m_last_write_per_location(Context::instance().get_position_handler().tag_end(), topological_ordered_actions.iend()),
       m_topological_ordered_actions(topological_ordered_actions),
-      m_location_tag_to_current_subgraphs_index_map(Context::instance().get_position_handler().tag_end())
+      m_location_id_to_rf_location(Context::instance().get_position_handler().tag_end())
 {
   // The opsem subgraph is the first subgraph, and always present.
   RFLocation index{m_current_subgraphs.ibegin()};
   push(*this);
-  // Initialize m_location_tag_to_current_subgraphs_index_map.
+  // Initialize m_location_id_to_rf_location.
   for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
   {
     Dout(dc::notice, location_subgraphs.location() << ':');
@@ -29,7 +29,7 @@ ReadFromGraph::ReadFromGraph(
     // by calling push/pop. Therefore the n+1's subgraph in m_current_subgraphs always corresponds
     // to the same memory location, namely the location of the n-th ReadFromLocationSubgraphs
     // of read_from_location_subgraphs_vector. The +1 is because of the push(*this) above.
-    m_location_tag_to_current_subgraphs_index_map[location_subgraphs.location().tag().id] = ++index; // Preincement: we start at index 1.
+    m_location_id_to_rf_location[location_subgraphs.location().tag().id] = ++index; // Preincement: we start at index 1.
 #ifdef CWDEBUG
     NAMESPACE_DEBUG::Indent indent(4);
 #endif
@@ -138,7 +138,7 @@ bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
     location = m_topological_ordered_actions[n]->tag();
     if (is_read)
     {
-      DirectedSubgraph const* subgraph = m_current_subgraphs[m_location_tag_to_current_subgraphs_index_map[location.id]];
+      DirectedSubgraph const* subgraph = m_current_subgraphs[m_location_id_to_rf_location[location.id]];
       //subgraph->rf_heads(n);
       SequenceNumber read_from_node{m_topological_ordered_actions.ibegin()}; // FIXME
       if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
