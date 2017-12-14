@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DirectedSubgraph.h"
+#include "RFLocationOrderedSubgraphs.h"
 #include <vector>
 
 class Location;
@@ -20,9 +21,9 @@ class ReadFromLocationSubgraphs
   ReadFromLocationSubgraphs(Location const& location) : m_location(location) { }
 
   void add(DirectedSubgraph&& read_from_subgraph);
-  size_t size() const { return m_subgraphs.size(); }
 
   // Accessor.
+  size_t size() const { return m_subgraphs.size(); }
   Location const& location() const { return m_location; }
   DirectedSubgraph const& operator[](int index) const { return m_subgraphs[index]; }
 

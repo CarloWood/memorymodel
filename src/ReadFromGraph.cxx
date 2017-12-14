@@ -16,12 +16,12 @@ ReadFromGraph::ReadFromGraph(
       m_node_data(m_number_of_nodes),
       m_last_write_per_location(Context::instance().get_position_handler().tag_end(), topological_ordered_actions.iend()),
       m_topological_ordered_actions(topological_ordered_actions),
-      m_location_tag_to_current_subgraphs_index_map(Context::instance().get_position_handler().tag_end(), -1)
+      m_location_tag_to_current_subgraphs_index_map(Context::instance().get_position_handler().tag_end())
 {
   // The opsem subgraph is the first subgraph, and always present.
+  RFLocation index{m_current_subgraphs.ibegin()};
   push(*this);
   // Initialize m_location_tag_to_current_subgraphs_index_map.
-  int index = 0;
   for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
   {
     Dout(dc::notice, location_subgraphs.location() << ':');

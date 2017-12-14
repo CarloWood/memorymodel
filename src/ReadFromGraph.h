@@ -3,6 +3,7 @@
 #include "PathConditionPerLoopEvent.h"
 #include "ReadFromLocationSubgraphs.h"
 #include "TopologicalOrderedActions.h"
+#include "RFLocationOrderedSubgraphs.h"
 #include "ast_tag.h"
 
 class ReadFromGraph : public DirectedSubgraph
@@ -20,11 +21,11 @@ class ReadFromGraph : public DirectedSubgraph
   int const m_number_of_nodes;                                  // Copy of DirectedSubgraph::m_nodes.size().
   set_type m_generation;                                        // The current generation.
   boolean::Expression m_loop_condition;                         // Collector for the total condition under which there is any loop.
-  std::vector<DirectedSubgraph const*> m_current_subgraphs;     // List of subgraphs that make up the current graph.
-  utils::Vector<NodeData, SequenceNumber> m_node_data;// The node data, using the nodes id as index.
-  std::vector<SequenceNumber> m_last_write_per_location; // Keeps track of the last node that wrote to a given memory location (iend when nothing was written yet).
-  TopologicalOrderedActions const& m_topological_ordered_actions;    // Maps node numbers to Action objects.
-  std::vector<int> m_location_tag_to_current_subgraphs_index_map;// Maps location tags to an index into m_current_subgraphs.
+  RFLocationOrderedSubgraphs m_current_subgraphs;               // List of subgraphs that make up the current graph.
+  utils::Vector<NodeData, SequenceNumber> m_node_data;          // The node data, using the nodes id as index.
+  std::vector<SequenceNumber> m_last_write_per_location;        // Keeps track of the last node that wrote to a given memory location (iend when nothing was written yet).
+  TopologicalOrderedActions const& m_topological_ordered_actions;    // Maps node sequence numbers to Action objects.
+  std::vector<RFLocation> m_location_tag_to_current_subgraphs_index_map;// Maps location tags to an index into m_current_subgraphs.
 
  public:
   // Reset all nodes to the state 'unvisited'.

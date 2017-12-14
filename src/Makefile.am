@@ -84,6 +84,8 @@ libcppmem_a_SOURCES = \
 		 PathConditionPerLoopEvent.h \
 		 TopologicalOrderedActions.cxx \
 		 TopologicalOrderedActions.h \
+		 RFLocationOrderedSubgraphs.cxx \
+		 RFLocationOrderedSubgraphs.h \
 		 debug_ostream_operators.cxx \
 		 debug_ostream_operators.h \
 		 ast.cxx \

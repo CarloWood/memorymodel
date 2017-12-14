@@ -811,9 +811,9 @@ int main(int argc, char* argv[])
 #endif
 
   // A vector of objects representing all read nodes per memory location.
-  std::vector<ReadFromLoopsPerLocation> read_from_loops_per_location_vector;
+  utils::Vector<ReadFromLoopsPerLocation, RFLocation> read_from_loops_per_location_vector;
   // A vector of objects representing all subgraphs per memory location.
-  std::vector<ReadFromLocationSubgraphs> read_from_location_subgraphs_vector;
+  utils::Vector<ReadFromLocationSubgraphs, RFLocation> read_from_location_subgraphs_vector;
 
   // A counter to mark edges as being visited. Incremented to reset (as opposed to resetting all edges).
   int visited_generation = 0;
@@ -913,7 +913,8 @@ int main(int argc, char* argv[])
   {
     for (;;)
     {
-      ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[*ml]};
+      RFLocation read_from_location{static_cast<size_t>(*ml)};
+      ReadFromLocationSubgraphs& read_from_location_subgraphs{read_from_location_subgraphs_vector[read_from_location]};
       if (ml() == (int)read_from_location_subgraphs.size())
         break;
       // Begin of loop *ml.
@@ -942,9 +943,9 @@ int main(int argc, char* argv[])
         boolean::Expression valid{true};
         // Construct a new graph.
         graph.delete_edges(edge_rf);
-        for (size_t location = 0; location < number_of_locations_with_rf; ++location)
+        for (RFLocation location = read_from_location_subgraphs_vector.ibegin(); location != read_from_location_subgraphs_vector.iend(); ++location)
         {
-          DirectedSubgraph const& read_from_location_subgraph{read_from_location_subgraphs_vector[location][ml[location]]};
+          DirectedSubgraph const& read_from_location_subgraph{read_from_location_subgraphs_vector[location][ml[location.get_value()]]};
           read_from_location_subgraph.add_to(graph);
           valid.times(read_from_location_subgraph.valid());
         }
