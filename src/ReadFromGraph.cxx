@@ -7,10 +7,11 @@
 
 ReadFromGraph::ReadFromGraph(
     Graph const& graph,
-    EdgeMaskType type,
+    EdgeMaskType outgoing_type,
+    EdgeMaskType incoming_type,
     TopologicalOrderedActions const& topological_ordered_actions,
     std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs_vector) :
-      DirectedSubgraph(graph, type, boolean::Expression{true}),
+      DirectedSubgraph(graph, outgoing_type, incoming_type, boolean::Expression{true}),
       m_number_of_nodes(m_nodes.size()),
       m_generation(0),
       m_node_data(m_number_of_nodes),
@@ -128,23 +129,26 @@ bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
   DoutEntering(dc::notice, "ReadFromGraph::dfs(" << n << ", " << current_memory_location << "): following children of node " << n);
 
   // n equals Action::m_sequence_number, the index for m_topological_ordered_actions.
-  bool const is_write = m_topological_ordered_actions[n]->is_write();
-  bool const is_read = m_topological_ordered_actions[n]->is_read();
+  ast::tag location = m_topological_ordered_actions[n]->tag();
+  RFLocation rf_location{m_location_id_to_rf_location[location.id]};
+  bool const have_location_subgraph = rf_location < m_current_subgraphs.iend();
+  bool const is_write = have_location_subgraph && m_topological_ordered_actions[n]->is_write();
+  bool const is_read = have_location_subgraph && m_topological_ordered_actions[n]->is_read();
   SequenceNumber previous_write;
-  ast::tag location;
 
   if (is_read || is_write)
   {
-    location = m_topological_ordered_actions[n]->tag();
     if (is_read)
     {
-      DirectedSubgraph const* subgraph = m_current_subgraphs[m_location_id_to_rf_location[location.id]];
-      //subgraph->rf_heads(n);
-      SequenceNumber read_from_node{m_topological_ordered_actions.ibegin()}; // FIXME
-      if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
+      DirectedSubgraph const* subgraph = m_current_subgraphs[rf_location];
+      for (auto incoming_read_from_edge = subgraph->edges(n).begin_incoming(); incoming_read_from_edge != subgraph->edges(n).end_incoming(); ++ incoming_read_from_edge)
       {
-        Dout(dc::warning, "*** *** *** node " << n << " reads from node " << read_from_node <<
-            " which was hidden by the write by node " << m_last_write_per_location[location.id]);
+        SequenceNumber read_from_node{incoming_read_from_edge->tail_sequence_number()};
+        if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
+        {
+          Dout(dc::warning, "*** *** *** node " << n << " reads from node " << read_from_node <<
+              " which was hidden by the write by node " << m_last_write_per_location[location.id]);
+        }
       }
     }
     if (is_write)
@@ -159,11 +163,11 @@ bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
   int memory_location = 0;
   for (DirectedSubgraph const* subgraph : m_current_subgraphs)
   {
-    for (DirectedEdge const& directed_edge : subgraph->tails(n))
+    for (auto directed_edge = subgraph->edges(n).begin_outgoing(); directed_edge != subgraph->edges(n).end_outgoing(); ++directed_edge)
     {
-      SequenceNumber const child = directed_edge.sequence_number();
+      SequenceNumber const child = directed_edge->head_sequence_number();
       Dout(dc::notice, "Following edge to child " << child);
-      if (directed_edge.is_rf_not_release_acquire())
+      if (directed_edge->is_rf_not_release_acquire())
       {
         // When memory_location == 0 this is a sb or asw edge, not an rf edge.
         ASSERT(memory_location > 0);
@@ -183,7 +187,7 @@ bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
       if (is_followed(child))
       {
         Dout(dc::notice, "  cycle detected! Marking node " << child << " as end_point.");
-        m_node_data[n].m_path_condition_per_loop_event.add_new(LoopEvent(causal_loop, child), directed_edge.condition().copy());
+        m_node_data[n].m_path_condition_per_loop_event.add_new(LoopEvent(causal_loop, child), directed_edge->condition().copy());
         Dout(dc::notice, "  path_condition_per_loop_condition is now " << m_node_data[n].m_path_condition_per_loop_event);
       }
       else
@@ -193,7 +197,7 @@ bool ReadFromGraph::dfs(SequenceNumber n, int current_memory_location)
         {
           Dout(dc::notice, "  cycle detected behind child " << child << " of node " << n <<
               " with path_condition_per_loop_event: " << m_node_data[child].m_path_condition_per_loop_event);
-          m_node_data[n].m_path_condition_per_loop_event.add_new(m_node_data[child].m_path_condition_per_loop_event, directed_edge.condition(), this);
+          m_node_data[n].m_path_condition_per_loop_event.add_new(m_node_data[child].m_path_condition_per_loop_event, directed_edge->condition(), this);
           Dout(dc::notice, "  path_condition_per_loop_event is now " << m_node_data[n].m_path_condition_per_loop_event);
         }
       }

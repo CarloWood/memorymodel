@@ -58,7 +58,8 @@ class ReadFromGraph : public DirectedSubgraph
   // Constructor.
   ReadFromGraph(
       Graph const& graph,
-      EdgeMaskType type,
+      EdgeMaskType outgoing_type,
+      EdgeMaskType incoming_type,
       TopologicalOrderedActions const& topological_ordered_actions,
       std::vector<ReadFromLocationSubgraphs> const& read_from_location_subgraphs_vector);
 

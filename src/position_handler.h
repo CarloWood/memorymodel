@@ -130,6 +130,7 @@ struct position_handler
       if ((*m_iters)[id] == pos)
         return id;
     m_iters->push_back(pos);
+    Dout(dc::notice, "pos_to_id: added new pos " << location(pos) << " (id " << id << ").");
     return id;
   }
 

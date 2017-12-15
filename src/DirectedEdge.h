@@ -10,6 +10,7 @@ class Graph;
 class DirectedEdge
 {
  private:
+  Action* m_tail_node;                  // The node that this edge starts from.
   Action* m_head_node;                  // The node that this edge is linked to.
   EdgeType m_edge_type;                 // The type of this edge.
   boolean::Expression m_condition;      // The condition under which this edge exists.
@@ -17,6 +18,7 @@ class DirectedEdge
 
  public:
   DirectedEdge(Action* tail_node, Action* head_node, EdgeType edge_type, boolean::Expression const& condition) :
+    m_tail_node(tail_node),
     m_head_node(head_node),
     m_edge_type(edge_type),
     m_condition(condition.copy()),
@@ -32,7 +34,8 @@ class DirectedEdge
   void add_to(Graph& graph, Action* tail_node) const;
   boolean::Expression const& condition() const { return m_condition; }
   bool is_rf_not_release_acquire() const { return m_rf_not_release_acquire; }
-  SequenceNumber sequence_number() const { return m_head_node->sequence_number(); }
+  SequenceNumber tail_sequence_number() const { return m_tail_node->sequence_number(); }
+  SequenceNumber head_sequence_number() const { return m_head_node->sequence_number(); }
 
   friend std::ostream& operator<<(std::ostream& os, DirectedEdge const& directed_edge);
 };

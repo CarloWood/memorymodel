@@ -38,6 +38,7 @@ struct EdgeMaskTypePod {
   edge_mask_type mask;
 };
 
+EdgeMaskTypePod constexpr edge_mask_none  = { 0 };                      // Nothing.
 EdgeMaskTypePod constexpr edge_mask_sb    = { to_mask(edge_sb) };       // Sequenced-Before.
 EdgeMaskTypePod constexpr edge_mask_asw   = { to_mask(edge_asw) };      // Additional-Synchronizes-With.
 EdgeMaskTypePod constexpr edge_mask_dd    = { to_mask(edge_dd) };       // Data-Dependency.

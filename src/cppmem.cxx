@@ -896,7 +896,7 @@ int main(int argc, char* argv[])
             //graph.write_png_file(basename + "_" + location.name() + "_rf", topological_ordered_actions, valid, rf_candidate++);
 
             // Collect all ReadFromSubgraphs.
-            read_from_location_subgraph.add(DirectedSubgraph{graph, edge_mask_rf, std::move(valid)});
+            read_from_location_subgraph.add(DirectedSubgraph{graph, edge_mask_rf, edge_mask_rf, std::move(valid)});
           }
         }
 
@@ -907,7 +907,7 @@ int main(int argc, char* argv[])
   size_t number_of_locations_with_rf = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
   Dout(dc::notice, "Number of locations with at least one rf edge: " << number_of_locations_with_rf);
 
-  ReadFromGraph read_from_graph{graph, edge_mask_sbw, topological_ordered_actions, read_from_location_subgraphs_vector};
+  ReadFromGraph read_from_graph{graph, edge_mask_sbw, edge_mask_none, topological_ordered_actions, read_from_location_subgraphs_vector};
 
   for (MultiLoop ml(number_of_locations_with_rf); !ml.finished(); ml.next_loop())
   {

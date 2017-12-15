@@ -41,8 +41,8 @@ libcppmem_a_SOURCES = \
 		 ReadFromLoop.h \
 		 DirectedEdge.cxx \
 		 DirectedEdge.h \
-		 DirectedEdgeTails.cxx \
-		 DirectedEdgeTails.h \
+		 DirectedEdges.cxx \
+		 DirectedEdges.h \
 		 DirectedSubgraph.cxx \
 		 DirectedSubgraph.h \
 		 ReadFromGraph.h \
