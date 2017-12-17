@@ -919,7 +919,7 @@ int main(int argc, char* argv[])
         break;
       // Begin of loop *ml.
       read_from_graph.push(read_from_location_subgraphs[ml()]);
-      if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
+      //if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
       {
 #ifdef CWDEBUG
         static int count = 0;
@@ -931,7 +931,7 @@ int main(int argc, char* argv[])
 #endif
         if (read_from_graph.loop_detected().is_one())
         {
-          Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continueing the current loop!");
+          Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continuing the current loop!");
           read_from_graph.pop();
           ml.breaks(0);
           break;

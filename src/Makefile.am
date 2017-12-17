@@ -78,10 +78,10 @@ libcppmem_a_SOURCES = \
 		 ConditionalBranch.h \
 		 SBNodePresence.cxx \
 		 SBNodePresence.h \
-		 LoopEvent.cxx \
-		 LoopEvent.h \
-		 PathConditionPerLoopEvent.cxx \
-		 PathConditionPerLoopEvent.h \
+		 Event.cxx \
+		 Event.h \
+		 PathConditionPerEvent.cxx \
+		 PathConditionPerEvent.h \
 		 TopologicalOrderedActions.cxx \
 		 TopologicalOrderedActions.h \
 		 RFLocationOrderedSubgraphs.cxx \

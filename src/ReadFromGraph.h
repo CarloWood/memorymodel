@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PathConditionPerLoopEvent.h"
+#include "PathConditionPerEvent.h"
 #include "ReadFromLocationSubgraphs.h"
 #include "TopologicalOrderedActions.h"
 #include "RFLocationOrderedSubgraphs.h"
@@ -12,12 +12,13 @@ class ReadFromGraph : public DirectedSubgraph
   using set_type = uint32_t;
 
   struct NodeData {
-    set_type m_set;                                             // The set type (unvisited, followed, processed (dead_end, current_cycle or dead_cycle)) of each node.
-    int m_end_point;                                            // The end point of a detected cycle (or -1 if it's a dead_end).
-    PathConditionPerLoopEvent m_path_condition_per_loop_event;  // Helper variables to calculate the condition under which a loop exists.
+    set_type m_set;                                     // The set type (unvisited, followed, processed (dead_end, current_cycle or dead_cycle)) of each node.
+    int m_end_point;                                    // The end point of a detected cycle (or -1 if it's a dead_end).
+    PathConditionPerEvent m_path_condition_per_event;   // Helper variables to calculate the condition under which an event occurs.
     NodeData() : m_set(0) { }
   };
 
+  SequenceNumber m_current_node;                                // The current node in the Depth-First-Search.
   int const m_number_of_nodes;                                  // Copy of DirectedSubgraph::m_nodes.size().
   set_type m_generation;                                        // The current generation.
   boolean::Expression m_loop_condition;                         // Collector for the total condition under which there is any loop.
@@ -35,7 +36,7 @@ class ReadFromGraph : public DirectedSubgraph
   bool is_unvisited(SequenceNumber n) const { return m_node_data[n].m_set <= m_generation; }
 
   // Mark node n as being followed.
-  void set_followed(SequenceNumber n) { m_node_data[n].m_set = m_generation + 1; m_node_data[n].m_path_condition_per_loop_event.reset(); }
+  void set_followed(SequenceNumber n) { m_node_data[n].m_set = m_generation + 1; }
 
   // Return true we are currently in the process of following node n's children.
   bool is_followed(SequenceNumber n) const { return m_node_data[n].m_set == m_generation + 1; }
@@ -47,13 +48,16 @@ class ReadFromGraph : public DirectedSubgraph
   bool is_cycle(SequenceNumber n) const { return m_node_data[n].m_set == m_generation + 2; }
 
   // Return true if node n is part of a dead cycle.
-  bool is_dead_cycle(SequenceNumber n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_loop_event.contains_actual_loop_event(this); }
+  bool is_dead_cycle(SequenceNumber n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_event.contains_relevant_event(this); }
 
   // Mark node n as (being part of) a dead end.
   void set_dead_end(SequenceNumber n) { m_node_data[n].m_set = m_generation + 3; }
 
   // Return true if node n is a dead end.
   bool is_dead_end(SequenceNumber n) const { return m_node_data[n].m_set == m_generation + 3; }
+
+  // Return true if a write in node n is currently hidden by another write.
+  bool is_hidden(SequenceNumber n) const { return m_last_write_per_location[m_topological_ordered_actions[n]->tag().id] != n; }
 
   // Constructor.
   ReadFromGraph(
@@ -72,7 +76,10 @@ class ReadFromGraph : public DirectedSubgraph
   // Returns the last value calculated by loop_detected().
   boolean::Expression const& loop_condition() const { return m_loop_condition; }
 
-  // Do a Depth-First-Search starting from node n, returning true if and only if we detected a cycle
-  // in which case m_loop_condition is set to the (non-zero) condition under which a cycle was found.
-  bool dfs(SequenceNumber n, int current_memory_location = 0);
+  // Do a Depth-First-Search starting from node n, returning true if and only if we detected an Event
+  // in which case m_loop_condition is set to the (possibly zero) condition under which a cycle was found.
+  bool dfs(int current_memory_location = 0);
+
+  // Return the current node in the Depth-First-Search (only valid while inside dfs()).
+  SequenceNumber current_node() const { return m_current_node; }
 };

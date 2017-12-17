@@ -1,10 +1,10 @@
 #include "sys.h"
-#include "LoopEvent.h"
+#include "Event.h"
 #include "ReadFromGraph.h"
 
-bool LoopEvent::is_actual(ReadFromGraph const& read_from_graph) const
+bool Event::is_relevant(ReadFromGraph const& read_from_graph) const
 {
-  switch (m_loop_event)
+  switch (m_event)
   {
     case causal_loop:
       // A causal loop is impossible because everything in the loop either needs to be
@@ -28,7 +28,7 @@ bool LoopEvent::is_actual(ReadFromGraph const& read_from_graph) const
       // m_end_point here is the vertex that we ran into while doing a depth-first search ((1) in the above case).
       return read_from_graph.is_followed(m_end_point);
 
-    case hidden_vse:
+    case reads_from:
       // A hidden visual side effect means that there is a Read-From that reads from
       // a write whose side effect is hidden by another write to the same memory
       // location (that happens after the first write and before the read).
@@ -49,7 +49,10 @@ bool LoopEvent::is_actual(ReadFromGraph const& read_from_graph) const
       // has a hidden visual side effect because the write (2) is in between
       // (1) and (7) that reads from (1) while following a Happens-Before
       // path (1 -> 2 -> 3 -> 6 -> 7).
-      return false; // FIXME
+
+      // The reads_from event is relevant as long as we didn't return to the
+      // parent node that it is reading from.
+      return m_hidden || m_end_point != read_from_graph.current_node();
   }
 
   // Should never get here.
@@ -57,13 +60,18 @@ bool LoopEvent::is_actual(ReadFromGraph const& read_from_graph) const
   return false;
 }
 
-std::ostream& operator<<(std::ostream& os, LoopEvent const& loop_event)
+std::ostream& operator<<(std::ostream& os, Event const& event)
 {
   os << '{';
-  if (loop_event.m_loop_event == causal_loop)
+  if (event.m_event == causal_loop)
     os << "causal_loop";
   else
-    os << "hidden_vse";
-  os << ';' << loop_event.m_end_point;
+  {
+    if (event.m_hidden)
+      os << "reads_from_hidden";
+    else
+      os << "reads_from";
+  }
+  os << ';' << event.m_end_point;
   return os << '}';
 }
