@@ -83,3 +83,9 @@ class ReadFromGraph : public DirectedSubgraph
   // Return the current node in the Depth-First-Search (only valid while inside dfs()).
   SequenceNumber current_node() const { return m_current_node; }
 };
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+extern channel_ct readfrom;
+NAMESPACE_DEBUG_CHANNELS_END
+#endif

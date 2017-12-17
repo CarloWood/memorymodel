@@ -25,7 +25,7 @@ ReadFromGraph::ReadFromGraph(
   // Initialize m_location_id_to_rf_location.
   for (auto&& location_subgraphs : read_from_location_subgraphs_vector)
   {
-    Dout(dc::notice, location_subgraphs.location() << ':');
+    Dout(dc::readfrom, location_subgraphs.location() << ':');
     // Subgraphs from read_from_location_subgraphs_vector are pushed in order to m_current_subgraphs
     // by calling push/pop. Therefore the n+1's subgraph in m_current_subgraphs always corresponds
     // to the same memory location, namely the location of the n-th ReadFromLocationSubgraphs
@@ -36,7 +36,7 @@ ReadFromGraph::ReadFromGraph(
 #endif
     for (auto&& subgraph : location_subgraphs)
     {
-      Dout(dc::notice, subgraph);
+      Dout(dc::readfrom, subgraph);
     }
   }
 }
@@ -57,7 +57,7 @@ boolean::Expression const& ReadFromGraph::loop_detected()
   m_loop_condition = false;
 
   if (dfs() && !m_loop_condition.is_zero())
-    Dout(dc::notice, "Found cycle under condition " << m_loop_condition);
+    Dout(dc::notice, "Found inconsistency under condition " << m_loop_condition);
 
   // Prepare for next call to loop_detected().
   reset();
@@ -123,7 +123,7 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 //
 bool ReadFromGraph::dfs(int current_memory_location)
 {
-  DoutEntering(dc::notice, "ReadFromGraph::dfs(" << m_current_node << ", " << current_memory_location << "): following children of node " << m_current_node);
+  DoutEntering(dc::readfrom, "ReadFromGraph::dfs(" << m_current_node << ", " << current_memory_location << "): following children of node " << m_current_node);
 
   // Depth-First search only visits each node once.
   ASSERT(is_unvisited(m_current_node));
@@ -150,9 +150,9 @@ bool ReadFromGraph::dfs(int current_memory_location)
         SequenceNumber read_from_node{incoming_read_from_edge->tail_sequence_number()};
         //if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
         {
-          Dout(dc::notice, "Node " << m_current_node << " reads from node " << read_from_node);
+          Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << read_from_node);
           m_node_data[m_current_node].m_path_condition_per_event.add_new(Event(reads_from, read_from_node), incoming_read_from_edge->condition().copy());
-          Dout(dc::notice, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
+          Dout(dc::readfrom, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
         }
       }
     }
@@ -171,29 +171,29 @@ bool ReadFromGraph::dfs(int current_memory_location)
     for (auto directed_edge = subgraph->edges(m_current_node).begin_outgoing(); directed_edge != subgraph->edges(m_current_node).end_outgoing(); ++directed_edge)
     {
       SequenceNumber const child = directed_edge->head_sequence_number();
-      Dout(dc::notice, "Following edge to child " << child);
+      Dout(dc::readfrom, "Following edge to child " << child);
       if (directed_edge->is_rf_not_release_acquire())
       {
         // When memory_location == 0 this is a sb or asw edge, not an rf edge.
         ASSERT(memory_location > 0);
-        Dout(dc::notice, "  (which is a rf edge of memory location '" << memory_location << "' that is not a release-acquire!)");
+        Dout(dc::readfrom, "  (which is a rf edge of memory location '" << memory_location << "' that is not a release-acquire!)");
         if (current_memory_location > 0 && current_memory_location != memory_location)
         {
-          Dout(dc::notice, "  Continuing because we already encountered a non-rel-acq Read-From edge for memory location " << current_memory_location << "!");
+          Dout(dc::readfrom, "  Continuing because we already encountered a non-rel-acq Read-From edge for memory location " << current_memory_location << "!");
           continue;
         }
         current_memory_location = memory_location;
       }
       if (is_dead_end(child) || is_dead_cycle(child))
       {
-        Dout(dc::notice, "  continuing because that node is dead.");
+        Dout(dc::readfrom, "  continuing because that node is dead.");
         continue;
       }
       if (is_followed(child))
       {
-        Dout(dc::notice, "  cycle detected! Marking node " << child << " as end_point.");
+        Dout(dc::readfrom, "  cycle detected! Marking node " << child << " as end_point.");
         m_node_data[m_current_node].m_path_condition_per_event.add_new(Event(causal_loop, child), directed_edge->condition().copy());
-        Dout(dc::notice, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
+        Dout(dc::readfrom, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
       }
       else
       {
@@ -208,12 +208,12 @@ bool ReadFromGraph::dfs(int current_memory_location)
         }
         if (have_events)
         {
-          Dout(dc::notice, "  event(s) detected behind child " << child << " of node " << m_current_node <<
+          Dout(dc::readfrom, "  event(s) detected behind child " << child << " of node " << m_current_node <<
               " with path_condition_per_event: " << m_node_data[child].m_path_condition_per_event);
           m_node_data[m_current_node].m_path_condition_per_event.add_new(m_node_data[child].m_path_condition_per_event, directed_edge->condition(), this);
           if (is_write)
             m_node_data[m_current_node].m_path_condition_per_event.set_hidden(location, m_topological_ordered_actions);
-          Dout(dc::notice, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
+          Dout(dc::readfrom, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
         }
       }
     }
@@ -222,7 +222,7 @@ bool ReadFromGraph::dfs(int current_memory_location)
     // of memory_location mean different memory locations.
     ++memory_location;
   }
-  Dout(dc::notice, "Done following children of node " << m_current_node);
+  Dout(dc::readfrom, "Done following children of node " << m_current_node);
   bool have_events = !m_node_data[m_current_node].m_path_condition_per_event.empty();
   if (have_events)
   {
@@ -232,7 +232,7 @@ bool ReadFromGraph::dfs(int current_memory_location)
     {
       Dout(dc::notice, "Violation(s) detected involving end point " << m_current_node << ", under condition " << loop_condition << '.');
       m_loop_condition += loop_condition;
-      Dout(dc::notice, "m_loop_condition is now: " << m_loop_condition << '.');
+      Dout(dc::readfrom, "m_loop_condition is now: " << m_loop_condition << '.');
     }
   }
   else
@@ -245,3 +245,9 @@ bool ReadFromGraph::dfs(int current_memory_location)
 
   return have_events;
 }
+
+#ifdef CWDEBUG
+NAMESPACE_DEBUG_CHANNELS_START
+channel_ct readfrom("READFROM");
+NAMESPACE_DEBUG_CHANNELS_END
+#endif
