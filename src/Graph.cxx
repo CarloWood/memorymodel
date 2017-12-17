@@ -128,7 +128,12 @@ void Graph::generate_dot_file(
       if (edge->is_conditional())
         out << ':' << edge->condition().as_html_string();
       out << "</font>>, color=\"" << color << "\", fontname=\"Helvetica\", "
-               "fontsize=" << edge_label_fontsize << ", penwidth=1., arrowsize=\"0.8\"];\n";
+               "fontsize=" << edge_label_fontsize << ", penwidth=1., ";
+      if (edge->is_directed())
+        out << "arrowsize=\"0.8\"";
+      else
+        out << "constraint=false, arrowhead=\"none\"";
+      out << "];\n";
     }
   }
 

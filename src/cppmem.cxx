@@ -904,9 +904,34 @@ int main(int argc, char* argv[])
       }
   }
 
+  // Find all Unsequenced-Race edges.
+  for (Action* action : topological_ordered_actions)
+  {
+    if (action->is_write())                                     // At least one must be a write.
+    {
+      bool const is_atomic_write{action->is_atomic()};
+      Location const& location{action->location()};
+      for (Action* action2 : topological_ordered_actions)
+      {
+        if (action2->thread() == action->thread() &&            // Both actions must be part of the same thread.
+            (!action2->is_write() || action2 < action) &&       // Do not generate the same edge twice, or an edge between the same write action.
+            (!is_atomic_write || !action2->is_atomic()) &&      // At least one must be non-atomic.
+            action2->location() == location &&                  // Both actions must involve the same memory location.
+            !action2->is_sequenced_before(*action) &&           // The two actions must be unsequenced.
+            !action->is_sequenced_before(*action2))
+        {
+          Dout(dc::notice, "Unsequenced-Race between " << *action << " and " << *action2 << "!");
+          action->add_edge_to(edge_ur, action2);
+        }
+      }
+      Dout(dc::notice, *action);
+    }
+  }
+
   size_t number_of_locations_with_rf = read_from_location_subgraphs_vector.size();      // The number of memory locations that have at least one read-from edge.
   Dout(dc::notice, "Number of locations with at least one rf edge: " << number_of_locations_with_rf);
 
+  // Generate all Read-From edges.
   ReadFromGraph read_from_graph{graph, edge_mask_sbw, edge_mask_none, topological_ordered_actions, read_from_location_subgraphs_vector};
 
   for (MultiLoop ml(number_of_locations_with_rf); !ml.finished(); ml.next_loop())

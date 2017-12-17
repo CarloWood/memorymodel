@@ -53,13 +53,13 @@ std::ostream& operator<<(std::ostream& os, EdgeMaskType edge_mask_type)
 
 static char const* edge_color_array[edge_bits] =
   {
-    "black",
-    "purple",
+    "black",            // sb
+    "purple",           // asw
    "dd",
    "cd",
-    "red",
+    "red",              // rf
    "tot",
-    "blue",
+    "blue",             // mo
    "sc",
    "lo",
    "hb",
@@ -71,8 +71,8 @@ static char const* edge_color_array[edge_bits] =
    "sw",
    "hrs",
    "rs",
-   "dr",
-   "ur"
+   "darkorange",        // dr
+   "darkorange",        // ur
   };
 
 char const* edge_color(EdgeType edge_type)

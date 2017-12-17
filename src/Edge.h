@@ -99,6 +99,7 @@ class Edge
   Action* tail_node() const { return m_tail_node; }
   char const* name() const { return edge_name(m_edge_type); }
   bool is_opsem() const { return EdgeMaskType{m_edge_type}.is_opsem(); }
+  bool is_directed() const { return EdgeMaskType{m_edge_type}.is_directed(); }
 
   inline bool is_conditional() const;
   inline boolean::Expression exists() const;
