@@ -15,7 +15,6 @@ ReadFromGraph::ReadFromGraph(
       m_number_of_nodes(m_nodes.size()),
       m_generation(0),
       m_node_data(m_number_of_nodes),
-      m_last_write_per_location(Context::instance().get_position_handler().tag_end(), topological_ordered_actions.iend()),
       m_topological_ordered_actions(topological_ordered_actions),
       m_location_id_to_rf_location(Context::instance().get_position_handler().tag_end())
 {
@@ -138,29 +137,17 @@ bool ReadFromGraph::dfs(int current_memory_location)
   bool const is_read = have_location_subgraph && m_topological_ordered_actions[m_current_node]->is_read();
   SequenceNumber previous_write;
 
-  if (is_read || is_write)
+  if (is_read)
   {
-    if (is_read)
+    DirectedSubgraph const* subgraph = m_current_subgraphs[rf_location];
+    for (auto incoming_read_from_edge = subgraph->edges(m_current_node).begin_incoming();
+         incoming_read_from_edge != subgraph->edges(m_current_node).end_incoming();
+         ++ incoming_read_from_edge)
     {
-      DirectedSubgraph const* subgraph = m_current_subgraphs[rf_location];
-      for (auto incoming_read_from_edge = subgraph->edges(m_current_node).begin_incoming();
-           incoming_read_from_edge != subgraph->edges(m_current_node).end_incoming();
-           ++ incoming_read_from_edge)
-      {
-        SequenceNumber read_from_node{incoming_read_from_edge->tail_sequence_number()};
-        //if (is_followed(read_from_node) && read_from_node != m_last_write_per_location[location.id])
-        {
-          Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << read_from_node);
-          m_node_data[m_current_node].m_path_condition_per_event.add_new(Event(reads_from, read_from_node), incoming_read_from_edge->condition().copy());
-          Dout(dc::readfrom, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
-        }
-      }
-    }
-    if (is_write)
-    {
-      // Keep track of when was the last time we wrote to a memory location.
-      previous_write = m_last_write_per_location[location.id];
-      m_last_write_per_location[location.id] = m_current_node;
+      SequenceNumber read_from_node{incoming_read_from_edge->tail_sequence_number()};
+      Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << read_from_node);
+      m_node_data[m_current_node].m_path_condition_per_event.add_new(Event(reads_from, read_from_node), incoming_read_from_edge->condition().copy());
+      Dout(dc::readfrom, "  " << m_current_node << ".path_condition_per_event is now " << m_node_data[m_current_node].m_path_condition_per_event);
     }
   }
 
@@ -237,11 +224,6 @@ bool ReadFromGraph::dfs(int current_memory_location)
   }
   else
     set_dead_end(m_current_node);
-
-  if (is_write)
-  {
-    m_last_write_per_location[location.id] = previous_write;
-  }
 
   return have_events;
 }

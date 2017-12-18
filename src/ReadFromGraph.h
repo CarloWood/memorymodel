@@ -24,7 +24,6 @@ class ReadFromGraph : public DirectedSubgraph
   boolean::Expression m_loop_condition;                         // Collector for the total condition under which there is any loop.
   RFLocationOrderedSubgraphs m_current_subgraphs;               // List of subgraphs that make up the current graph.
   utils::Vector<NodeData, SequenceNumber> m_node_data;          // The node data, using the nodes id as index.
-  std::vector<SequenceNumber> m_last_write_per_location;        // Keeps track of the last node that wrote to a given memory location (iend when nothing was written yet).
   TopologicalOrderedActions const& m_topological_ordered_actions;    // Maps node sequence numbers to Action objects.
   std::vector<RFLocation> m_location_id_to_rf_location;// Maps location tags to an index into m_current_subgraphs.
 
@@ -55,9 +54,6 @@ class ReadFromGraph : public DirectedSubgraph
 
   // Return true if node n is a dead end.
   bool is_dead_end(SequenceNumber n) const { return m_node_data[n].m_set == m_generation + 3; }
-
-  // Return true if a write in node n is currently hidden by another write.
-  bool is_hidden(SequenceNumber n) const { return m_last_write_per_location[m_topological_ordered_actions[n]->tag().id] != n; }
 
   // Constructor.
   ReadFromGraph(
