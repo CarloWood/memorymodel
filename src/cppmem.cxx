@@ -944,7 +944,7 @@ int main(int argc, char* argv[])
         break;
       // Begin of loop *ml.
       read_from_graph.push(read_from_location_subgraphs[ml()]);
-      //if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
+      if (*ml > 0)      // We need at least two read-from subgraphs before there can be a loop.
       {
 #ifdef CWDEBUG
         static int count = 0;
