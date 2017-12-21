@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PathConditionPerEvent.h"
+#include "Properties.h"
 #include "ReadFromLocationSubgraphs.h"
 #include "TopologicalOrderedActions.h"
 #include "RFLocationOrderedSubgraphs.h"
@@ -14,7 +14,7 @@ class ReadFromGraph : public DirectedSubgraph
   struct NodeData {
     set_type m_set;                                     // The set type (unvisited, followed, processed (dead_end, current_cycle or dead_cycle)) of each node.
     int m_end_point;                                    // The end point of a detected cycle (or -1 if it's a dead_end).
-    PathConditionPerEvent m_path_condition_per_event;   // Helper variables to calculate the condition under which an event occurs.
+    Properties m_properties;   // Helper variables to calculate the condition under which an quirk occurs.
     NodeData() : m_set(0) { }
   };
 
@@ -47,7 +47,7 @@ class ReadFromGraph : public DirectedSubgraph
   bool is_cycle(SequenceNumber n) const { return m_node_data[n].m_set == m_generation + 2; }
 
   // Return true if node n is part of a dead cycle.
-  bool is_dead_cycle(SequenceNumber n) const { return is_cycle(n) && !m_node_data[n].m_path_condition_per_event.contains_relevant_event(this); }
+  bool is_dead_cycle(SequenceNumber n) const { return is_cycle(n) && !m_node_data[n].m_properties.contains_relevant_quirk(this); }
 
   // Mark node n as (being part of) a dead end.
   void set_dead_end(SequenceNumber n) { m_node_data[n].m_set = m_generation + 3; }
@@ -72,8 +72,9 @@ class ReadFromGraph : public DirectedSubgraph
   // Returns the last value calculated by loop_detected().
   boolean::Expression const& loop_condition() const { return m_loop_condition; }
 
-  // Do a Depth-First-Search starting from node n, returning true if and only if we detected an Event
-  // in which case m_loop_condition is set to the (possibly zero) condition under which a cycle was found.
+  // Do a Depth-First-Search starting from node m_current_node, returning true if and only if we detected
+  // an Quirk in which case m_loop_condition is set to the (possibly zero) condition under which an inconsistency
+  // was found.
   bool dfs(int current_memory_location = 0);
 
   // Return the current node in the Depth-First-Search (only valid while inside dfs()).
