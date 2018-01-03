@@ -92,6 +92,8 @@ class Action
   bool is_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw || kind_ == non_atomic_read; }
   bool is_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw || kind_ == non_atomic_write; }
   bool is_atomic() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_store || kind_ == atomic_rmw; }
+  bool is_atomic_write() const { Kind kind_ = kind(); return kind_ == atomic_store || kind_ == atomic_rmw; }
+  bool is_atomic_read() const { Kind kind_ = kind(); return kind_ == atomic_load || kind_ == atomic_rmw; }
 
   Edge* first_of(EndPointType end_point_type, EdgeMaskType edge_mask_type) const
   {
@@ -134,6 +136,16 @@ class Action
   int get_read_from_loop_index() const { return m_read_from_loop_index; }
   bool is_fully_visited(int visited_generation, Action* read_node) const;
   boolean::Expression calculate_path_condition(int visited_generation, Action* read_node) const;
+  bool is_acquire() const
+  {
+    std::memory_order mo = read_memory_order();
+    return mo == std::memory_order_acquire || mo == std::memory_order_acq_rel || mo == std::memory_order_seq_cst;
+  }
+  bool is_release() const
+  {
+    std::memory_order mo = write_memory_order();
+    return mo == std::memory_order_release || mo == std::memory_order_acq_rel || mo == std::memory_order_seq_cst;
+  }
 
   virtual Kind kind() const = 0;
   virtual bool is_second_mutex_access() const { return false; }

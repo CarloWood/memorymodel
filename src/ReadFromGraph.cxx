@@ -3,6 +3,7 @@
 #include "ReadFromGraph.h"
 #include "Action.h"
 #include "Context.h"
+#include "Propagator.h"
 #include "utils/MultiLoop.h"
 
 ReadFromGraph::ReadFromGraph(
@@ -120,105 +121,107 @@ boolean::Expression const& ReadFromGraph::loop_detected()
 // exist when each edge is "weighted" (with a boolean expression in this case),
 // was designed by myself (Carlo Wood) in November/December 2017.
 //
-bool ReadFromGraph::dfs(int current_memory_location)
+bool ReadFromGraph::dfs()
 {
-  DoutEntering(dc::readfrom, "ReadFromGraph::dfs(" << current_memory_location << ") for node " << m_current_node << '.');
+  DoutEntering(dc::readfrom, "ReadFromGraph::dfs() for node " << m_current_node << '.');
 
   // Depth-First search only visits each node once.
   ASSERT(is_unvisited(m_current_node));
 
-  // Current node data.  Facet, Property, Quirk, Trait
-  Properties& current_node_data{m_node_data[m_current_node].m_properties};
+  // Current node data.
+  Properties& current_properties{m_node_data[m_current_node].m_properties};
 
   // Reset any old values in m_properties (from a previous generation).
-  current_node_data.reset();
+  current_properties.reset();
 
   // m_current_node equals Action::m_sequence_number, the index for m_topological_ordered_actions.
-  ast::tag location = m_topological_ordered_actions[m_current_node]->tag();
-  RFLocation rf_location{m_location_id_to_rf_location[location.id]};
-  bool const have_location_subgraph = !rf_location.undefined() && rf_location < m_current_subgraphs.iend();
-  bool const is_write = have_location_subgraph && m_topological_ordered_actions[m_current_node]->is_write();
-  bool const is_read = have_location_subgraph && m_topological_ordered_actions[m_current_node]->is_read();
-  SequenceNumber previous_write;
+  Action* current_action = m_topological_ordered_actions[m_current_node];
+  ast::tag location = current_action->tag();
+  RFLocation current_location{m_location_id_to_rf_location[location.id]};
+  bool const have_location_subgraph = !current_location.undefined() && current_location < m_current_subgraphs.iend();
+  bool const is_write = have_location_subgraph && current_action->is_write();
+  bool const is_read = have_location_subgraph && current_action->is_read();
 
   if (is_read)
   {
-    DirectedSubgraph const* subgraph = m_current_subgraphs[rf_location];
+    DirectedSubgraph const* subgraph = m_current_subgraphs[current_location];
     for (auto incoming_read_from_edge = subgraph->edges(m_current_node).begin_incoming();
          incoming_read_from_edge != subgraph->edges(m_current_node).end_incoming();
-         ++ incoming_read_from_edge)
+         ++incoming_read_from_edge)
     {
-      SequenceNumber read_from_node{incoming_read_from_edge->tail_sequence_number()};
-      Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << read_from_node);
-      current_node_data.add_new(Quirk(reads_from, read_from_node), incoming_read_from_edge->condition().copy());
-      Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_node_data);
+      SequenceNumber write_node{incoming_read_from_edge->tail_sequence_number()};
+      Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << write_node);
+      current_properties.add(Property(reads_from, write_node, SequenceNumber(), incoming_read_from_edge->condition()));
+      Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
     }
   }
 
   set_followed(m_current_node);
-  int memory_location = 0;
-  for (DirectedSubgraph const* subgraph : m_current_subgraphs)
+
+  // Run over all relevant subgraphs (two of them).
+  DirectedSubgraph const* subgraph = m_current_subgraphs.front();
+  for (int opsem_or_rf = 0; opsem_or_rf < 2; ++opsem_or_rf)
   {
+    // Run over all outgoing directed edges of the current node.
     for (auto directed_edge = subgraph->edges(m_current_node).begin_outgoing(); directed_edge != subgraph->edges(m_current_node).end_outgoing(); ++directed_edge)
     {
       SequenceNumber const child = directed_edge->head_sequence_number();
       Dout(dc::readfrom, "Following edge to child " << child);
-      if (directed_edge->is_rf_not_release_acquire())
+
+      if (is_processed(child) || is_visited_but_not_relevant(child))
       {
-        // When memory_location == 0 this is a sb or asw edge, not an rf edge.
-        ASSERT(memory_location > 0);
-        Dout(dc::readfrom, "  (which is a rf edge of memory location '" << memory_location << "' that is not a release-acquire!)");
-        if (current_memory_location > 0 && current_memory_location != memory_location)
-        {
-          Dout(dc::readfrom, "  Continuing because we already encountered a non-rel-acq Read-From edge for memory location " << current_memory_location << "!");
-          continue;
-        }
-        current_memory_location = memory_location;
-      }
-      if (is_dead_end(child) || is_dead_cycle(child))
-      {
-        Dout(dc::readfrom, "  continuing because that node is dead.");
+        Dout(dc::readfrom, "  continuing because that node is already processed.");
         continue;
       }
+      if (!is_followed(child))
+      {
+        // If is_visited returns true then we have properties to be processed,
+        // because if there were no relevant properties then we wouldn't get here.
+        bool have_properties = is_visited(child);
+        if (!have_properties)
+        {
+          // Call dfs recursively.
+          SequenceNumber current_node{m_current_node};
+          m_current_node = child;
+          have_properties = dfs();
+          m_current_node = current_node;
+        }
+        if (!have_properties)
+          continue;
+      }
+      Action* child_action = m_topological_ordered_actions[child];
+      Propagator propagator(
+          current_action, m_current_node, current_location, is_write,
+          child_action, child, opsem_or_rf,
+          directed_edge->condition());
       if (is_followed(child))
       {
-        Dout(dc::readfrom, "  causal loop detected! Marking node " << child << " as end_point.");
-        current_node_data.add_new(Quirk(causal_loop, child), directed_edge->condition().copy());
-        Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_node_data);
+        Dout(dc::readfrom, "  possible causal loop detected. Marking node " << child << " as end_point.");
+        Property new_property(causal_loop, child, m_current_node, directed_edge->condition());
+        if (new_property.convert(propagator))
+          current_properties.add(std::move(new_property));
+        Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
       }
       else
       {
-        // If is_cycle returns true then we have a current cycle because the cycle isn't dead when we get here.
-        bool have_quirks = is_cycle(child);
-        if (!have_quirks)
-        {
-          SequenceNumber current_node{m_current_node};
-          m_current_node = child;
-          have_quirks = dfs(current_memory_location);
-          m_current_node = current_node;
-        }
-        if (have_quirks)
-        {
-          Dout(dc::readfrom, "  quirk(s) detected behind child " << child << " of node " << m_current_node <<
-              " with properties: " << m_node_data[child].m_properties);
-          current_node_data.add_new(m_node_data[child].m_properties, directed_edge->condition(), this);
-          if (is_write)
-            current_node_data.set_hidden(location, m_topological_ordered_actions);
-          Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_node_data);
-        }
+        Dout(dc::readfrom, "  merging properties of child " << child << " [" << m_node_data[child].m_properties <<
+            "] into node " << m_current_node << " [" << current_properties << "].");
+        // Propagate the properties from child to the current node and merge them.
+        current_properties.merge(m_node_data[child].m_properties, std::move(propagator), this);
+        Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
       }
     }
-    // When memory_location is larger than 0 the edges being followed
-    // are Read-From edges of a certain memory location; different values
-    // of memory_location mean different memory locations.
-    ++memory_location;
+    // Next process the rf edges of the current node, if any.
+    if (!have_location_subgraph)
+      break;
+    subgraph = m_current_subgraphs[current_location];
   }
   Dout(dc::readfrom, "Done following children of node " << m_current_node);
-  bool have_quirks = !current_node_data.empty();
-  if (have_quirks)
+  bool have_properties = !current_properties.empty();
+  if (have_properties)
   {
-    set_cycle(m_current_node);
-    boolean::Expression loop_condition = current_node_data.current_loop_condition(m_current_node);
+    set_visited(m_current_node);
+    boolean::Expression loop_condition = current_properties.current_loop_condition(this);
     if (!loop_condition.is_zero())
     {
       Dout(dc::notice, "Violation(s) detected involving end point " << m_current_node << ", under condition " << loop_condition << '.');
@@ -227,9 +230,9 @@ bool ReadFromGraph::dfs(int current_memory_location)
     }
   }
   else
-    set_dead_end(m_current_node);
+    set_processed(m_current_node);
 
-  return have_quirks;
+  return have_properties;
 }
 
 #ifdef CWDEBUG

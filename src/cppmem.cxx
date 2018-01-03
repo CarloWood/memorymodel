@@ -957,9 +957,11 @@ int main(int argc, char* argv[])
         if (read_from_graph.loop_detected().is_one())
         {
           Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continuing the current loop!");
+#if 0   // FIXME: remove this. Commented in order to print also fully rejected graphs.
           read_from_graph.pop();
           ml.breaks(0);
           break;
+#endif
         }
       }
       if (ml.inner_loop())

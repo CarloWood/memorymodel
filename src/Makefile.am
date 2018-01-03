@@ -78,10 +78,12 @@ libcppmem_a_SOURCES = \
 		 ConditionalBranch.h \
 		 SBNodePresence.cxx \
 		 SBNodePresence.h \
-		 Quirk.cxx \
-		 Quirk.h \
+		 Property.cxx \
+		 Property.h \
 		 Properties.cxx \
 		 Properties.h \
+		 Propagator.cxx \
+		 Propagator.h \
 		 TopologicalOrderedActions.cxx \
 		 TopologicalOrderedActions.h \
 		 RFLocationOrderedSubgraphs.cxx \
