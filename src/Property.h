@@ -66,7 +66,13 @@ class Property
 
   bool invalidates_graph(ReadFromGraph const* read_from_graph) const;
   bool convert(Propagator const& propagator);
-  bool if_needed_unwrap_to(Properties& properties) { bool needed = m_type == release_sequence && !m_not_synced_yet; if (needed) unwrap_to(properties); return needed; }
+  bool if_needed_unwrap_to(Properties& properties)
+  {
+    bool needed = m_type == release_sequence && !m_not_synced_yet && !m_broken_release_sequence;
+    if (needed)
+      unwrap_to(properties);
+    return needed;
+  }
   void merge_into(std::vector<Property>& map);
   void wrap(Property const& property);
   friend bool need_merging(Property const& p1, Property const& p2);

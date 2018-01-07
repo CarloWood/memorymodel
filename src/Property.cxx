@@ -283,6 +283,7 @@ bool Property::convert(Propagator const& propagator)
               propagator.current_thread() << " != " << m_not_synced_thread << ").");
           m_broken_release_sequence = true;
           m_not_synced_thread = -1;
+          m_pending.clear();    // Not needed anymore.
         }
       }
     }
