@@ -37,13 +37,17 @@ class Propagator
       m_current_is_write(current_is_write),
       m_edge_is_rf(edge_is_rf) { }
 
+  // Accessors.
   // Return the condition under which this propagation will take place.
   boolean::Expression const& condition() const { return m_condition; }
   bool edge_is_rf() const { return m_edge_is_rf; }
   RFLocation current_location() const { return m_current_location; }
   Thread::id_type current_thread() const { return m_current_action->thread()->id(); }
+  SequenceNumber child() const { return m_child; }
+  Action const& current_action() const { return *m_current_action; }
 
   bool rf_acq_but_not_rel() const;
+  bool rf_rel_acq() const;
   bool is_write_rel_to(RFLocation location) const;
   bool is_non_rel_write(RFLocation location) const;
 

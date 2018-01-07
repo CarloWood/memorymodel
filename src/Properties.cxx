@@ -4,6 +4,7 @@
 
 void Properties::add(Property&& new_property)
 {
+  DoutEntering(dc::property, "Properties::add(" << new_property << ").");
   if (!new_property.path_condition().is_zero()) // Speed up.
     new_property.merge_into(m_map);
 }
@@ -14,6 +15,18 @@ void Properties::merge(
     Propagator const& propagator,
     ReadFromGraph const* read_from_graph)
 {
+  DoutEntering(dc::property, "Properties::merge(" << properties << ", " << propagator << ", read_from_graph)");
+  if (propagator.rf_acq_but_not_rel())
+  {
+    Dout(dc::property, "Unsynced Release-Sequence detected.");
+    // This signifies the start of a Release-Sequence. We need to replace the map of properties with
+    // one that contains a single release_sequence Property that wraps everything it contained before.
+    Property new_property(release_sequence, propagator.child(), propagator.condition());
+    properties.copy_to(new_property);
+    // Then apply the propagator to the rest of the data.
+    if (new_property.convert(propagator))
+      add(std::move(new_property));
+  }
   // Add the new properties to our map, updating their path condition,
   // and convert them according to the propagator.
   for (Property const& property : properties.m_map)
@@ -22,9 +35,16 @@ void Properties::merge(
       // Create a new Property in m_map from property but with already updated path condition.
       Property new_property(property, property.path_condition().times(propagator.condition()));
       // Then apply the propagator to the rest of the data.
-      if (new_property.convert(propagator))
+      if (new_property.convert(propagator) && !new_property.if_needed_unwrap_to(*this))
         add(std::move(new_property));
     }
+}
+
+void Properties::copy_to(Property& rs_property) const
+{
+  DoutEntering(dc::property, "Properties::copy_to(" << rs_property << ").");
+  for (Property const& property : m_map)
+    rs_property.wrap(property);
 }
 
 bool Properties::contains_relevant_property(ReadFromGraph const* read_from_graph) const

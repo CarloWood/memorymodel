@@ -4,7 +4,14 @@
 
 bool Propagator::rf_acq_but_not_rel() const
 {
-  return m_edge_is_rf && m_current_is_write && m_child_action->is_atomic_read() && m_child_action->is_acquire() && !m_current_action->is_release();
+  ASSERT(!m_edge_is_rf || m_current_is_write);
+  return m_edge_is_rf && m_child_action->is_acquire() && !m_current_action->is_release();
+}
+
+bool Propagator::rf_rel_acq() const
+{
+  ASSERT(!m_edge_is_rf || m_current_is_write);
+  return m_edge_is_rf && m_child_action->is_acquire() && m_current_action->is_release();
 }
 
 bool Propagator::is_write_rel_to(RFLocation location) const

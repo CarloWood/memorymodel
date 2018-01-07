@@ -138,11 +138,15 @@ class Action
   boolean::Expression calculate_path_condition(int visited_generation, Action* read_node) const;
   bool is_acquire() const
   {
+    if (!is_atomic_read())
+      return false;
     std::memory_order mo = read_memory_order();
     return mo == std::memory_order_acquire || mo == std::memory_order_acq_rel || mo == std::memory_order_seq_cst;
   }
   bool is_release() const
   {
+    if (!is_atomic_write())
+      return false;
     std::memory_order mo = write_memory_order();
     return mo == std::memory_order_release || mo == std::memory_order_acq_rel || mo == std::memory_order_seq_cst;
   }

@@ -43,11 +43,10 @@ ReadFromGraph::ReadFromGraph(
 
 boolean::Expression const& ReadFromGraph::loop_detected()
 {
-  static int count = 0;
-  DoutEntering(dc::notice, "ReadFromGraph::loop_detected() " << ++count);
+  DoutEntering(dc::notice, "ReadFromGraph::loop_detected()");
 
   // Node 0 is the starting node of the program.
-  m_current_node.clear();
+  m_current_node.set_to_zero();
 
   // If no loops are detected when starting from that node then the program
   // has no loops, because every node should be reachable from begin_node.
@@ -151,7 +150,7 @@ bool ReadFromGraph::dfs()
     {
       SequenceNumber write_node{incoming_read_from_edge->tail_sequence_number()};
       Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << write_node);
-      current_properties.add(Property(reads_from, write_node, SequenceNumber(), incoming_read_from_edge->condition()));
+      current_properties.add(Property(reads_from, write_node, incoming_read_from_edge->condition()));
       Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
     }
   }
@@ -160,7 +159,7 @@ bool ReadFromGraph::dfs()
 
   // Run over all relevant subgraphs (two of them).
   DirectedSubgraph const* subgraph = m_current_subgraphs.front();
-  for (int opsem_or_rf = 0; opsem_or_rf < 2; ++opsem_or_rf)
+  for (int opsem_or_rf = 0; opsem_or_rf < 2; ++opsem_or_rf)     // 0: edge is opsem, 1: edge is rf.
   {
     // Run over all outgoing directed edges of the current node.
     for (auto directed_edge = subgraph->edges(m_current_node).begin_outgoing(); directed_edge != subgraph->edges(m_current_node).end_outgoing(); ++directed_edge)
@@ -189,15 +188,49 @@ bool ReadFromGraph::dfs()
         if (!have_properties)
           continue;
       }
-      Action* child_action = m_topological_ordered_actions[child];
+
+      // If we are following an edge that is a ReadFrom then obviously the current node needs to be a write.
+      ASSERT(!opsem_or_rf || is_write);
+
+      // We fould an edge that either ends in a (child) node that
+      // is currently being followed, or that was visited before
+      // and has unprocessed properties. In the latter case the
+      // properties of child need converted using a Propagator and
+      // merged into the properties of the current node.
+      // In the former case we create a new causal_loop property,
+      // which also has to be converted before it can be merged
+      // into our own properties.
+      //
+      //           opsem or rf              (opsem being sb or asw).
+      //    * ----------------------> *
+      //    ^                         ^
+      //    |                         |
+      // current_*                  child*
+      //
       Propagator propagator(
           current_action, m_current_node, current_location, is_write,
-          child_action, child, opsem_or_rf,
+          m_topological_ordered_actions[child], child, opsem_or_rf,
           directed_edge->condition());
+
       if (is_followed(child))
       {
         Dout(dc::readfrom, "  possible causal loop detected. Marking node " << child << " as end_point.");
-        Property new_property(causal_loop, child, m_current_node, directed_edge->condition());
+        // If the edge is a Read-From edge and the child is a Read acquire but
+        // our current node is not a Write release then we need to wrap the
+        // causal_loop Property in a release_sequence Property.
+        bool is_release_sequence = propagator.rf_acq_but_not_rel();
+        // Create a new causal_loop/release_sequence Property. Immediately give it the condition
+        // under which our edge exists because convert() does not alter the condition
+        // of Property objects, so we have to do that ourselves.
+        Property new_property(is_release_sequence ? release_sequence : causal_loop, child, directed_edge->condition());
+        if (is_release_sequence)
+        {
+          // In this case the new causal loop Property needs to be both, wrapped and added.
+          Property cl_property(causal_loop, child, true);
+          new_property.wrap(cl_property);
+          if (cl_property.convert(propagator))
+            current_properties.add(std::move(cl_property));
+        }
         if (new_property.convert(propagator))
           current_properties.add(std::move(new_property));
         Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);

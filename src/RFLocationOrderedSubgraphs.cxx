@@ -4,6 +4,9 @@
 
 std::ostream& operator<<(std::ostream& os, RFLocation index)
 {
-  os << 'L' << index.get_value();
+  if (index.undefined())
+    os << "L?";
+  else
+    os << 'L' << index.get_value();
   return os;
 }
