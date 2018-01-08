@@ -26,6 +26,7 @@ class Property
   boolean::Expression m_path_condition; // The condition under which this property will exist.
   RFLocation m_location;                // causal_loop: the memory location that is read from with a non-rel-acq rf, or 'undefined' if none.
                                         // release_sequence: the memory location that isn't synced yet.
+                                        // reads_from: the memory location that is being read from.
 
   // Only valid for release_sequence:
   std::vector<Property> m_pending;      // The properties that were copied from the Read-acq node that caused this release_sequence Property.

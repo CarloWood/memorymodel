@@ -237,6 +237,18 @@ bool Property::convert(Propagator const& propagator)
       m_location = propagator.current_location();
     }
   }
+  else if (m_type == reads_from)
+  {
+    if (m_location.undefined())
+    {
+      m_location = propagator.child_location();
+    }
+    else if (m_location == propagator.current_location() && m_end_point != propagator.current_node())
+    {
+      Dout(dc::property, "The reads_from " << m_end_point << " Property fails because it is overwritten by node " << propagator.current_node() << '.');
+      m_hidden = true;
+    }
+  }
   else if (m_type == release_sequence)
   {
     // Do not copy non-causal-loop Property objects in the case that the propagator is a Racq<---Wrlx because
@@ -575,8 +587,7 @@ std::ostream& operator<<(std::ostream& os, Property const& property)
   }
   else
   {
-    os << "reads_from";
-
+    os << "reads_from;" << property.m_location;
     if (property.m_hidden)
       os << "(hidden)";
   }

@@ -43,6 +43,7 @@ class Propagator
   bool edge_is_rf() const { return m_edge_is_rf; }
   RFLocation current_location() const { return m_current_location; }
   Thread::id_type current_thread() const { return m_current_action->thread()->id(); }
+  SequenceNumber current_node() const { return m_current_node; }
   SequenceNumber child() const { return m_child; }
   Action const& current_action() const { return *m_current_action; }
 
