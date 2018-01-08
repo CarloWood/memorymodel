@@ -150,7 +150,7 @@ bool ReadFromGraph::dfs()
     {
       SequenceNumber write_node{incoming_read_from_edge->tail_sequence_number()};
       Dout(dc::readfrom, "Node " << m_current_node << " reads from node " << write_node);
-      current_properties.add(Property(reads_from, write_node, incoming_read_from_edge->condition()));
+      current_properties.add(Property(write_node, incoming_read_from_edge->condition(), current_location));
       Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
     }
   }

@@ -239,11 +239,12 @@ bool Property::convert(Propagator const& propagator)
   }
   else if (m_type == reads_from)
   {
-    if (m_location.undefined())
+    if (propagator.rf_acq_but_not_rel())        // Should we wrap all Property objects instead of copying them?
     {
-      m_location = propagator.child_location();
+      Dout(dc::property, "Returning false because reads_from should not be propagated over a non-rel-acq rf (but wrapped).");
+      return false;
     }
-    else if (m_location == propagator.current_location() && m_end_point != propagator.current_node())
+    if (m_location == propagator.current_location() && m_end_point != propagator.current_node())
     {
       Dout(dc::property, "The reads_from " << m_end_point << " Property fails because it is overwritten by node " << propagator.current_node() << '.');
       m_hidden = true;

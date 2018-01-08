@@ -22,7 +22,7 @@ void Properties::merge(
     // This signifies the start of a Release-Sequence. We need to replace the map of properties with
     // one that contains a single release_sequence Property that wraps everything it contained before.
     Property new_property(release_sequence, propagator.child(), propagator.condition());
-    properties.copy_to(new_property);
+    properties.copy_to(new_property, propagator.current_node());
     // Then apply the propagator to the rest of the data.
     if (new_property.convert(propagator))
       add(std::move(new_property));
@@ -40,11 +40,12 @@ void Properties::merge(
     }
 }
 
-void Properties::copy_to(Property& rs_property) const
+void Properties::copy_to(Property& rs_property, SequenceNumber current_node) const
 {
   DoutEntering(dc::property, "Properties::copy_to(" << rs_property << ").");
   for (Property const& property : m_map)
-    rs_property.wrap(property);
+    if (!(property.type() == reads_from && property.end_point() == current_node))
+      rs_property.wrap(property);
 }
 
 bool Properties::contains_relevant_property(ReadFromGraph const* read_from_graph) const

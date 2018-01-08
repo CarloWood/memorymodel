@@ -22,7 +22,7 @@ class Properties
   void merge(Properties const& properties, Propagator const& propagator, ReadFromGraph const* read_from_graph);
   bool contains_relevant_property(ReadFromGraph const* read_from_graph) const;
   boolean::Expression current_loop_condition(ReadFromGraph const* read_from_graph);
-  void copy_to(Property& rs_property) const;
+  void copy_to(Property& rs_property, SequenceNumber current_node) const;
 
   friend std::ostream& operator<<(std::ostream& os, Properties const& properties);
 };

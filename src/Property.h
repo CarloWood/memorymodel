@@ -41,7 +41,10 @@ class Property
  public:
   Property(property_type type, SequenceNumber end_point, boolean::Expression const& path_condition) :
       m_type(type), m_end_point(end_point), m_path_condition(path_condition.copy()),
-      m_not_synced_yet(type == release_sequence), m_broken_release_sequence(false), m_not_synced_thread(-1), m_hidden(false) { }
+      m_not_synced_yet(type == release_sequence), m_broken_release_sequence(false), m_not_synced_thread(-1) { }
+
+  Property(SequenceNumber end_point, boolean::Expression const& path_condition, RFLocation location) :
+      m_type(reads_from), m_end_point(end_point), m_path_condition(path_condition.copy()), m_location(location), m_hidden(false) { }
 
   Property(Property const& property, boolean::Expression&& path_condition) :
       m_type(property.m_type),
