@@ -50,7 +50,8 @@ class Propagator
   bool rf_acq_but_not_rel() const;
   bool rf_rel_acq() const;
   bool is_write_rel_to(RFLocation location) const;
-  bool is_non_rel_write(RFLocation location) const;
+  bool is_store_to(RFLocation location) const;
+  bool is_write() const { return m_current_is_write; }
 
   friend std::ostream& operator<<(std::ostream& os, Propagator const&);
 };

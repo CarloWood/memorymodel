@@ -138,7 +138,9 @@ void Graph::generate_dot_file(
   }
 
   conditionals_type const& conditionals{Context::instance().conditionals()};
-  if (!conditionals.empty())
+  RSIndex const rs_begin = Context::instance().m_release_sequences.ibegin();
+  RSIndex const rs_end = Context::instance().m_release_sequences.iend();
+  if (!conditionals.empty() || rs_begin != rs_end)
   {
     out <<
         "  { rank = sink;\n"
@@ -155,6 +157,18 @@ void Graph::generate_dot_file(
         "      <TD>" << conditional.second.id_name() << "</TD>\n"
         "      <TD><FONT COLOR=\"black\">";
       out << html << *conditional.first;
+      out <<
+        "</FONT></TD>\n"
+        "      </TR>\n";
+    }
+    for (RSIndex rs_index = rs_begin; rs_index != rs_end; ++rs_index)
+    {
+      ReleaseSequence const& release_sequence{Context::instance().m_release_sequences[rs_index]};
+      out <<
+        "      <TR>\n"
+        "      <TD>" << boolean::Product(release_sequence.boolexpr_variable()).to_string(true) << "</TD>\n"
+        "      <TD><FONT COLOR=\"black\">";
+      out << "RS " << release_sequence.m_begin << "--&gt;" << release_sequence.m_end;
       out <<
         "</FONT></TD>\n"
         "      </TR>\n";

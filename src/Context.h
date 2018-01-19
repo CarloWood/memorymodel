@@ -9,6 +9,7 @@
 #include "Thread.h"
 #include "Node.h"
 #include "Location.h"
+#include "ReleaseSequences.h"
 #include "utils/Singleton.h"
 #include <string>
 #include <set>
@@ -26,6 +27,7 @@ class Context : public Singleton<Context>
   Symbols m_symbols;
   Locks m_locks;
   Loops m_loops;
+  ReleaseSequences m_release_sequences;
 
  private:
   position_handler<iterator_type>* m_position_handler;

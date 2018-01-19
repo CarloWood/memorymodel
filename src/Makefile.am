@@ -64,6 +64,10 @@ libcppmem_a_SOURCES = \
 		 EvaluationNodePtrs.h \
 		 Conditional.cxx \
 		 Conditional.h \
+		 ReleaseSequence.cxx \
+		 ReleaseSequence.h \
+		 ReleaseSequences.cxx \
+		 ReleaseSequences.h \
 		 Branch.cxx \
 		 Branch.h \
 		 Thread.cxx \

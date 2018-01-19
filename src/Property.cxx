@@ -1,6 +1,8 @@
 #include "sys.h"
 #include "Property.h"
 #include "ReadFromGraph.h"
+#include "ReleaseSequence.h"
+#include "Context.h"
 
 // A hidden visual side effect means that there is a Read-From that reads from
 // a write whose side effect is hidden by another write to the same memory
@@ -244,7 +246,7 @@ bool Property::convert(Propagator const& propagator)
       Dout(dc::property, "Returning false because reads_from should not be propagated over a non-rel-acq rf (but wrapped).");
       return false;
     }
-    if (m_location == propagator.current_location() && m_end_point != propagator.current_node())
+    if (propagator.is_write() && m_location == propagator.current_location() && m_end_point != propagator.current_node())
     {
       Dout(dc::property, "The reads_from " << m_end_point << " Property fails because it is overwritten by node " << propagator.current_node() << '.');
       m_hidden = true;
@@ -255,60 +257,62 @@ bool Property::convert(Propagator const& propagator)
     // Do not copy non-causal-loop Property objects in the case that the propagator is a Racq<---Wrlx because
     // in that case all Property objects are being copied by wrapping them in a release_sequence. However
     // make a exception for the release_sequence Property that is the Property that is doing the wrapping.
-    if (m_end_point == propagator.child())      // Is this the release_sequence Proporty that is doing the wrapping?
+    if (m_location.undefined())         // Is this the release_sequence Proporty that is doing the wrapping?
     {
+      // This should be the first time we get here, directly after construction of the Property.
+      ASSERT(m_end_point == propagator.child());
       Dout(dc::property, "This is the release_sequence Property that is doing the wrapping. Set location (" << propagator.current_location() << ").");
       m_location = propagator.current_location();
+      // We always get here directly after creating a release_sequence Property.
+      // This records the thread of the possible to-be release sequence.
+      Dout(dc::property, "Recording the current thread (" << propagator.current_thread() << ") as the thread that writes.");
+      ASSERT(m_release_sequence_thread == -1);
+      m_release_sequence_thread = propagator.current_thread();
+      return true;
     }
     else if (propagator.rf_acq_but_not_rel())   // Should we wrap all Property objects instead of copying them?
     {
       Dout(dc::property, "Returning false because release_sequence should not be propagated over a non-rel-acq rf (but wrapped).");
       return false;
     }
+    // m_location should always be defined when we get here.
+    ASSERT(!m_location.undefined());
+    // Once synced, no conversion is possible anymore (can we even get here for a synced release sequence Property?)
     if (m_not_synced_yet)
     {
-      if (m_broken_release_sequence)
+      ASSERT(m_release_sequence_thread != -1);
+      bool correct_thread = propagator.current_thread() == m_release_sequence_thread;
+      // Synchronize when a write release is encountered (in the correct thread).
+      // We also do this when the release_sequence was already broken (that flag isn't touched here).
+      if (correct_thread &&
+          propagator.is_write_rel_to(m_location))       // Also RMW.
       {
-        ASSERT(m_not_synced_thread == -1);
-        if (propagator.is_write_rel_to(m_location))
-        {
-          Dout(dc::property, "Resetting m_not_synced_yet because " << propagator.current_action() << " is a Wrel to the correct memory location.");
-          m_not_synced_yet = false;
-        }
-      }
-      else if (propagator.is_write_rel_to(m_location))       // Also RMW.
-      {
-        Dout(dc::property, "Resetting m_not_synced_yet because " << propagator.current_action() << " is a Wrel to the correct memory location.");
+        Dout(dc::property, "Resetting m_not_synced_yet because " << propagator.current_action() << " is a Wrel in the correct thread to the correct memory location.");
         m_not_synced_yet = false;
-        m_not_synced_thread = -1;
       }
-      else if (propagator.is_non_rel_write(m_location))      // Not RMW.
+      else if (!m_broken_release_sequence &&            // No need to clear m_pending again.
+               !correct_thread &&
+               propagator.is_store_to(m_location))      // Not RMWs.
       {
-        if (m_not_synced_thread == -1)
-        {
-          Dout(dc::property, "Recording the current thread (" << propagator.current_thread() << ") as the thread that writes.");
-          m_not_synced_thread = propagator.current_thread();
-        }
-        else if (m_not_synced_thread != propagator.current_thread())
-        {
-          Dout(dc::property, "Setting m_broken_release_sequence because " << propagator.current_action() <<
-              " is non-release Write to the correct memory location but in the wrong thread (" <<
-              propagator.current_thread() << " != " << m_not_synced_thread << ").");
-          m_broken_release_sequence = true;
-          m_not_synced_thread = -1;
-          m_pending.clear();    // Not needed anymore.
-        }
+        Dout(dc::property, "Setting m_broken_release_sequence because " << propagator.current_action() <<
+            " is store to the correct memory location but in the wrong thread (" <<
+            propagator.current_thread() << " != " << m_release_sequence_thread << ").");
+        m_broken_release_sequence = true;
+        m_pending.clear();    // Not needed anymore.
       }
     }
   }
   return true;
 }
 
-void Property::unwrap_to(Properties& properties)
+void Property::unwrap_to(Properties& properties, SequenceNumber rs_begin)
 {
   DoutEntering(dc::property, "Property::unwrap_to(" << properties << ")");
+  ReleaseSequence const& release_sequence{Context::instance().m_release_sequences.insert(rs_begin, m_rs_end)};
+  Dout(dc::notice, "Adding properties from ReleaseSequence " << release_sequence);
+  boolean::Expression path_condition(m_path_condition * release_sequence.boolexpr_variable());
   for (Property const& property : m_pending)
-    properties.add(Property(property, property.m_path_condition.times(m_path_condition)));
+    properties.add(Property(property, property.m_path_condition.times(path_condition)));
   m_pending.clear();
 }
 
@@ -343,34 +347,6 @@ void Property::unwrap_to(Properties& properties)
 // of view of node 4, the Property "cause loop ending at 1" now has condition
 // A + B.
 //
-// merge_causal_loop:
-//
-// However, in the case of a causal loop a complex merge is needed where
-// the state of m_not_synced_yet and m_broken_release_sequence interfere
-// with eachother.
-//
-// Let xy be one of {00, 01, 10, 11} where x = m_broken_release_sequence
-// and y = m_not_synced_yet. When two paths are merged where one or more
-// is broken then the result is broken, so the first bit needs to be
-// OR-ed. While if two paths are merged where one or more are synced
-// then the result is synced, so the second bit needs to be AND-ed.
-//
-// Hence *) the following table applies.
-//
-//    | Merging in under condition E                              |
-//    |   10      |   00                    |  11                 | 01
-//--------------------------------------------------------------------------------------
-// 10 |  A + E    |  A + C * E              |  A + B * E          | A
-// 00 |  B * !E   |  B + E * !(A + C)       |  B * !E             | B
-// 11 |  C * !E   |  C * !E                 |  C + E * !(A + B)   | C
-// 01 |  D * !E   |  D * !E                 |  D * !E             | D + E * !(A + B + C)
-//
-//  ^   ^
-//  |   `-- Resulting conditions after merge.
-//  `------ Original conditions respectively A, B, C and D.
-//
-// *) It took me four days to figure that out.
-//
 void Property::merge_into(std::vector<Property>& map)
 {
   DoutEntering(dc::property, "Property::merge_into(map) with *this = " << *this);
@@ -384,25 +360,53 @@ void Property::merge_into(std::vector<Property>& map)
         needs_release_sequence_merging = true;
         break;
       }
+      else
+        Dout(dc::property, "No merge required with " << property);
     if (!needs_release_sequence_merging)
     {
+      Dout(dc::property, "No merging required; just adding " << *this);
       map.emplace_back(std::move(*this));
       return;
     }
   }
   else
   {
+#ifdef CWDEBUG
+    bool needs_merging = false;
+#endif
     for (Property& property : map)
       if (need_merging(*this, property))
       {
-        property.m_path_condition += m_path_condition;
-        if (m_type == causal_loop && m_location.undefined())
-          property.m_location.set_to_undefined();
+        needs_merging = true;
+        Dout(dc::property|continued_cf, "Merging " << *this << " into " << property << " ---> ");
+        if (m_type == causal_loop && m_location.undefined() != property.m_location.undefined())
+        {
+          if (m_location.undefined())
+            property.m_path_condition = property.m_path_condition.times(!m_path_condition.as_product());
+          else
+            m_path_condition = m_path_condition.times(!property.m_path_condition.as_product());
+          Dout(dc::continued, property);
+          break;
+        }
+        else
+          property.m_path_condition += m_path_condition;
+        Dout(dc::finish, property);
         return;
       }
+#ifdef CWDEBUG
+    if (!needs_merging)
+      Dout(dc::property, "No merging required; just adding " << *this);
+    else
+      Dout(dc::finish, " + " << *this);
+#endif
     map.emplace_back(std::move(*this));
     return;
   }
+
+//PROPERTY  : Entering Property::merge_into(map) with *this = {rel_seq(not_synced_yet;broken;L6)[];#7;B}
+//PROPERTY  :   Merging {rel_seq(not_synced_yet;broken;L6)[];#7;B} into
+//              [ {rel_seq(not_synced_yet;T2;L6)[{causal_loop;L?;#7;1}];#7;1} ] --->
+//              [ {rel_seq(not_synced_yet;broken;L6)[];#7;B} ].
 
   int internal_state = (m_broken_release_sequence ? 0 : 1) + (m_not_synced_yet ? 2 : 0);
   boolean::Expression inverse_E;
@@ -414,13 +418,45 @@ void Property::merge_into(std::vector<Property>& map)
   Property* Psum = nullptr;
   int zero_count = 0;
   Property* Pzero[3];
+
+  // merge_causal_loop:
+  //
+  // In the case of a causal loop a complex merge is needed where the state of m_not_synced_yet
+  // and m_broken_release_sequence interfere with eachother.
+  //
+  // Let xy be one of {00, 01, 10, 11} where x = m_broken_release_sequence and y = m_not_synced_yet.
+  // When two paths are merged where one or more is broken then the result is broken, so the first
+  // bit needs to be OR-ed. While if two paths are merged where one or more are synced then the
+  // result is synced, so the second bit needs to be AND-ed.
+  //
+  // The following table applies (don't worry if you don't understand why, this is not trival).
+  //
+  //    | Merging in under condition E                              |
+  //    |    0      |    1                    |   2                 |  3   <-- internal_state
+  //    |   10      |   00                    |  11                 | 01
+  //--------------------------------------------------------------------------------------
+  // 10 |  A + E    |  A + C * E              |  A + B * E          | A
+  // 00 |  B * !E   |  B + E * !(A + C)       |  B * !E             | B
+  // 11 |  C * !E   |  C * !E                 |  C + E * !(A + B)   | C
+  // 01 |  D * !E   |  D * !E                 |  D * !E             | D + E * !(A + B + C)
+  //
+  //  ^   ^
+  //  |   `-- Resulting conditions after merge.
+  //  `------ Original conditions respectively A, B, C and D.
+
+  Dout(dc::property|continued_cf, "Merging " << *this << " into [");
   for (Property& property : map)
   {
     if (need_merging(*this, property))
     {
+      Dout(dc::continued, ' ' << property);
       switch (internal_state)
       {
         case 0:     // this is 10
+          // 10 |  A + E
+          // 00 |  B * !E
+          // 11 |  C * !E
+          // 01 |  D * !E
           if (property.m_broken_release_sequence && !property.m_not_synced_yet)
           {
             // property is 10 (with condition A).
@@ -429,55 +465,106 @@ void Property::merge_into(std::vector<Property>& map)
           }
           else
           {
+            // property is 00 (with condition B), 11 (with condition C) or 01 (with condition D).
             property.m_path_condition = property.m_path_condition.times(inverse_E);   // B * !E, C * !E, D * !E.
-            Pzero[zero_count++] = &property;
+            if (property.m_path_condition.is_zero())
+              Pzero[zero_count++] = &property;                          // Remember properties that need to be removed.
           }
           break;
         case 1:     // this is 00
+          // 10 |  A + C * E
+          // 00 |  B + E * !(A + C)
+          // 11 |  C * !E
+          // 01 |  D * !E
           if (property.m_broken_release_sequence)
           {
             // property is 10 (with condition A) or 11 (with condition C).
-            sum += property.m_path_condition;               // Collect A + C.
-            if (property.m_not_synced_yet)                  // property is 11 (with condition C).
-              XE = property.m_path_condition.times(m_path_condition); // C * E.
+            sum += property.m_path_condition;                           // Collect A + C.
+            if (property.m_not_synced_yet)
+            {
+              // property is 11 (with condition C).
+              XE = property.m_path_condition.times(m_path_condition);   // Collect C * E.
+            }
             else
-              P10 = &property;
+            {
+              // property is 10 (with condition A).
+              P10 = &property;                                          // Remember the property that needs XE to be added (to become A + C * E).
+            }
           }
-          if (!property.m_not_synced_yet)
+          if (property.m_not_synced_yet)
           {
+            // property is 11 (with condition C) or 01 (with condition D).
             property.m_path_condition = property.m_path_condition.times(inverse_E);   // C * !E, D * !E.
-            Pzero[zero_count++] = &property;
-            if (!property.m_broken_release_sequence)
-              Psum = &property;
+            if (property.m_path_condition.is_zero())
+              Pzero[zero_count++] = &property;                          // Remember properties that need to be removed.
+          }
+          else if (!property.m_broken_release_sequence)
+          {
+            // property is 00 (with condition B).
+            Psum = &property;                                           // Remember the property that needs E * !sum to be added (to become B + E * !(A + C)).
           }
           break;
         case 2:     // this is 11
+          // 10 |  A + B * E
+          // 00 |  B * !E
+          // 11 |  C + E * !(A + B)
+          // 01 |  D * !E
           if (!property.m_not_synced_yet)
           {
             // property is 10 (with condition A) or 00 (with condition B).
-            sum += property.m_path_condition;               // Collect A + B
-            if (!property.m_broken_release_sequence)        // property is 00 (with condition B).
-              XE = property.m_path_condition.times(m_path_condition); // B * E.
+            sum += property.m_path_condition;                           // Collect A + B.
+            if (!property.m_broken_release_sequence)
+            {
+              // property is 00 (with condition B).
+              XE = property.m_path_condition.times(m_path_condition);   // Collect B * E.
+            }
             else
-              P10 = &property;
+            {
+              // property 10 (with condition A).
+              P10 = &property;                                          // Remember the property that needs XE to be added (to become A + B * E).
+            }
           }
           if (!property.m_broken_release_sequence)
           {
+            // property is 00 (with condition B) or 01 (with condition D).
             property.m_path_condition = property.m_path_condition.times(inverse_E);   // B * !E, D * !E.
-            Pzero[zero_count++] = &property;
+            if (property.m_path_condition.is_zero())
+              Pzero[zero_count++] = &property;                          // Remember properties that need to be removed.
           }
           else if (property.m_not_synced_yet)
-            Psum = &property;
+          {
+            // property is 11 (with condition C).
+            Psum = &property;                                           // Remember the property that needs E * !sum to be added (to become C + E * !(A + B)).
+          }
           break;
         case 3:     // this is 01
+          // 10 | A
+          // 00 | B
+          // 11 | C
+          // 01 | D + E * !(A + B + C)
           if (property.m_broken_release_sequence || !property.m_not_synced_yet)
+          {
+            // property is 10 (with condition A) or 00 (with condition B) or 11 (with condition C).
             sum += property.m_path_condition;               // Collect A + B + C.
+          }
           else
-            Psum = &property;
+          {
+            // property is 01 (with condition D).
+            Psum = &property;                                           // Remember the property that needs E * !sum to be added (to become D + E * !(A + B + C)).
+          }
           break;
       }
     }
   }
+  Dout(dc::continued, "] ---> [");
+
+  if (Psum)
+    Psum->m_path_condition += m_path_condition.times(sum.inverse());
+  else if (internal_state > 0)  // Should there be a Psum?
+    m_path_condition = m_path_condition.times(sum.inverse());           // We need to add a new property to the map with path condition E * !sum.
+  if (P10 && XE.is_initialized())
+    P10->m_path_condition += XE;
+
   auto Pend = map.end();
   auto Plast = Pend - 1;
   // m_map index: 0   1   2   3   4   5   6
@@ -525,25 +612,8 @@ void Property::merge_into(std::vector<Property>& map)
     //                  Plast
   }
   auto Pback = Plast + 1;
-  if (internal_state > 0)
-  {
-    if (!Psum)
-      m_path_condition = m_path_condition.times(sum.inverse());
-    else
-      Psum->m_path_condition += m_path_condition.times(sum.inverse());
-    if (internal_state < 3)
-    {
-      if (P10)
-        P10->m_path_condition += XE;
-      else if (XE.is_initialized() && !XE.is_zero())
-      {
-        if (Pback != Pend)
-          *Pback++ = Property(*this, std::move(XE));
-        else
-          map.emplace_back(*this, std::move(XE));
-      }
-    }
-  }
+
+  // Add this object to the map if needed.
   if (!Psum && !m_path_condition.is_zero())
   {
     if (Pback != Pend)
@@ -551,9 +621,82 @@ void Property::merge_into(std::vector<Property>& map)
     else
       map.emplace_back(std::move(*this));
   }
+
+  // If there was no P10 found but there should have been then a 10 property with path condition XE needs to be added.
+  if (!P10 && 0 < internal_state && internal_state < 3 && XE.is_initialized() && !XE.is_zero())
+  {
+    m_broken_release_sequence =true;
+    m_not_synced_yet = false;
+    if (Pback != Pend)
+      *Pback++ = Property(*this, std::move(XE));
+    else
+      map.emplace_back(*this, std::move(XE));
+  }
+
+  // Erase deleted properties from the map.
   if (Pback != Pend)
     map.erase(Pback, Pend);
+
+#ifdef CWDEBUG
+  for (Property& property : map)
+    if (need_merging(*this, property))
+      Dout(dc::continued, ' ' << property);
+  Dout(dc::finish, " ].");
+#endif
 }
+
+#if 0
+bool broken(int i)
+{
+  return !(i & 1);
+}
+
+bool not_synced(int i)
+{
+  return (i & 2);
+}
+
+int main()
+{
+#ifdef DEBUGGLOBAL
+  GlobalObjectManager::main_entered();
+#endif
+  Debug(NAMESPACE_DEBUG::init());
+
+  boolean::Product const A(boolean::Context::instance().create_variable("A"));
+  boolean::Product const B(boolean::Context::instance().create_variable("B"));
+  boolean::Product const C(boolean::Context::instance().create_variable("C"));
+  boolean::Product const D(boolean::Context::instance().create_variable("D"));
+  boolean::Product const E(boolean::Context::instance().create_variable("E"));
+
+  SequenceNumber const s1((size_t)1);
+  SequenceNumber const s2((size_t)2);
+
+  for (int j = 0; j < 5; ++j)
+    for (int i1 = 0; i1 <= 3; ++i1)
+    {
+      Property pE(not_synced(i1), broken(i1), s1, s2, boolean::Expression(E));
+      std::vector<Property> v;
+      Property pA(not_synced(0), broken(0), s1, s2, boolean::Expression(A));
+      Property pB(not_synced(1), broken(1), s1, s2, boolean::Expression(B));
+      Property pC(not_synced(2), broken(2), s1, s2, boolean::Expression(C));
+      Property pD(not_synced(3), broken(3), s1, s2, boolean::Expression(D));
+      if (j > 0)
+      {
+        Dout(dc::property, "Leaving out " << char('A' - 1 + j));
+      }
+      if (j != 1)
+        v.emplace_back(std::move(pA));
+      if (j != 2)
+        v.emplace_back(std::move(pB));
+      if (j != 3)
+        v.emplace_back(std::move(pC));
+      if (j != 4)
+        v.emplace_back(std::move(pD));
+      pE.merge_into(v);
+    }
+}
+#endif
 
 std::ostream& operator<<(std::ostream& os, Property const& property)
 {
@@ -572,10 +715,10 @@ std::ostream& operator<<(std::ostream& os, Property const& property)
         os << "not_synced_yet;";
       if (property.m_broken_release_sequence)
         os << "broken";
-      else if (property.m_not_synced_thread == -1)
+      else if (property.m_release_sequence_thread == -1)
         os << "T?";
       else
-        os << 'T' << property.m_not_synced_thread;
+        os << 'T' << property.m_release_sequence_thread;
       if (!property.m_location.undefined())
         os << ";" << property.m_location;
       os << ")[";

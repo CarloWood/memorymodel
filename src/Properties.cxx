@@ -21,7 +21,7 @@ void Properties::merge(
     Dout(dc::property, "Unsynced Release-Sequence detected.");
     // This signifies the start of a Release-Sequence. We need to replace the map of properties with
     // one that contains a single release_sequence Property that wraps everything it contained before.
-    Property new_property(release_sequence, propagator.child(), propagator.condition());
+    Property new_property(propagator.child(), propagator.current_node(), propagator.condition());
     properties.copy_to(new_property, propagator.current_node());
     // Then apply the propagator to the rest of the data.
     if (new_property.convert(propagator))
@@ -35,7 +35,7 @@ void Properties::merge(
       // Create a new Property in m_map from property but with already updated path condition.
       Property new_property(property, property.path_condition().times(propagator.condition()));
       // Then apply the propagator to the rest of the data.
-      if (new_property.convert(propagator) && !new_property.if_needed_unwrap_to(*this))
+      if (new_property.convert(propagator) && !new_property.if_needed_unwrap_to(*this, propagator.current_node()))
         add(std::move(new_property));
     }
 }

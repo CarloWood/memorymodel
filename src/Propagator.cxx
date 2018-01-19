@@ -19,9 +19,9 @@ bool Propagator::is_write_rel_to(RFLocation location) const
   return m_current_is_write && m_current_location == location && m_current_action->is_release();
 }
 
-bool Propagator::is_non_rel_write(RFLocation location) const
+bool Propagator::is_store_to(RFLocation location) const
 {
-  return m_current_is_write && m_current_location == location && m_current_action->kind() == Action::atomic_store && !m_current_action->is_release();
+  return m_current_is_write && m_current_location == location && m_current_action->kind() == Action::atomic_store;
 }
 
 std::ostream& operator<<(std::ostream& os, Propagator const& propagator)

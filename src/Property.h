@@ -32,16 +32,28 @@ class Property
   std::vector<Property> m_pending;      // The properties that were copied from the Read-acq node that caused this release_sequence Property.
   bool m_not_synced_yet;                // Set to true after following a rf edge from a Read-acq to a non-rel Write, until we hit the rs-tail.
   bool m_broken_release_sequence;       // Set to true if there is a non-release write between the rs-tail and the rs-head.
+  SequenceNumber m_rs_end;              // The Write relaxed that is being read by a Read-acq that might synchronize with the rs-tail.
     // Only valid when m_not_synced_yet:
-  Thread::id_type m_not_synced_thread;  // The thread that did a relaxed write to an unsynced memory location, if any (-1 if none or not relevant).
+  Thread::id_type m_release_sequence_thread;  // The thread that did a relaxed write to an unsynced memory location, if any (-1 if none or not relevant).
 
   // Only valid for reads_from:
   bool m_hidden;                        // Set to true when a write to the corresponding memory location will happen before reaching m_end_point.
 
  public:
-  Property(property_type type, SequenceNumber end_point, boolean::Expression const& path_condition) :
-      m_type(type), m_end_point(end_point), m_path_condition(path_condition.copy()),
-      m_not_synced_yet(type == release_sequence), m_broken_release_sequence(false), m_not_synced_thread(-1) { }
+  Property(SequenceNumber end_point, boolean::Expression const& path_condition) :
+      m_type(causal_loop), m_end_point(end_point), m_path_condition(path_condition.copy()),
+      m_not_synced_yet(false), m_broken_release_sequence(false), m_release_sequence_thread(-1), m_hidden(false) { }
+
+  Property(SequenceNumber end_point, SequenceNumber rs_end, boolean::Expression const& path_condition) :
+      m_type(release_sequence), m_end_point(end_point), m_path_condition(path_condition.copy()),
+      m_not_synced_yet(true), m_broken_release_sequence(false), m_rs_end(rs_end), m_release_sequence_thread(-1), m_hidden(false) { }
+
+#ifdef CWDEBUG
+  // For testing of merge_into.
+  Property(bool not_synced_yet, bool broken_release_sequence, SequenceNumber end_point, SequenceNumber rs_end, boolean::Expression const& path_condition) :
+      m_type(release_sequence), m_end_point(end_point), m_path_condition(path_condition.copy()),
+      m_not_synced_yet(not_synced_yet), m_broken_release_sequence(broken_release_sequence), m_rs_end(rs_end), m_release_sequence_thread(-1), m_hidden(false) { }
+#endif
 
   Property(SequenceNumber end_point, boolean::Expression const& path_condition, RFLocation location) :
       m_type(reads_from), m_end_point(end_point), m_path_condition(path_condition.copy()), m_location(location), m_hidden(false) { }
@@ -53,7 +65,8 @@ class Property
       m_location(property.m_location),
       m_not_synced_yet(property.m_not_synced_yet),
       m_broken_release_sequence(property.m_broken_release_sequence),
-      m_not_synced_thread(property.m_not_synced_thread),
+      m_rs_end(property.m_rs_end),
+      m_release_sequence_thread(property.m_release_sequence_thread),
       m_hidden(property.m_hidden)
   {
     for (Property const& prop : property.m_pending)
@@ -70,11 +83,11 @@ class Property
 
   bool invalidates_graph(ReadFromGraph const* read_from_graph) const;
   bool convert(Propagator const& propagator);
-  bool if_needed_unwrap_to(Properties& properties)
+  bool if_needed_unwrap_to(Properties& properties, SequenceNumber rs_begin)
   {
     bool needed = m_type == release_sequence && !m_not_synced_yet && !m_broken_release_sequence;
     if (needed)
-      unwrap_to(properties);
+      unwrap_to(properties, rs_begin);
     return needed;
   }
   void merge_into(std::vector<Property>& map);
@@ -84,7 +97,7 @@ class Property
   friend std::ostream& operator<<(std::ostream& os, Property const& property);
 
  private:
-  void unwrap_to(Properties& properties);
+  void unwrap_to(Properties& properties, SequenceNumber rs_begin);
 };
 
 #ifdef CWDEBUG

@@ -222,17 +222,23 @@ bool ReadFromGraph::dfs()
         // Create a new causal_loop/release_sequence Property. Immediately give it the condition
         // under which our edge exists because convert() does not alter the condition
         // of Property objects, so we have to do that ourselves.
-        Property new_property(is_release_sequence ? release_sequence : causal_loop, child, directed_edge->condition());
         if (is_release_sequence)
         {
+          Property rs_property(child, m_current_node, directed_edge->condition());
           // In this case the new causal loop Property needs to be both, wrapped and added.
-          Property cl_property(causal_loop, child, true);
-          new_property.wrap(cl_property);
+          Property cl_property(child, true);
+          rs_property.wrap(cl_property);
+          if (cl_property.convert(propagator))
+            current_properties.add(std::move(cl_property));
+          if (rs_property.convert(propagator))
+            current_properties.add(std::move(rs_property));
+        }
+        else
+        {
+          Property cl_property(child, directed_edge->condition());
           if (cl_property.convert(propagator))
             current_properties.add(std::move(cl_property));
         }
-        if (new_property.convert(propagator))
-          current_properties.add(std::move(new_property));
         Dout(dc::readfrom, "  " << m_current_node << ".properties is now " << current_properties);
       }
       else

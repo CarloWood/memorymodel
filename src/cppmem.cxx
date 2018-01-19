@@ -957,7 +957,7 @@ int main(int argc, char* argv[])
         if (read_from_graph.loop_detected().is_one())
         {
           Dout(dc::notice, " loop_detected() with *ml == " << *ml << " returned true! Continuing the current loop!");
-#if 1   // Remove this in order to print also fully rejected graphs.
+#if 0   // Remove this in order to print also fully rejected graphs.
           read_from_graph.pop();
           ml.breaks(0);
           break;
@@ -974,10 +974,11 @@ int main(int argc, char* argv[])
         {
           DirectedSubgraph const& read_from_location_subgraph{read_from_location_subgraphs_vector[location][ml[location.get_value()]]};
           read_from_location_subgraph.add_to(graph);
-          valid.times(read_from_location_subgraph.valid());
+          valid = valid.times(read_from_location_subgraph.valid());
         }
-        boolean::Expression has_loop{read_from_graph.loop_condition().copy()};
-        graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, has_loop, rf_candidate++);
+        valid = valid.times(read_from_graph.loop_condition().inverse());
+        if (!valid.is_zero())
+          graph.write_png_file(basename + "_rf", topological_ordered_actions, valid, false, rf_candidate++);
         read_from_graph.pop();
       }
       ml.start_next_loop_at(0);
