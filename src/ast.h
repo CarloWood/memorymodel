@@ -13,6 +13,7 @@
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/variant/variant.hpp>
 #include <boost/optional.hpp>
+#include <boost/spirit/include/phoenix_fusion.hpp>
 
 namespace ast {
 
@@ -522,6 +523,12 @@ struct vardecl
 
   friend std::ostream& operator<<(std::ostream& os, vardecl const& vardecl);
 };
+
+} // namespace ast
+
+BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)
+
+namespace ast {
 
 enum DeclarationStatementNode {                DS_mutex_decl, DS_condition_variable_decl, DS_unique_lock_decl, DS_vardecl };
 using declaration_statement_node = boost::variant<mutex_decl,    condition_variable_decl,    unique_lock_decl,    vardecl>;

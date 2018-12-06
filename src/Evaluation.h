@@ -9,6 +9,7 @@
 #include <iosfwd>
 #include <vector>
 #include <set>
+#include <functional>
 
 #ifdef TRACK_EVALUATION
 #include "tracked.h"

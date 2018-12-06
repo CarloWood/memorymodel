@@ -39,7 +39,7 @@ grammar_unittest<Iterator>::grammar_unittest(position_handler<Iterator>& handler
   on_error<fail>
   (
       unittest
-    , position_handler_function(handler)("Error! Expecting ", _4, _3)
+    , position_handler_function(handler)(const_cast<char*>("Error! Expecting "), _4, _3)
   );
 
 }

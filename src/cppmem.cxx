@@ -650,9 +650,6 @@ void Graph::write_png_file(
 
 int main(int argc, char* argv[])
 {
-#ifdef DEBUGGLOBAL
-  GlobalObjectManager::main_entered();
-#endif
   Debug(NAMESPACE_DEBUG::init());
 
   //==========================================================================

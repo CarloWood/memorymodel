@@ -2,18 +2,18 @@
 #include "grammar_cppmem.h"
 #include "position_handler.h"
 #include "SymbolsImpl_parser.h"
+
 #include <boost/spirit/include/phoenix_function.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>
-#include <boost/spirit/include/phoenix_fusion.hpp>
 #include <boost/spirit/include/phoenix_stl.hpp>
 #include <boost/spirit/include/phoenix_object.hpp>
 #ifdef BOOST_SPIRIT_QI_DEBUG
 #include <boost/tuple/tuple_io.hpp>
 #endif
 
+//BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)    [Moved to ast.h]
 BOOST_FUSION_ADAPT_STRUCT(ast::memory_location, m_name)
-BOOST_FUSION_ADAPT_STRUCT(ast::vardecl, m_type, m_memory_location, m_initial_value)
 BOOST_FUSION_ADAPT_STRUCT(ast::mutex_decl, m_name)
 BOOST_FUSION_ADAPT_STRUCT(ast::condition_variable_decl, m_name)
 BOOST_FUSION_ADAPT_STRUCT(ast::unique_lock_decl, m_name, m_mutex)
@@ -449,14 +449,14 @@ grammar_cppmem<Iterator>::grammar_cppmem(position_handler<Iterator>& handler) :
   on_error<fail>
   (
       cppmem
-    , handler_function(handler)("Error! Expecting ", _4, _3)
+    , handler_function(handler)(const_cast<char*>("Error! Expecting "), _4, _3)
   );
 
   // Error handling: on error in start, call handler.
   on_error<fail>
   (
       statement
-    , handler_function(handler)("Error! Expecting ", _4, _3)
+    , handler_function(handler)(const_cast<char*>("Error! Expecting "), _4, _3)
   );
 
   // Annotation: on success in register_assignment, call position_handler.

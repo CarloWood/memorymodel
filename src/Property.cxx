@@ -658,9 +658,6 @@ bool not_synced(int i)
 
 int main()
 {
-#ifdef DEBUGGLOBAL
-  GlobalObjectManager::main_entered();
-#endif
   Debug(NAMESPACE_DEBUG::init());
 
   boolean::Product const A(boolean::Context::instance().create_variable("A"));
