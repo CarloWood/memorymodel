@@ -13,7 +13,7 @@ DirectedSubgraph::DirectedSubgraph(Graph const& graph, EdgeMaskType outgoing_typ
   size_t count = 0;
   for (auto&& action_ptr : graph)
   {
-    ASSERT(0 <= action_ptr->sequence_number().get_value() && action_ptr->sequence_number().get_value() < m_nodes.size());
+    ASSERT(action_ptr->sequence_number().get_value() < m_nodes.size());
     m_nodes[action_ptr->sequence_number()] = DirectedEdges(outgoing_type, incoming_type, action_ptr.get());
     ++count;
   }
